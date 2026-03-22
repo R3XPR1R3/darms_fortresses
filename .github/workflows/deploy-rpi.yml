@@ -20,15 +20,18 @@ jobs:
 
   deploy:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.RPI_HOST }}
-          username: ${{ secrets.RPI_USER }}
-          key: ${{ secrets.RPI_SSH_KEY }}
-          port: ${{ secrets.RPI_PORT || 22 }}
-          script: |
-            cd ${{ secrets.RPI_REPO_DIR || '/opt/darms-fortresses' }}
-            bash infra/deploy.sh
+      - uses: actions/checkout@v4
+
+      - name: Build and restart containers
+        run: |
+          docker compose -f infra/docker/docker-compose.yml build
+          docker compose -f infra/docker/docker-compose.yml up -d
+          docker image prune -f
+
+      - name: Show tunnel URL
+        run: |
+          echo "Waiting for cloudflared to start..."
+          sleep 5
+          docker compose -f infra/docker/docker-compose.yml logs tunnel | grep -oP 'https://[^\s]+'  || echo "Check tunnel logs: docker compose -f infra/docker/docker-compose.yml logs tunnel"
