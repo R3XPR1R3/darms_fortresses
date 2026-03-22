@@ -9,6 +9,7 @@ function makeDeck(count: number): DistrictCard[] {
     id: `card-${i}`,
     name: `District ${i}`,
     cost: 1 + (i % 5),
+    hp: 1 + (i % 5),
     colors: [["yellow", "blue", "green", "red"][i % 4] as "yellow" | "blue" | "green" | "red"],
     purple: false,
   }));

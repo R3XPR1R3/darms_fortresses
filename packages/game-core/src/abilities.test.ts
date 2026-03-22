@@ -16,7 +16,7 @@ const PLAYERS = [
 ];
 
 function makeCard(id: string, name: string, cost: number, color: "yellow" | "blue" | "green" | "red"): DistrictCard {
-  return { id, name, cost, colors: [color], purple: false };
+  return { id, name, cost, hp: cost, colors: [color], purple: false };
 }
 
 function makeTestState(overrides?: Partial<GameState>): GameState {
@@ -123,6 +123,27 @@ describe("hero abilities", () => {
     expect(result).not.toBeNull();
     expect(result!.players[0].gold).toBe(8); // 10 - 2
     expect(result!.players[1].builtDistricts).toHaveLength(0);
+  });
+
+  it("general damages district HP without destroying it if not enough gold", () => {
+    const rng = createRng(1);
+    let state = makeTestState();
+    state = assignHeroes(state, [HeroId.General, HeroId.King, HeroId.Merchant, HeroId.Cleric]);
+    const targetCard = makeCard("test-1", "Дворец", 5, "yellow");
+    state = {
+      ...state,
+      players: state.players.map((p) => {
+        if (p.id === "p1") return { ...p, gold: 3 };
+        if (p.id === "p2") return { ...p, builtDistricts: [targetCard] };
+        return p;
+      }),
+    };
+
+    const result = useAbility(state, "p1", { hero: "general", targetPlayerId: "p2", cardId: "test-1" }, rng);
+    expect(result).not.toBeNull();
+    expect(result!.players[0].gold).toBe(0); // spent all 3
+    expect(result!.players[1].builtDistricts).toHaveLength(1); // not destroyed
+    expect(result!.players[1].builtDistricts[0].hp).toBe(2); // 5 - 3
   });
 
   it("general cannot destroy cleric districts", () => {

@@ -140,18 +140,23 @@ function pickAbility(
       return { type: "ability", playerId, ability: { hero: "sorcerer", mode: "draw" } };
     }
     case HeroId.General: {
-      // Destroy cheapest district of leading player
+      // Target lowest HP district that can be destroyed, or damage the weakest
+      if (player.gold < 1) return null;
       const targets = state.players
         .filter((p) => p.id !== playerId && p.builtDistricts.length > 0 && p.hero !== HeroId.Cleric)
         .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length);
       if (targets.length === 0) return null;
       const target = targets[0];
-      const cheapest = [...target.builtDistricts].sort((a, b) => a.cost - b.cost)[0];
-      if (cheapest && player.gold >= cheapest.cost) {
+      // Prefer a district we can destroy (hp <= gold), otherwise pick lowest HP
+      const destroyable = [...target.builtDistricts]
+        .filter((d) => d.hp <= player.gold)
+        .sort((a, b) => a.hp - b.hp)[0];
+      const pick = destroyable ?? [...target.builtDistricts].sort((a, b) => a.hp - b.hp)[0];
+      if (pick) {
         return {
           type: "ability",
           playerId,
-          ability: { hero: "general", targetPlayerId: target.id, cardId: cheapest.id },
+          ability: { hero: "general", targetPlayerId: target.id, cardId: pick.id },
         };
       }
       return null;

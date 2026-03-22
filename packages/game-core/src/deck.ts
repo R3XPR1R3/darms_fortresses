@@ -52,6 +52,7 @@ export function createBaseDeck(): DistrictCard[] {
         id: `d-${_nextId++}`,
         name: t.name,
         cost: t.cost,
+        hp: t.cost,
         colors: t.colors,
         purple: false,
       });

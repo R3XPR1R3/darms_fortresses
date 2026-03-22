@@ -183,15 +183,26 @@ export function useAbility(
       // Cleric's districts are immune to destruction
       if (target.hero === HeroId.Cleric) return null;
 
-      // Cost to destroy = card cost
-      if (player.gold < card.cost) return null;
+      // General spends gold to deal damage to district HP
+      // Must have at least 1 gold and can spend up to card's current HP
+      if (player.gold < 1) return null;
+      const damage = Math.min(player.gold, card.hp);
 
       const newTargetDistricts = [...target.builtDistricts];
-      newTargetDistricts.splice(cardIdx, 1);
+      const newHp = card.hp - damage;
 
-      newPlayers[playerIdx] = { ...player, gold: player.gold - card.cost, abilityUsed: true };
+      if (newHp < 1) {
+        // District destroyed
+        newTargetDistricts.splice(cardIdx, 1);
+        log = addLog({ ...state, log }, `${player.name} (Генерал) разрушил ${card.name} у ${target.name} за ${damage} золота`);
+      } else {
+        // District damaged but survives
+        newTargetDistricts[cardIdx] = { ...card, hp: newHp };
+        log = addLog({ ...state, log }, `${player.name} (Генерал) повредил ${card.name} у ${target.name} (${card.hp}→${newHp} HP) за ${damage} золота`);
+      }
+
+      newPlayers[playerIdx] = { ...player, gold: player.gold - damage, abilityUsed: true };
       newPlayers[targetIdx] = { ...target, builtDistricts: newTargetDistricts };
-      log = addLog({ ...state, log }, `${player.name} (Генерал) разрушил ${card.name} у ${target.name} за ${card.cost} золота`);
       break;
     }
     // Passive abilities — no active action needed
@@ -236,9 +247,9 @@ export function calculateScores(state: GameState): GameState {
     const p = state.players[i];
     let score = 0;
 
-    // Sum of district costs
+    // Sum of district HP (table value)
     for (const d of p.builtDistricts) {
-      score += d.cost;
+      score += d.hp;
     }
 
     // Bonus for finishing first
