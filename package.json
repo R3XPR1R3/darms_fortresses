@@ -1,0 +1,15 @@
+{
+  "name": "darms-fortresses",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Darms: Fortresses — online card strategy game",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck"
+  }
+}
