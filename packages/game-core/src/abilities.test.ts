@@ -50,21 +50,16 @@ describe("hero abilities", () => {
     expect(king.assassinated).toBe(true);
   });
 
-  it("assassin double kill costs 2 gold", () => {
+  it("assassin only kills one hero", () => {
     const rng = createRng(1);
     let state = makeTestState();
     state = assignHeroes(state, [HeroId.Assassin, HeroId.King, HeroId.Merchant, HeroId.General]);
-    state = { ...state, players: state.players.map((p) => p.id === "p1" ? { ...p, gold: 5 } : p) };
 
-    const result = useAbility(state, "p1", {
-      hero: "assassin",
-      targetHeroId: HeroId.King,
-      secondTargetHeroId: HeroId.Merchant,
-    }, rng);
+    const result = useAbility(state, "p1", { hero: "assassin", targetHeroId: HeroId.King }, rng);
     expect(result).not.toBeNull();
-    expect(result!.players[0].gold).toBe(3); // 5 - 2
     expect(result!.players[1].assassinated).toBe(true);
-    expect(result!.players[2].assassinated).toBe(true);
+    expect(result!.players[2].assassinated).toBe(false);
+    expect(result!.players[0].abilityUsed).toBe(true);
   });
 
   it("thief sets up robbery", () => {

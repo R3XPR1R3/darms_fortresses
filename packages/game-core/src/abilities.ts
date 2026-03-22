@@ -129,24 +129,12 @@ export function useAbility(
   switch (ability.hero) {
     case "assassin": {
       if (player.hero !== HeroId.Assassin) return null;
-      // Kill target hero
       const targetIdx = findPlayerByHero(state.players, ability.targetHeroId);
       if (targetIdx !== -1) {
         newPlayers[targetIdx] = { ...state.players[targetIdx], assassinated: true };
         log = addLog({ ...state, log }, `${player.name} убил ${HEROES.find((h) => h.id === ability.targetHeroId)!.name}`);
       }
-      // Optional second kill for 2 gold
-      if (ability.secondTargetHeroId) {
-        if (player.gold < 2) return null;
-        const secondIdx = findPlayerByHero(state.players, ability.secondTargetHeroId);
-        if (secondIdx !== -1) {
-          newPlayers[secondIdx] = { ...newPlayers[secondIdx], assassinated: true };
-        }
-        newPlayers[playerIdx] = { ...newPlayers[playerIdx], gold: newPlayers[playerIdx].gold - 2, abilityUsed: true };
-        log = addLog({ ...state, log }, `${player.name} заплатил 2 золота и убил ещё одного героя`);
-      } else {
-        newPlayers[playerIdx] = { ...newPlayers[playerIdx], abilityUsed: true };
-      }
+      newPlayers[playerIdx] = { ...newPlayers[playerIdx], abilityUsed: true };
       break;
     }
     case "thief": {

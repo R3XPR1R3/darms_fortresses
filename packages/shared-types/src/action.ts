@@ -37,7 +37,7 @@ export interface AbilityAction {
 }
 
 export type AbilityPayload =
-  | { hero: "assassin"; targetHeroId: HeroId; secondTargetHeroId?: HeroId }
+  | { hero: "assassin"; targetHeroId: HeroId }
   | { hero: "thief"; targetHeroId: HeroId }
   | { hero: "sorcerer"; mode: "draw" }
   | { hero: "sorcerer"; mode: "swap"; targetPlayerId: string }
