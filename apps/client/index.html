@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Darms: Fortresses</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      padding: 8px;
+      font-size: 14px;
+    }
+    h1 { font-size: 18px; text-align: center; margin-bottom: 8px; color: #e94560; }
+    h2 { font-size: 15px; margin-bottom: 6px; color: #0f3460; background: #e94560; padding: 4px 8px; border-radius: 4px; }
+    .phase-label { text-align: center; font-size: 13px; color: #aaa; margin-bottom: 8px; }
+
+    /* Layout */
+    #app { max-width: 600px; margin: 0 auto; }
+
+    /* Player cards */
+    .player-card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 6px;
+    }
+    .player-card.active { border-color: #e94560; box-shadow: 0 0 8px rgba(233,69,96,0.4); }
+    .player-card .name { font-weight: bold; font-size: 14px; }
+    .player-card .hero { color: #e94560; font-size: 12px; }
+    .player-card .stats { font-size: 12px; color: #aaa; margin-top: 2px; }
+    .player-card .districts {
+      display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
+    }
+
+    /* District chips */
+    .district-chip {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #000;
+      font-weight: 500;
+    }
+    .color-yellow { background: #f0c040; }
+    .color-blue { background: #4090f0; }
+    .color-green { background: #40c060; }
+    .color-red { background: #e04050; }
+    .color-multi { background: linear-gradient(135deg, #4090f0, #40c060); }
+
+    /* Hand */
+    #hand-area {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 8px;
+      margin: 8px 0;
+    }
+    #hand-area h3 { font-size: 13px; margin-bottom: 6px; color: #e94560; }
+    .hand-cards { display: flex; flex-wrap: wrap; gap: 4px; }
+    .hand-card {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .hand-card:hover { transform: scale(1.05); border-color: #e94560; }
+    .hand-card .card-cost { font-weight: bold; }
+
+    /* Action buttons */
+    #actions {
+      display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0;
+    }
+    .btn {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .btn:active { transform: scale(0.95); }
+    .btn-primary { background: #e94560; color: #fff; }
+    .btn-secondary { background: #0f3460; color: #fff; }
+    .btn-gold { background: #f0c040; color: #000; }
+    .btn-card { background: #4090f0; color: #fff; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Draft */
+    #draft-area { margin: 8px 0; }
+    .draft-heroes { display: flex; flex-wrap: wrap; gap: 6px; }
+    .hero-btn {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 2px solid #0f3460;
+      background: #16213e;
+      color: #eee;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .hero-btn:hover { border-color: #e94560; background: #1a1a3e; }
+    .hero-btn .speed { color: #aaa; font-size: 10px; }
+
+    /* Bans */
+    .bans { font-size: 11px; color: #888; margin-top: 4px; }
+    .bans .ban-up { color: #e94560; }
+
+    /* Log */
+    #log {
+      background: #0d1117;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 8px;
+      margin-top: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    #log .log-entry { color: #8b949e; }
+    #log .log-entry .day-tag { color: #e94560; font-weight: bold; }
+
+    /* Ability modal */
+    #ability-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    #ability-modal.show { display: flex; }
+    #ability-modal .modal-content {
+      background: #16213e;
+      border: 1px solid #e94560;
+      border-radius: 12px;
+      padding: 16px;
+      max-width: 90%;
+      width: 350px;
+    }
+    #ability-modal h3 { margin-bottom: 10px; color: #e94560; font-size: 14px; }
+    .modal-options { display: flex; flex-direction: column; gap: 6px; }
+    .modal-option {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #0f3460;
+      background: #1a1a2e;
+      color: #eee;
+      cursor: pointer;
+      font-size: 12px;
+      text-align: left;
+    }
+    .modal-option:hover { border-color: #e94560; }
+
+    /* Winner */
+    #winner-banner {
+      display: none;
+      text-align: center;
+      padding: 16px;
+      background: linear-gradient(135deg, #e94560, #0f3460);
+      border-radius: 12px;
+      margin: 8px 0;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    #winner-banner.show { display: block; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>Darms: Fortresses</h1>
+    <div id="phase-label" class="phase-label"></div>
+    <div id="winner-banner"></div>
+    <div id="players-area"></div>
+    <div id="draft-area"></div>
+    <div id="hand-area" style="display:none">
+      <h3>Рука</h3>
+      <div class="hand-cards" id="hand-cards"></div>
+    </div>
+    <div id="actions"></div>
+    <div id="ability-modal">
+      <div class="modal-content">
+        <h3 id="modal-title"></h3>
+        <div class="modal-options" id="modal-options"></div>
+      </div>
+    </div>
+    <div id="log"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

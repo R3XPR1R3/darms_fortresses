@@ -1,6 +1,8 @@
 import type { HeroId } from "./hero.js";
 import type { DistrictCard } from "./card.js";
 
+export const WIN_DISTRICTS = 8;
+
 /** Top-level game state — single source of truth */
 export interface GameState {
   phase: GamePhase;
@@ -13,7 +15,16 @@ export interface GameState {
   draft: DraftState | null;
   turnOrder: number[] | null;
   currentTurnIndex: number;
+  /** Index of winning player, or null */
+  winner: number | null;
+  /** Log of events for UI display */
+  log: LogEntry[];
   rng: number; // seed for deterministic randomness
+}
+
+export interface LogEntry {
+  day: number;
+  message: string;
 }
 
 export type GamePhase =
@@ -31,12 +42,16 @@ export interface PlayerState {
   hero: HeroId | null;
   /** Has this player taken their income action this turn? */
   incomeTaken: boolean;
-  /** Has this player built this turn? */
-  hasBuilt: boolean;
+  /** How many builds remaining this turn (architect gets 3, others 1) */
+  buildsRemaining: number;
+  /** Has this player used their hero ability this turn? */
+  abilityUsed: boolean;
   /** Is this player's hero assassinated this day? */
   assassinated: boolean;
-  /** Is this player's gold stolen this day? */
-  robbed: boolean;
+  /** HeroId that will be robbed when they act (thief target) */
+  robbedHeroId: HeroId | null;
+  /** Was this the first player to build 8 districts? */
+  finishedFirst: boolean;
 }
 
 /** State tracking the hero draft within a day */

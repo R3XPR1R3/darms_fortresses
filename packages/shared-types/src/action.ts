@@ -4,7 +4,9 @@ import type { HeroId } from "./hero.js";
 export type GameAction =
   | DraftPickAction
   | IncomeAction
-  | BuildAction;
+  | BuildAction
+  | AbilityAction
+  | EndTurnAction;
 
 /** Player picks a hero during draft */
 export interface DraftPickAction {
@@ -25,4 +27,28 @@ export interface BuildAction {
   type: "build";
   playerId: string;
   cardId: string;
+}
+
+/** Player uses their hero ability */
+export interface AbilityAction {
+  type: "ability";
+  playerId: string;
+  ability: AbilityPayload;
+}
+
+export type AbilityPayload =
+  | { hero: "assassin"; targetHeroId: HeroId; secondTargetHeroId?: HeroId }
+  | { hero: "thief"; targetHeroId: HeroId }
+  | { hero: "sorcerer"; mode: "draw" }
+  | { hero: "sorcerer"; mode: "swap"; targetPlayerId: string }
+  | { hero: "king" } // passive — auto-applied
+  | { hero: "cleric" } // passive — auto-applied
+  | { hero: "merchant" } // passive — auto-applied
+  | { hero: "architect" } // passive — builds handled by build action
+  | { hero: "general"; targetPlayerId: string; cardId: string };
+
+/** Player explicitly ends their turn */
+export interface EndTurnAction {
+  type: "end_turn";
+  playerId: string;
 }

@@ -1,30 +1,47 @@
 import type { GameState } from "@darms/shared-types";
-import { HEROES } from "@darms/shared-types";
+import { HeroId, HEROES } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
+import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
 
 /**
  * Build the turn order for the current day based on hero speeds.
  * Lower speed = goes first. Ties broken randomly.
+ * Also resets per-turn state and applies passive abilities for first player.
  */
 export function buildTurnOrder(state: GameState, rng: Rng): GameState {
   const indexed = state.players
     .map((p, i) => ({ idx: i, hero: p.hero }))
     .filter((p) => p.hero !== null && !state.players[p.idx].assassinated);
 
-  // Sort by hero speed, random tiebreak
   indexed.sort((a, b) => {
     const speedA = HEROES.find((h) => h.id === a.hero)!.speed;
     const speedB = HEROES.find((h) => h.id === b.hero)!.speed;
     if (speedA !== speedB) return speedA - speedB;
-    return rng.next() - 0.5; // random tiebreak
+    return rng.next() - 0.5;
   });
 
-  return {
+  // Reset per-turn state
+  const newPlayers = state.players.map((p) => ({
+    ...p,
+    incomeTaken: false,
+    buildsRemaining: p.hero === HeroId.Architect ? 3 : 1,
+    abilityUsed: false,
+  }));
+
+  let newState: GameState = {
     ...state,
+    players: newPlayers,
     turnOrder: indexed.map((p) => p.idx),
     currentTurnIndex: 0,
     rng: rng.getSeed(),
   };
+
+  // Apply passive ability for the first player
+  if (indexed.length > 0) {
+    newState = applyPassiveAbility(newState, indexed[0].idx, rng);
+  }
+
+  return newState;
 }
 
 /**
@@ -39,7 +56,7 @@ export function takeIncome(
   if (playerIdx === -1) return null;
 
   const player = state.players[playerIdx];
-  if (player.incomeTaken) return null; // already took income
+  if (player.incomeTaken) return null;
 
   if (choice === "gold") {
     const newPlayers = [...state.players];
@@ -51,8 +68,7 @@ export function takeIncome(
     return { ...state, players: newPlayers };
   }
 
-  // Draw a card
-  if (state.deck.length === 0) return null; // no cards left
+  if (state.deck.length === 0) return null;
 
   const newDeck = [...state.deck];
   const drawn = newDeck.shift()!;
@@ -68,7 +84,7 @@ export function takeIncome(
 
 /**
  * Build a district from hand. Costs gold equal to card cost.
- * Default: 1 build per turn (Architect gets up to 3 via hero ability).
+ * Architect can build up to 3 per turn, others 1.
  */
 export function buildDistrict(
   state: GameState,
@@ -79,15 +95,14 @@ export function buildDistrict(
   if (playerIdx === -1) return null;
 
   const player = state.players[playerIdx];
-  if (player.hasBuilt) return null; // already built (non-architect)
+  if (player.buildsRemaining <= 0) return null;
 
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
-  if (cardIdx === -1) return null; // card not in hand
+  if (cardIdx === -1) return null;
 
   const card = player.hand[cardIdx];
-  if (player.gold < card.cost) return null; // can't afford
+  if (player.gold < card.cost) return null;
 
-  // Check for duplicate built district
   if (player.builtDistricts.some((d) => d.name === card.name)) return null;
 
   const newHand = [...player.hand];
@@ -99,20 +114,29 @@ export function buildDistrict(
     gold: player.gold - card.cost,
     hand: newHand,
     builtDistricts: [...player.builtDistricts, card],
-    hasBuilt: true,
+    buildsRemaining: player.buildsRemaining - 1,
   };
 
-  return { ...state, players: newPlayers };
+  let newState = { ...state, players: newPlayers };
+  newState = checkWinCondition(newState);
+  return newState;
 }
 
 /**
  * Advance to the next player's turn, or end the day if all done.
  */
-export function advanceTurn(state: GameState): GameState {
+export function advanceTurn(state: GameState, rng: Rng): GameState {
   if (!state.turnOrder) return state;
 
   const nextIdx = state.currentTurnIndex + 1;
+
   if (nextIdx >= state.turnOrder.length) {
+    // Check if someone reached 8 — this was the last day
+    const someoneFinished = state.players.some((p) => p.finishedFirst);
+    if (someoneFinished) {
+      return calculateScores(state);
+    }
+
     // Day is over — go back to draft for next day
     return {
       ...state,
@@ -123,7 +147,12 @@ export function advanceTurn(state: GameState): GameState {
     };
   }
 
-  return { ...state, currentTurnIndex: nextIdx };
+  // Apply passive for next player
+  const nextPlayerIdx = state.turnOrder[nextIdx];
+  let newState: GameState = { ...state, currentTurnIndex: nextIdx };
+  newState = applyPassiveAbility(newState, nextPlayerIdx, rng);
+
+  return newState;
 }
 
 /** Get the player index whose turn it is, or null */

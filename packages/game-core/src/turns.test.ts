@@ -88,7 +88,6 @@ describe("turn phase", () => {
     const ordered = buildTurnOrder(state, rng);
     const playerIdx = currentPlayer(ordered)!;
 
-    // Give player enough gold
     const withGold = {
       ...ordered,
       players: ordered.players.map((p, i) =>
@@ -112,7 +111,6 @@ describe("turn phase", () => {
     const playerIdx = currentPlayer(ordered)!;
     const player = ordered.players[playerIdx];
 
-    // Set gold to 0
     const broke = {
       ...ordered,
       players: ordered.players.map((p, i) =>
@@ -130,7 +128,7 @@ describe("turn phase", () => {
     const ordered = buildTurnOrder(state, rng);
 
     expect(ordered.currentTurnIndex).toBe(0);
-    const next = advanceTurn(ordered);
+    const next = advanceTurn(ordered, rng);
     expect(next.currentTurnIndex).toBe(1);
   });
 
@@ -138,9 +136,8 @@ describe("turn phase", () => {
     const { state, rng } = draftAll(42);
     let ordered = buildTurnOrder(state, rng);
 
-    // Advance through all turns
     for (let i = 0; i < 4; i++) {
-      ordered = advanceTurn(ordered);
+      ordered = advanceTurn(ordered, rng);
     }
 
     expect(ordered.phase).toBe("draft");
@@ -162,12 +159,21 @@ describe("setup", () => {
     }
   });
 
+  it("players start with 2 gold", () => {
+    const deck = makeDeck(40);
+    const rng = createRng(42);
+    const state = createMatch(PLAYERS, deck, rng);
+
+    for (const p of state.players) {
+      expect(p.gold).toBe(2);
+    }
+  });
+
   it("remaining deck has correct size after dealing", () => {
     const deck = makeDeck(40);
     const rng = createRng(42);
     const state = createMatch(PLAYERS, deck, rng);
 
-    // 40 cards - 4*5 dealt = 20 remaining
     expect(state.deck.length).toBe(20);
   });
 });

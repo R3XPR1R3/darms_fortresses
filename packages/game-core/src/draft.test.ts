@@ -54,7 +54,6 @@ describe("draft phase", () => {
     let state = createMatch(PLAYERS, makeDeck(40), rng);
     state = initDraft(state, rng);
 
-    // All 4 players pick in order
     for (let step = 0; step < 4; step++) {
       const drafterIdx = currentDrafter(state)!;
       expect(drafterIdx).not.toBeNull();
@@ -67,13 +66,10 @@ describe("draft phase", () => {
       state = next!;
     }
 
-    // After all picks, phase should be "turns"
     expect(state.phase).toBe("turns");
-    // Each player should have a hero
     for (const p of state.players) {
       expect(p.hero).not.toBeNull();
     }
-    // All heroes accounted for (4 picked + 4 banned)
     const picked = state.players.map((p) => p.hero!);
     const banned = [
       ...state.draft!.faceUpBans,
@@ -87,7 +83,6 @@ describe("draft phase", () => {
     let state = createMatch(PLAYERS, makeDeck(40), rng);
     state = initDraft(state, rng);
 
-    // Try to pick with wrong player
     const hero = state.draft!.availableHeroes[0];
     const wrongPlayer = state.players.find(
       (_, i) => i !== state.draft!.draftOrder[0],

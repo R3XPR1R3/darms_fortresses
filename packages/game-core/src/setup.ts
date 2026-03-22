@@ -6,13 +6,13 @@ import type { Rng } from "./rng.js";
  *
  * - Each player receives 5 random cards (no purple in first hand)
  * - First player (crown holder) is chosen randomly
+ * - Each player starts with 2 gold
  */
 export function createMatch(
   playerInfos: Array<{ id: string; name: string }>,
   deck: DistrictCard[],
   rng: Rng,
 ): GameState {
-  // Separate purple cards from the starting deck
   const normalCards = deck.filter((c) => !c.purple);
   const shuffled = [...normalCards];
   rng.shuffle(shuffled);
@@ -22,18 +22,19 @@ export function createMatch(
     return {
       id: info.id,
       name: info.name,
-      gold: 0,
+      gold: 2,
       hand,
       builtDistricts: [],
       hero: null,
       incomeTaken: false,
-      hasBuilt: false,
+      buildsRemaining: 0,
+      abilityUsed: false,
       assassinated: false,
-      robbed: false,
+      robbedHeroId: null,
+      finishedFirst: false,
     };
   });
 
-  // Random first crown holder
   const crownHolder = rng.int(0, players.length - 1);
 
   return {
@@ -41,11 +42,13 @@ export function createMatch(
     players,
     crownHolder,
     day: 1,
-    deck: shuffled, // remaining cards after dealing
+    deck: shuffled,
     discardPile: [],
     draft: null,
     turnOrder: null,
     currentTurnIndex: 0,
+    winner: null,
+    log: [],
     rng: rng.getSeed(),
   };
 }
