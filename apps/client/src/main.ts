@@ -955,11 +955,19 @@ function showAbilityModal(heroId: HeroId) {
 
   switch (heroId) {
     case HeroId.Assassin: {
-      title.textContent = "Кого убить?";
-      const targets = Object.values(HeroId).filter((h) => h !== HeroId.Assassin);
-      options.innerHTML = targets.map((h) =>
-        `<button class="modal-option" data-target="${h}">${heroIcon(h)} ${heroName(h)}</button>`,
-      ).join("");
+      title.textContent = "Убить персонажа";
+      const draft = getDraft();
+      const faceUpBans = draft?.faceUpBans ?? [];
+      // Exclude self and face-up banned heroes (known to not be in play)
+      const targets = Object.values(HeroId).filter((h) =>
+        h !== HeroId.Assassin && !faceUpBans.includes(h),
+      );
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Ты не знаешь, кто взял какую роль. Выбери персонажа — если кто-то его взял, он пропустит ход.</p>
+        ${targets.map((h) =>
+          `<button class="modal-option" data-target="${h}">${heroIcon(h)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
+        ).join("")}
+      `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
           const target = (btn as HTMLElement).dataset.target as HeroId;
@@ -970,11 +978,19 @@ function showAbilityModal(heroId: HeroId) {
       break;
     }
     case HeroId.Thief: {
-      title.textContent = "Кого обокрасть?";
-      const targets = Object.values(HeroId).filter((h) => h !== HeroId.Thief && h !== HeroId.Assassin);
-      options.innerHTML = targets.map((h) =>
-        `<button class="modal-option" data-target="${h}">${heroIcon(h)} ${heroName(h)}</button>`,
-      ).join("");
+      title.textContent = "Обокрасть персонажа";
+      const draft = getDraft();
+      const faceUpBans = draft?.faceUpBans ?? [];
+      // Exclude self, assassin, and face-up banned heroes
+      const targets = Object.values(HeroId).filter((h) =>
+        h !== HeroId.Thief && h !== HeroId.Assassin && !faceUpBans.includes(h),
+      );
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Выбери роль — когда начнётся ход этого персонажа, ты заберёшь всё его золото.</p>
+        ${targets.map((h) =>
+          `<button class="modal-option" data-target="${h}">${heroIcon(h)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
+        ).join("")}
+      `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
           const target = (btn as HTMLElement).dataset.target as HeroId;
@@ -990,10 +1006,14 @@ function showAbilityModal(heroId: HeroId) {
       const myIdx = getMyIndex();
       const otherPlayers = players.filter((_, i) => i !== myIdx);
       options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Взять 2 карты из колоды, или обменяться рукой с другим игроком.</p>
         <button class="modal-option" data-mode="draw">${heroIcon(HeroId.Sorcerer)} Взять 2 карты</button>
-        ${otherPlayers.map((p) =>
-          `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 Обмен с ${p.name} (${p.hand ? p.hand.length : p.handSize} карт)</button>`,
-        ).join("")}
+        ${otherPlayers.map((p) => {
+          const revealedIdx = players.indexOf(p);
+          const revealed = isHeroRevealed(revealedIdx);
+          const heroTag = revealed && p.hero ? ` (${heroName(p.hero)})` : "";
+          return `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 Обмен с ${p.name}${heroTag} — ${p.hand ? p.hand.length : p.handSize} карт</button>`;
+        }).join("")}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1010,7 +1030,7 @@ function showAbilityModal(heroId: HeroId) {
       break;
     }
     case HeroId.General: {
-      title.textContent = "Чей квартал разрушить?";
+      title.textContent = "Разрушить квартал";
       const players = getPlayers();
       const me = players[getMyIndex()];
       const targets = players
@@ -1019,15 +1039,22 @@ function showAbilityModal(heroId: HeroId) {
         options.innerHTML = '<p class="hint">Нет доступных целей</p>';
         break;
       }
-      options.innerHTML = targets.flatMap((p) =>
-        p.builtDistricts
+      const targetButtons = targets.flatMap((p) => {
+        const pIdx = players.indexOf(p);
+        const revealed = isHeroRevealed(pIdx);
+        const heroTag = revealed && p.hero ? ` (${heroName(p.hero)})` : "";
+        return p.builtDistricts
           .filter((d) => me && d.cost <= me.gold)
           .map((d) =>
             `<button class="modal-option" data-target="${p.id}" data-card="${d.id}">
-              💥 ${d.name} (${d.cost}💰) у ${p.name}
+              💥 ${d.name} (${d.cost}💰) у ${p.name}${heroTag}
             </button>`,
-          ),
-      ).join("") || '<p class="hint">Не хватает золота</p>';
+          );
+      });
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Потрать золото чтобы разрушить квартал противника. Клерик защищён.</p>
+        ${targetButtons.join("") || '<p class="hint">Не хватает золота</p>'}
+      `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
           const targetId = (btn as HTMLElement).dataset.target!;
