@@ -120,6 +120,7 @@ export function useAbility(
   const playerIdx = state.players.findIndex((p) => p.id === playerId);
   if (playerIdx === -1) return null;
   const player = state.players[playerIdx];
+  if (player.assassinated) return null;
   if (player.abilityUsed) return null;
 
   const newPlayers = [...state.players];
@@ -132,7 +133,7 @@ export function useAbility(
       const targetIdx = findPlayerByHero(state.players, ability.targetHeroId);
       if (targetIdx !== -1) {
         newPlayers[targetIdx] = { ...state.players[targetIdx], assassinated: true };
-        log = addLog({ ...state, log }, `${player.name} убил ${HEROES.find((h) => h.id === ability.targetHeroId)!.name}`);
+        log = addLog({ ...state, log }, `${player.name} совершил убийство...`);
       }
       newPlayers[playerIdx] = { ...newPlayers[playerIdx], abilityUsed: true };
       break;
@@ -142,7 +143,7 @@ export function useAbility(
       // Can't target assassin or self
       if (ability.targetHeroId === HeroId.Thief || ability.targetHeroId === HeroId.Assassin) return null;
       newPlayers[playerIdx] = { ...player, robbedHeroId: ability.targetHeroId, abilityUsed: true };
-      log = addLog({ ...state, log }, `${player.name} собирается обокрасть ${HEROES.find((h) => h.id === ability.targetHeroId)!.name}`);
+      log = addLog({ ...state, log }, `${player.name} готовит ограбление...`);
       break;
     }
     case "sorcerer": {

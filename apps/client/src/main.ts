@@ -386,9 +386,32 @@ function heroIcon(id: HeroId | string): string {
   return HERO_ICONS[id] ?? "";
 }
 
-function colorClass(colors: string[]): string {
-  if (colors.length > 1) return "color-multi";
-  return `color-${colors[0]}`;
+const COLOR_HEX: Record<string, string> = {
+  yellow: "#f0c040",
+  blue: "#4090f0",
+  green: "#40c060",
+  red: "#e04050",
+  purple: "#9060e0",
+};
+
+/** Returns CSS class for single-color, or inline style attr for multi-color split */
+function colorStyle(colors: string[]): { cls: string; style: string } {
+  if (colors.length === 1) {
+    return { cls: `color-${colors[0]}`, style: "" };
+  }
+  // Dual-color: 50/50 split gradient
+  const c1 = COLOR_HEX[colors[0]] ?? "#888";
+  const c2 = COLOR_HEX[colors[1]] ?? "#888";
+  return {
+    cls: "",
+    style: `background: linear-gradient(135deg, ${c1} 50%, ${c2} 50%); color: #fff;`,
+  };
+}
+
+function districtChipHtml(d: { colors: string[]; name: string; cost: number }): string {
+  const cs = colorStyle(d.colors);
+  const dots = d.colors.map(c => districtColorDot(c)).join("");
+  return `<span class="district-chip ${cs.cls}" style="${cs.style}">${dots} ${d.name} (${d.cost})</span>`;
 }
 
 // ---- Player switching state ----
@@ -399,8 +422,11 @@ let selectedOpponentIndex: number | null = null;
  * Rules:
  * - Always see your own hero
  * - During draft: nobody's hero is revealed
- * - During turns: a player's hero is visible if their turn has started or passed
- *   (i.e., their position in turnOrder <= currentTurnIndex)
+ * - During turns: a player's hero is visible if their turn position
+ *   has been reached or passed (posInOrder <= currentTurnIndex).
+ *   Assassinated players stay hidden until their turn would have come,
+ *   keeping the intrigue alive. advanceTurn skips them, so
+ *   currentTurnIndex jumps past their position.
  * - During end phase: all heroes visible
  */
 function isHeroRevealed(playerIndex: number): boolean {
@@ -414,12 +440,7 @@ function isHeroRevealed(playerIndex: number): boolean {
 
   const currentTurnIdx = getCurrentTurnIndex();
   const posInOrder = turnOrder.indexOf(playerIndex);
-  if (posInOrder === -1) {
-    // Player was assassinated (not in turn order) — hero still revealed
-    // because assassination itself reveals them
-    const players = getPlayers();
-    return players[playerIndex]?.assassinated ?? false;
-  }
+  if (posInOrder === -1) return false;
   return posInOrder <= currentTurnIdx;
 }
 
@@ -695,7 +716,7 @@ function renderOpponentBoard() {
 
   // Districts
   const districts = p.builtDistricts.map(
-    (d) => `<span class="district-chip ${colorClass(d.colors)}">${d.colors.map(c => districtColorDot(c)).join("")} ${d.name} (${d.cost})</span>`,
+    (d) => districtChipHtml(d),
   ).join("");
   const districtsSection = districts
     ? `<div class="opp-districts">${districts}</div>`
@@ -850,7 +871,7 @@ function renderMyBoard() {
 
   // My districts
   const districts = me.builtDistricts.map(
-    (d) => `<span class="district-chip ${colorClass(d.colors)}">${d.colors.map(c => districtColorDot(c)).join("")} ${d.name} (${d.cost})</span>`,
+    (d) => districtChipHtml(d),
   ).join("");
   const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
 
@@ -862,8 +883,9 @@ function renderMyBoard() {
       const affordable = me.gold >= c.cost;
       const duplicate = me.builtDistricts.some((d) => d.name === c.name);
       const buildable = canBuild && affordable && !duplicate;
+      const cs = colorStyle(c.colors);
       return `
-        <div class="hand-card ${colorClass(c.colors)}">
+        <div class="hand-card ${cs.cls}" style="${cs.style}">
           <span class="card-colors">${c.colors.map(col => districtColorDot(col)).join("")}</span>
           <span class="card-cost">${c.cost}</span> ${c.name}
           ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">Строить</button>` : ""}
@@ -881,7 +903,9 @@ function renderMyBoard() {
   // Actions
   let actionsSection = "";
   if (phase === "turns") {
-    if (!myTurnNow) {
+    if (me.assassinated) {
+      actionsSection = '<div id="my-actions"><p class="hint">💀 Вы убиты в этот день. Ваш ход пропущен.</p></div>';
+    } else if (!myTurnNow) {
       actionsSection = '<div id="my-actions"><p class="hint">Ждём ход других игроков...</p></div>';
     } else {
       const buttons: string[] = [];
