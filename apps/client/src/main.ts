@@ -410,7 +410,7 @@ function renderLobby() {
       <div class="room-code">Код комнаты: <strong>${myRoomId}</strong></div>
       <div class="lobby-info">Отправь код друзьям для подключения</div>
       <div class="lobby-players">${playersList}</div>
-      <div class="lobby-count">${lobbyPlayers.length}/6 игроков (мин. 4)</div>
+      <div class="lobby-count">${lobbyPlayers.length}/4 игрока</div>
       ${isHost ? `
         <div class="lobby-actions">
           <button class="btn btn-secondary" id="btn-add-bot">🤖 Добавить бота</button>
@@ -433,9 +433,34 @@ function renderLobby() {
   });
 }
 
+function ensureGameLayout() {
+  if (document.getElementById("phase-label")) return;
+  const app = document.getElementById("app")!;
+  app.innerHTML = `
+    <h1>⚔ Darms: Fortresses</h1>
+    <div id="phase-label" class="phase-label"></div>
+    <div id="winner-banner"></div>
+    <div id="players-area"></div>
+    <div id="draft-area"></div>
+    <div id="hand-area" style="display:none">
+      <h3>Рука</h3>
+      <div class="hand-cards" id="hand-cards"></div>
+    </div>
+    <div id="actions"></div>
+    <div id="ability-modal">
+      <div class="modal-content">
+        <h3 id="modal-title"></h3>
+        <div class="modal-options" id="modal-options"></div>
+      </div>
+    </div>
+    <div id="log"></div>
+  `;
+}
+
 function render() {
   if (mode === "menu") { renderMenu(); return; }
   if (mode === "lobby") { renderLobby(); return; }
+  ensureGameLayout();
   renderPhaseLabel();
   renderPlayers();
   renderDraft();
