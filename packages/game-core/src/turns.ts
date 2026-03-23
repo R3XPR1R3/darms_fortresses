@@ -141,6 +141,7 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     return {
       ...state,
       phase: "draft",
+      draft: null,
       currentTurnIndex: 0,
       turnOrder: null,
       day: state.day + 1,

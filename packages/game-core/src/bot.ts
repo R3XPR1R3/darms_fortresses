@@ -17,32 +17,10 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
     if (state.players[drafterIdx].id !== botPlayerId) return null;
 
     const available = state.draft!.availableHeroes;
-    // Prefer heroes that match built district colors, otherwise random
+    if (available.length === 0) return null;
+
     const player = state.players[drafterIdx];
-    const colorCounts: Record<string, number> = {};
-    for (const d of player.builtDistricts) {
-      for (const c of d.colors) {
-        colorCounts[c] = (colorCounts[c] || 0) + 1;
-      }
-    }
-
-    // Simple heuristic: prefer heroes matching dominant color
-    let bestHero = available[rng.int(0, available.length - 1)];
-    const heroColorMap: Record<string, string> = {
-      [HeroId.King]: "yellow",
-      [HeroId.Cleric]: "blue",
-      [HeroId.Merchant]: "green",
-      [HeroId.General]: "red",
-    };
-
-    for (const h of available) {
-      const hColor = heroColorMap[h];
-      if (hColor && (colorCounts[hColor] || 0) >= 2) {
-        bestHero = h;
-        break;
-      }
-    }
-
+    const bestHero = scoreDraftPick(player, available, state, rng);
     return { type: "draft_pick", playerId: botPlayerId, heroId: bestHero };
   }
 
@@ -170,4 +148,111 @@ function pickAbility(
     default:
       return null;
   }
+}
+
+/**
+ * Smart hero selection for bot draft.
+ * Scores each hero based on:
+ * 1. Color synergy with built districts (how many matching districts)
+ * 2. Color synergy with hand cards (what they can build soon)
+ * 3. Base hero value (some heroes are inherently more versatile)
+ * 4. Risk assessment: known banned heroes change threat landscape
+ * 5. Random noise for variety
+ */
+function scoreDraftPick(
+  player: GameState["players"][0],
+  available: HeroId[],
+  state: GameState,
+  rng: ReturnType<typeof createRng>,
+): HeroId {
+  const heroColorMap: Record<string, string> = {
+    [HeroId.King]: "yellow",
+    [HeroId.Cleric]: "blue",
+    [HeroId.Merchant]: "green",
+    [HeroId.General]: "red",
+  };
+
+  // Count colors in built districts
+  const builtColorCounts: Record<string, number> = {};
+  for (const d of player.builtDistricts) {
+    for (const c of d.colors) {
+      builtColorCounts[c] = (builtColorCounts[c] || 0) + 1;
+    }
+  }
+
+  // Count colors in hand
+  const handColorCounts: Record<string, number> = {};
+  for (const d of player.hand) {
+    for (const c of d.colors) {
+      handColorCounts[c] = (handColorCounts[c] || 0) + 1;
+    }
+  }
+
+  // Base value for each hero (how generally useful they are)
+  const baseValue: Record<string, number> = {
+    [HeroId.Assassin]: 6,   // strong disruption
+    [HeroId.Thief]: 5,      // economy disruption
+    [HeroId.Sorcerer]: 4,   // utility
+    [HeroId.King]: 5,       // crown + income
+    [HeroId.Cleric]: 5,     // protection + income
+    [HeroId.Merchant]: 6,   // guaranteed income (+1 always)
+    [HeroId.Architect]: 7,  // fast building (very strong)
+    [HeroId.General]: 4,    // destruction (expensive)
+  };
+
+  // If someone is close to winning, boost assassin/general
+  const maxDistricts = Math.max(...state.players
+    .filter((p) => p.id !== player.id)
+    .map((p) => p.builtDistricts.length));
+  const threatLevel = maxDistricts >= 6 ? 3 : maxDistricts >= 5 ? 1.5 : 0;
+
+  // Known banned heroes (face-up bans) tell us what ISN'T in play
+  const faceUpBans = state.draft?.faceUpBans ?? [];
+
+  let bestHero = available[0];
+  let bestScore = -Infinity;
+
+  for (const h of available) {
+    let score = baseValue[h] ?? 3;
+
+    // Color synergy bonus
+    const hColor = heroColorMap[h];
+    if (hColor) {
+      const builtCount = builtColorCounts[hColor] || 0;
+      const handCount = handColorCounts[hColor] || 0;
+      score += builtCount * 2;  // strong synergy with built districts
+      score += handCount * 1;   // moderate synergy with hand cards
+    }
+
+    // Threat response: boost assassin/general when opponent is close to winning
+    if (threatLevel > 0) {
+      if (h === HeroId.Assassin) score += threatLevel;
+      if (h === HeroId.General) score += threatLevel * 0.7;
+    }
+
+    // If architect is banned (face-up), building-focused heroes are safer
+    if (faceUpBans.includes(HeroId.Assassin)) {
+      // Assassin banned = safer to pick high-value roles
+      if (h === HeroId.Architect || h === HeroId.Merchant) score += 1.5;
+    }
+
+    // If player has low gold, merchant is more valuable
+    if (player.gold <= 1 && h === HeroId.Merchant) score += 2;
+
+    // If player has many cards, architect is more valuable
+    if (player.hand.length >= 4 && h === HeroId.Architect) score += 2;
+
+    // Cleric protection is more valuable with more built districts
+    if (h === HeroId.Cleric && player.builtDistricts.length >= 4) score += 2;
+
+    // Random noise for variety (±1.5)
+    score += (rng.next() - 0.5) * 3;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestHero = h;
+    }
+  }
+
+  return bestHero;
 }
