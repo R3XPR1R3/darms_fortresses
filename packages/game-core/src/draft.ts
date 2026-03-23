@@ -48,9 +48,10 @@ export function initDraft(state: GameState, rng: Rng): GameState {
       ...p,
       hero: null,
       assassinated: false,
-      robbed: false,
+      robbedHeroId: null,
       incomeTaken: false,
-      hasBuilt: false,
+      buildsRemaining: 0,
+      abilityUsed: false,
     })),
   };
 }

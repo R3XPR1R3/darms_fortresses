@@ -433,9 +433,34 @@ function renderLobby() {
   });
 }
 
+function ensureGameLayout() {
+  if (document.getElementById("phase-label")) return;
+  const app = document.getElementById("app")!;
+  app.innerHTML = `
+    <h1>⚔ Darms: Fortresses</h1>
+    <div id="phase-label" class="phase-label"></div>
+    <div id="winner-banner"></div>
+    <div id="players-area"></div>
+    <div id="draft-area"></div>
+    <div id="hand-area" style="display:none">
+      <h3>Рука</h3>
+      <div class="hand-cards" id="hand-cards"></div>
+    </div>
+    <div id="actions"></div>
+    <div id="ability-modal">
+      <div class="modal-content">
+        <h3 id="modal-title"></h3>
+        <div class="modal-options" id="modal-options"></div>
+      </div>
+    </div>
+    <div id="log"></div>
+  `;
+}
+
 function render() {
   if (mode === "menu") { renderMenu(); return; }
   if (mode === "lobby") { renderLobby(); return; }
+  ensureGameLayout();
   renderPhaseLabel();
   renderPlayers();
   renderDraft();

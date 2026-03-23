@@ -96,11 +96,16 @@ wss.on("connection", (ws) => {
       case "start_game": {
         const meta = socketMeta.get(ws);
         if (!meta) { send(ws, { type: "error", message: "Вы не в комнате" }); break; }
-        const err = startGame(meta.roomId, meta.playerId);
-        if (err) {
-          send(ws, { type: "error", message: err });
-        } else {
-          broadcastState(meta.roomId);
+        try {
+          const err = startGame(meta.roomId, meta.playerId);
+          if (err) {
+            send(ws, { type: "error", message: err });
+          } else {
+            broadcastState(meta.roomId);
+          }
+        } catch (e) {
+          console.error("startGame error:", e);
+          send(ws, { type: "error", message: "Ошибка запуска игры" });
         }
         break;
       }
