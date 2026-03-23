@@ -165,7 +165,19 @@ function scheduleBotStep(room: Room) {
 
   // Determine delay: draft = 1.2s, end_turn = 5s, other actions = 1s
   const action = botAction(room.state, botInfo.botId);
-  if (!action) return;
+  if (!action) {
+    // Bot has no action (shouldn't happen) — force end turn
+    const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
+    if (fallback) {
+      room.state = fallback;
+      if (room.state.phase === "draft" && !room.state.draft) {
+        room.state = startDraft(room.state);
+      }
+      room.broadcastState?.();
+    }
+    scheduleBotStep(room);
+    return;
+  }
 
   const delay = action.type === "draft_pick" ? 1200
     : action.type === "end_turn" ? 5000
@@ -176,7 +188,21 @@ function scheduleBotStep(room: Room) {
     if (!room.state || room.state.phase === "end") return;
 
     const next = processAction(room.state, action);
-    if (!next) return;
+    if (!next) {
+      // Action failed — force end turn to prevent infinite loop
+      if (action.type !== "end_turn") {
+        const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
+        if (fallback) {
+          room.state = fallback;
+          if (room.state.phase === "draft" && !room.state.draft) {
+            room.state = startDraft(room.state);
+          }
+          room.broadcastState?.();
+        }
+      }
+      scheduleBotStep(room);
+      return;
+    }
     room.state = next;
 
     // Start new draft if day transition happened

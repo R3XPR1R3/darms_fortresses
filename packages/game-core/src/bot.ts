@@ -106,7 +106,7 @@ function pickAbility(
         return { type: "ability", playerId, ability: { hero: "sorcerer", mode: "draw" } };
       }
       const richest = state.players
-        .filter((p) => p.id !== playerId)
+        .filter((p) => p.id !== playerId && !p.assassinated)
         .sort((a, b) => b.hand.length - a.hand.length)[0];
       if (richest && richest.hand.length > player.hand.length) {
         return {

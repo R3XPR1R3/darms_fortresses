@@ -133,13 +133,29 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   let nextIdx = state.currentTurnIndex + 1;
   let log = state.log;
 
-  // Skip assassinated players in turn order — reveal who was killed
-  while (nextIdx < state.turnOrder.length && state.players[state.turnOrder[nextIdx]].assassinated) {
-    const killed = state.players[state.turnOrder[nextIdx]];
-    const heroName = HEROES.find((h) => h.id === killed.hero)?.name ?? "???";
-    log = [...log, { day: state.day, message: `💀 ${heroName} (${killed.name}) был убит! Ход пропущен.` }];
+  // Skip assassinated players — but still process theft against them
+  let players = [...state.players];
+  while (nextIdx < state.turnOrder.length && players[state.turnOrder[nextIdx]].assassinated) {
+    const killedIdx = state.turnOrder[nextIdx];
+    const killed = players[killedIdx];
+    const killedHeroName = HEROES.find((h) => h.id === killed.hero)?.name ?? "???";
+    log = [...log, { day: state.day, message: `💀 ${killedHeroName} (${killed.name}) был убит! Ход пропущен.` }];
+
+    // Thief still steals from assassinated players
+    const thiefIdx = players.findIndex(
+      (p) => p.hero === HeroId.Thief && p.robbedHeroId === killed.hero,
+    );
+    if (thiefIdx !== -1 && killed.gold > 0) {
+      const stolenGold = killed.gold;
+      players = [...players];
+      players[killedIdx] = { ...killed, gold: 0 };
+      players[thiefIdx] = { ...players[thiefIdx], gold: players[thiefIdx].gold + stolenGold };
+      log = [...log, { day: state.day, message: `${players[thiefIdx].name} украл ${stolenGold} золота у убитого ${killed.name}` }];
+    }
+
     nextIdx++;
   }
+  state = { ...state, players, log };
 
   if (nextIdx >= state.turnOrder.length) {
     // Check if someone reached 8 — this was the last day
