@@ -376,8 +376,57 @@ function colorClass(colors: string[]): string {
   return `color-${colors[0]}`;
 }
 
+// ---- Player switching state ----
+let selectedOpponentIndex: number | null = null;
+
+/**
+ * Determine if a player's hero should be visible to the current player.
+ * Rules:
+ * - Always see your own hero
+ * - During draft: nobody's hero is revealed
+ * - During turns: a player's hero is visible if their turn has started or passed
+ *   (i.e., their position in turnOrder <= currentTurnIndex)
+ * - During end phase: all heroes visible
+ */
+function isHeroRevealed(playerIndex: number): boolean {
+  if (playerIndex === getMyIndex()) return true;
+  const phase = getPhase();
+  if (phase === "end") return true;
+  if (phase !== "turns") return false;
+
+  const turnOrder = getTurnOrder();
+  if (!turnOrder) return false;
+
+  const currentTurnIdx = getCurrentTurnIndex();
+  const posInOrder = turnOrder.indexOf(playerIndex);
+  if (posInOrder === -1) {
+    // Player was assassinated (not in turn order) — hero still revealed
+    // because assassination itself reveals them
+    const players = getPlayers();
+    return players[playerIndex]?.assassinated ?? false;
+  }
+  return posInOrder <= currentTurnIdx;
+}
+
+function getTurnOrder(): number[] | null {
+  if (mode === "online" && onlineState) return onlineState.turnOrder;
+  if (localState) return localState.turnOrder;
+  return null;
+}
+
+function getCurrentTurnIndex(): number {
+  if (mode === "online" && onlineState) return onlineState.currentTurnIndex;
+  if (localState) return localState.currentTurnIndex;
+  return 0;
+}
+
 // ---- Rendering ----
 function renderMenu() {
+  // Clean up game board if exists
+  const board = document.getElementById("game-board");
+  if (board) board.remove();
+  selectedOpponentIndex = null;
+
   const app = document.getElementById("app")!;
   app.innerHTML = `
     <h1>⚔ Darms: Fortresses</h1>
@@ -434,87 +483,214 @@ function renderLobby() {
 }
 
 function ensureGameLayout() {
-  if (document.getElementById("phase-label")) return;
+  if (document.getElementById("game-board")) return;
   const app = document.getElementById("app")!;
-  app.innerHTML = `
-    <h1>⚔ Darms: Fortresses</h1>
-    <div id="phase-label" class="phase-label"></div>
-    <div id="winner-banner"></div>
-    <div id="players-area"></div>
-    <div id="draft-area"></div>
-    <div id="hand-area" style="display:none">
-      <h3>Рука</h3>
-      <div class="hand-cards" id="hand-cards"></div>
+  app.innerHTML = "";
+  const board = document.createElement("div");
+  board.id = "game-board";
+  board.innerHTML = `
+    <div id="turn-banner"></div>
+    <div id="opponent-tabs"></div>
+    <div id="opponent-board"></div>
+    <div id="center-area">
+      <div id="draft-area"></div>
     </div>
-    <div id="actions"></div>
-    <div id="ability-modal">
-      <div class="modal-content">
-        <h3 id="modal-title"></h3>
-        <div class="modal-options" id="modal-options"></div>
-      </div>
-    </div>
-    <div id="log"></div>
+    <div id="my-board"></div>
+    <div id="log-toggle">📜 Журнал</div>
+    <div id="game-log"></div>
   `;
+  document.body.insertBefore(board, document.body.firstChild);
+
+  document.getElementById("log-toggle")!.addEventListener("click", () => {
+    document.getElementById("game-log")!.classList.toggle("show");
+  });
 }
 
 function render() {
   if (mode === "menu") { renderMenu(); return; }
   if (mode === "lobby") { renderLobby(); return; }
   ensureGameLayout();
-  renderPhaseLabel();
-  renderPlayers();
+  renderTurnBanner();
+  renderOpponentTabs();
+  renderOpponentBoard();
   renderDraft();
-  renderHand();
-  renderActions();
+  renderMyBoard();
   renderLog();
   renderWinner();
 }
 
-function renderPhaseLabel() {
-  const el = document.getElementById("phase-label")!;
+function renderTurnBanner() {
+  const el = document.getElementById("turn-banner")!;
   if (!el) return;
   const phase = getPhase();
   const day = getDay();
-  const labels: Record<string, string> = {
-    setup: "Подготовка...",
-    draft: `День ${day} — Выбор героя`,
-    turns: `День ${day} — Ходы`,
-    end: "Игра окончена",
-  };
-  el.textContent = labels[phase] || phase;
+  const activeIdx = getActiveIndex();
+  const players = getPlayers();
+  const myTurn = isMyTurn();
+
+  if (phase === "draft") {
+    el.className = "turn-banner" + (myTurn ? " my-turn" : "");
+    el.id = "turn-banner";
+    el.innerHTML = myTurn
+      ? `⚔ День ${day} — Твой выбор героя!`
+      : `День ${day} — Выбор героя...`;
+    return;
+  }
+
+  if (phase === "turns" && activeIdx !== null) {
+    const activePlayer = players[activeIdx];
+    const revealed = isHeroRevealed(activeIdx);
+    el.className = "turn-banner" + (myTurn ? " my-turn" : "");
+    el.id = "turn-banner";
+    if (myTurn) {
+      const heroId = activePlayer?.hero;
+      el.innerHTML = heroId
+        ? `${heroIcon(heroId)} Твой ход — ${heroName(heroId)}`
+        : `⚔ Твой ход!`;
+    } else {
+      if (revealed && activePlayer?.hero) {
+        el.innerHTML = `${heroIcon(activePlayer.hero)} Ход: ${heroName(activePlayer.hero)} (${activePlayer.name})`;
+      } else {
+        el.innerHTML = `⏳ Ход: ${activePlayer?.name ?? "..."}`;
+      }
+    }
+    return;
+  }
+
+  if (phase === "end") {
+    el.className = "";
+    el.id = "turn-banner";
+    el.innerHTML = "🏆 Игра окончена";
+    return;
+  }
+
+  el.className = "";
+  el.id = "turn-banner";
+  el.innerHTML = `День ${day}`;
 }
 
-function renderPlayers() {
-  const el = document.getElementById("players-area")!;
+function renderOpponentTabs() {
+  const el = document.getElementById("opponent-tabs")!;
   if (!el) return;
   const players = getPlayers();
+  const myIdx = getMyIndex();
   const activeIdx = getActiveIndex();
+  const phase = getPhase();
 
-  el.innerHTML = players.map((p, i) => {
+  // Only show tabs during turns or end phase
+  if (phase !== "turns" && phase !== "end") {
+    el.innerHTML = "";
+    return;
+  }
+
+  const opponents = players
+    .map((p, i) => ({ player: p, index: i }))
+    .filter((x) => x.index !== myIdx);
+
+  // Auto-select first opponent if none selected
+  if (selectedOpponentIndex === null || selectedOpponentIndex === myIdx) {
+    selectedOpponentIndex = opponents[0]?.index ?? null;
+  }
+
+  el.innerHTML = opponents.map((x) => {
+    const p = x.player;
+    const i = x.index;
     const isActive = i === activeIdx;
-    const isMe = i === getMyIndex();
-    const heroId = p.hero;
-    const heroDisplay = heroId
-      ? `<span class="hero-badge">${heroIcon(heroId)} ${heroName(heroId)} <span class="speed-badge">${heroSpeed(heroId)}</span></span>`
-      : "—";
-    const districts = p.builtDistricts.map(
-      (d) => `<span class="district-chip ${colorClass(d.colors)}">${d.colors.map(c => districtColorDot(c)).join("")} ${d.name} (${d.cost})</span>`,
-    ).join("");
+    const revealed = isHeroRevealed(i);
+    const selected = i === selectedOpponentIndex;
+
+    let label: string;
+    let heroLine = "";
+
+    if (revealed && p.hero) {
+      label = heroName(p.hero);
+      heroLine = `<span class="tab-hero">${heroIcon(p.hero)}</span>`;
+    } else {
+      label = p.name;
+      heroLine = `<span class="tab-sleep">💤</span>`;
+    }
+
+    const stats = `<span class="tab-stats">💰${p.gold} 🏠${p.builtDistricts.length}/${WIN_DISTRICTS}</span>`;
 
     return `
-      <div class="player-card ${isActive ? "active" : ""} ${isMe ? "me" : ""}">
-        <div class="player-header">
-          <span class="name">${isMe ? "👤" : "🤖"} ${p.name} ${p.finishedFirst ? "⭐" : ""}</span>
-          ${p.assassinated ? '<span class="status-dead">💀</span>' : ""}
-        </div>
-        <div class="hero-line">${heroDisplay}</div>
-        <div class="stats">
-          💰 ${p.gold} | 🃏 ${p.hand ? p.hand.length : p.handSize} | 🏠 ${p.builtDistricts.length}/${WIN_DISTRICTS}
-        </div>
-        ${districts ? `<div class="districts">${districts}</div>` : ""}
-      </div>
+      <button class="opp-tab ${selected ? "active" : ""} ${isActive ? "is-current-turn" : ""}" data-opp-idx="${i}">
+        ${heroLine}
+        <span>${label}</span>
+        ${stats}
+      </button>
     `;
   }).join("");
+
+  el.querySelectorAll(".opp-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectedOpponentIndex = parseInt((btn as HTMLElement).dataset.oppIdx!, 10);
+      renderOpponentTabs();
+      renderOpponentBoard();
+    });
+  });
+}
+
+function renderOpponentBoard() {
+  const el = document.getElementById("opponent-board")!;
+  if (!el) return;
+  const phase = getPhase();
+
+  if ((phase !== "turns" && phase !== "end") || selectedOpponentIndex === null) {
+    el.innerHTML = "";
+    return;
+  }
+
+  const players = getPlayers();
+  const p = players[selectedOpponentIndex];
+  if (!p) { el.innerHTML = ""; return; }
+
+  const revealed = isHeroRevealed(selectedOpponentIndex);
+
+  // Hero display
+  let heroSection: string;
+  if (revealed && p.hero) {
+    const heroDef = HEROES.find((h) => h.id === p.hero);
+    heroSection = `
+      <div class="opp-hero-display">
+        <div class="hero-icon-large">${heroIconLarge(p.hero)}</div>
+        <div class="hero-name">${heroName(p.hero)}</div>
+        <div class="hero-speed">Скорость ${heroDef?.speed ?? "?"}</div>
+      </div>
+    `;
+  } else {
+    heroSection = `
+      <div class="opp-hero-display">
+        <div class="sleep-display">💤</div>
+        <div class="hero-name" style="color: #888;">${p.name}</div>
+        <div class="hero-speed">Роль скрыта</div>
+      </div>
+    `;
+  }
+
+  // Stats bar
+  const statsBar = `
+    <div class="opp-stats-bar">
+      <span>💰 ${p.gold}</span>
+      <span>🃏 ${p.hand ? p.hand.length : p.handSize}</span>
+      <span>🏠 ${p.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      ${p.finishedFirst ? "<span>⭐</span>" : ""}
+    </div>
+  `;
+
+  // Districts
+  const districts = p.builtDistricts.map(
+    (d) => `<span class="district-chip ${colorClass(d.colors)}">${d.colors.map(c => districtColorDot(c)).join("")} ${d.name} (${d.cost})</span>`,
+  ).join("");
+  const districtsSection = districts
+    ? `<div class="opp-districts">${districts}</div>`
+    : '<div class="opp-districts" style="color:#666;font-size:12px;">Нет построек</div>';
+
+  // Assassination status
+  const assassinated = p.assassinated
+    ? `<div class="opp-assassinated">💀 Убит в этот день</div>`
+    : "";
+
+  el.innerHTML = heroSection + statsBar + districtsSection + assassinated;
 }
 
 function renderDraft() {
@@ -562,87 +738,118 @@ function renderDraft() {
   }
 }
 
-function renderHand() {
-  const area = document.getElementById("hand-area")!;
-  const cardsEl = document.getElementById("hand-cards")!;
-  if (!area || !cardsEl) return;
-  const hand = getMyHand();
+function renderMyBoard() {
+  const el = document.getElementById("my-board")!;
+  if (!el) return;
   const phase = getPhase();
-
-  if (hand.length === 0 || phase === "end") {
-    area.style.display = "none";
-    return;
-  }
-  area.style.display = "block";
-
   const players = getPlayers();
   const me = players[getMyIndex()];
-  const myTurnNow = isMyTurn();
-  const canBuild = myTurnNow && me && me.buildsRemaining > 0 && me.incomeTaken;
+  if (!me) { el.innerHTML = ""; return; }
 
-  cardsEl.innerHTML = hand.map((c) => {
-    const affordable = me && me.gold >= c.cost;
-    const duplicate = me && me.builtDistricts.some((d) => d.name === c.name);
-    const buildable = canBuild && affordable && !duplicate;
-    return `
-      <div class="hand-card ${colorClass(c.colors)}">
-        <span class="card-colors">${c.colors.map(col => districtColorDot(col)).join("")}</span>
-        <span class="card-cost">${c.cost}</span> ${c.name}
-        ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">Строить</button>` : ""}
+  if (phase === "draft" || phase === "setup") {
+    el.innerHTML = "";
+    return;
+  }
+
+  const myTurnNow = isMyTurn();
+  const hand = getMyHand();
+
+  // My hero row
+  let heroRow = "";
+  if (me.hero) {
+    const heroDef = HEROES.find((h) => h.id === me.hero);
+    const abilityTag = heroDef
+      ? `<span class="my-hero-ability-tag">${getAbilityDescription(me.hero)}</span>`
+      : "";
+    heroRow = `
+      <div class="my-hero-row">
+        <div class="hero-icon-large">${heroIconLarge(me.hero)}</div>
+        <div class="my-hero-info">
+          <div class="my-hero-name">${heroName(me.hero)}</div>
+          <div class="my-hero-speed">Скорость ${heroDef?.speed ?? "?"}</div>
+          ${abilityTag}
+        </div>
       </div>
     `;
-  }).join("");
+  }
 
-  cardsEl.querySelectorAll("[data-build]").forEach((btn) => {
+  // Stats bar
+  const statsBar = `
+    <div class="my-stats-bar">
+      <span>💰 ${me.gold}</span>
+      <span>🃏 ${hand.length}</span>
+      <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      ${me.finishedFirst ? "<span>⭐ Первый!</span>" : ""}
+    </div>
+  `;
+
+  // My districts
+  const districts = me.builtDistricts.map(
+    (d) => `<span class="district-chip ${colorClass(d.colors)}">${d.colors.map(c => districtColorDot(c)).join("")} ${d.name} (${d.cost})</span>`,
+  ).join("");
+  const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
+
+  // Hand
+  const canBuild = myTurnNow && me.buildsRemaining > 0 && me.incomeTaken;
+  let handSection = "";
+  if (hand.length > 0 && phase !== "end") {
+    const cards = hand.map((c) => {
+      const affordable = me.gold >= c.cost;
+      const duplicate = me.builtDistricts.some((d) => d.name === c.name);
+      const buildable = canBuild && affordable && !duplicate;
+      return `
+        <div class="hand-card ${colorClass(c.colors)}">
+          <span class="card-colors">${c.colors.map(col => districtColorDot(col)).join("")}</span>
+          <span class="card-cost">${c.cost}</span> ${c.name}
+          ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">Строить</button>` : ""}
+        </div>
+      `;
+    }).join("");
+    handSection = `
+      <div id="my-hand">
+        <h3>Рука</h3>
+        <div class="hand-cards">${cards}</div>
+      </div>
+    `;
+  }
+
+  // Actions
+  let actionsSection = "";
+  if (phase === "turns") {
+    if (!myTurnNow) {
+      actionsSection = '<div id="my-actions"><p class="hint">Ждём ход других игроков...</p></div>';
+    } else {
+      const buttons: string[] = [];
+
+      if (!me.abilityUsed && me.hero) {
+        const hasActiveAbility = [HeroId.Assassin, HeroId.Thief, HeroId.Sorcerer, HeroId.General].includes(me.hero);
+        if (hasActiveAbility) {
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroIcon(me.hero)} Способность</button>`);
+        } else {
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ Пассивка</button>`);
+        }
+      }
+
+      if (!me.incomeTaken) {
+        buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 +1 Золото</button>`);
+        buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 Взять карту</button>`);
+      }
+
+      buttons.push(`<button class="btn btn-primary" id="btn-end">Завершить ход ➡</button>`);
+      actionsSection = `<div id="my-actions">${buttons.join("")}</div>`;
+    }
+  }
+
+  el.innerHTML = heroRow + statsBar + districtsSection + handSection + actionsSection;
+
+  // Wire up events
+  el.querySelectorAll("[data-build]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const cardId = (btn as HTMLElement).dataset.build!;
       dispatch({ type: "build", playerId: getMyId(), cardId });
     });
   });
-}
-
-function renderActions() {
-  const el = document.getElementById("actions")!;
-  if (!el) return;
-  const phase = getPhase();
-
-  if (phase !== "turns") {
-    el.innerHTML = "";
-    return;
-  }
-
-  if (!isMyTurn()) {
-    el.innerHTML = '<p class="hint">Ждём ход других игроков...</p>';
-    return;
-  }
-
-  const players = getPlayers();
-  const me = players[getMyIndex()];
-  if (!me) return;
-  const buttons: string[] = [];
-
-  // Ability
-  if (!me.abilityUsed && me.hero) {
-    const hasActiveAbility = [HeroId.Assassin, HeroId.Thief, HeroId.Sorcerer, HeroId.General].includes(me.hero);
-    if (hasActiveAbility) {
-      buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroIcon(me.hero)} Способность</button>`);
-    } else {
-      buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ Пассивка</button>`);
-    }
-  }
-
-  // Income
-  if (!me.incomeTaken) {
-    buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 +1 Золото</button>`);
-    buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 Взять карту</button>`);
-  }
-
-  // End turn
-  buttons.push(`<button class="btn btn-primary" id="btn-end">Завершить ход ➡</button>`);
-
-  el.innerHTML = buttons.join("");
-
   document.getElementById("btn-gold")?.addEventListener("click", () => {
     dispatch({ type: "income", playerId: getMyId(), choice: "gold" });
   });
@@ -658,6 +865,20 @@ function renderActions() {
   document.getElementById("btn-ability-passive")?.addEventListener("click", () => {
     dispatch({ type: "ability", playerId: getMyId(), ability: { hero: me.hero! } as AbilityPayload });
   });
+}
+
+function getAbilityDescription(heroId: HeroId): string {
+  switch (heroId) {
+    case HeroId.Assassin: return "Убийство";
+    case HeroId.Thief: return "Грабёж";
+    case HeroId.Sorcerer: return "Магия";
+    case HeroId.King: return "Корона + жёлтый доход";
+    case HeroId.Cleric: return "Защита + синий доход";
+    case HeroId.Merchant: return "Бонус + зелёный доход";
+    case HeroId.Architect: return "3 постройки за ход";
+    case HeroId.General: return "Разрушение + красный доход";
+    default: return "";
+  }
 }
 
 function showAbilityModal(heroId: HeroId) {
@@ -764,7 +985,7 @@ function showAbilityModal(heroId: HeroId) {
 }
 
 function renderLog() {
-  const el = document.getElementById("log")!;
+  const el = document.getElementById("game-log")!;
   if (!el) return;
   const entries = getLog().slice(-30);
   el.innerHTML = entries.map((e) =>
@@ -774,20 +995,21 @@ function renderLog() {
 }
 
 function renderWinner() {
-  const el = document.getElementById("winner-banner")!;
-  if (!el) return;
+  const overlay = document.getElementById("winner-overlay")!;
+  const card = document.getElementById("winner-card")!;
+  if (!overlay || !card) return;
   const phase = getPhase();
   const winner = getWinner();
   if (phase === "end" && winner !== null) {
     const players = getPlayers();
-    el.classList.add("show");
-    el.innerHTML = `🏆 Победил ${players[winner]?.name ?? "???"}!<br><button class="btn btn-primary" id="btn-to-menu" style="margin-top:10px;">← В меню</button>`;
+    overlay.classList.add("show");
+    card.innerHTML = `🏆 Победил ${players[winner]?.name ?? "???"}!<br><button class="btn btn-primary" id="btn-to-menu" style="margin-top:10px;">← В меню</button>`;
     document.getElementById("btn-to-menu")?.addEventListener("click", () => {
       ws?.close();
       showMenu();
     });
   } else {
-    el.classList.remove("show");
+    overlay.classList.remove("show");
   }
 }
 
