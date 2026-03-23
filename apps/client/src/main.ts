@@ -410,7 +410,7 @@ function renderLobby() {
       <div class="room-code">Код комнаты: <strong>${myRoomId}</strong></div>
       <div class="lobby-info">Отправь код друзьям для подключения</div>
       <div class="lobby-players">${playersList}</div>
-      <div class="lobby-count">${lobbyPlayers.length}/6 игроков (мин. 4)</div>
+      <div class="lobby-count">${lobbyPlayers.length}/4 игрока</div>
       ${isHost ? `
         <div class="lobby-actions">
           <button class="btn btn-secondary" id="btn-add-bot">🤖 Добавить бота</button>

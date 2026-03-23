@@ -59,7 +59,7 @@ export function joinRoom(roomId: string, playerName: string, ws: WebSocket): { p
   const room = rooms.get(roomId);
   if (!room) return "Комната не найдена";
   if (room.started) return "Игра уже началась";
-  if (room.players.length >= 6) return "Комната заполнена (макс. 6)";
+  if (room.players.length >= 4) return "Комната заполнена (макс. 4)";
 
   const playerId = generatePlayerId();
   room.players.push({ id: playerId, name: playerName, isBot: false, ws });
@@ -71,7 +71,7 @@ export function addBot(roomId: string, requesterId: string): LobbyPlayer[] | str
   if (!room) return "Комната не найдена";
   if (room.hostId !== requesterId) return "Только хост может добавлять ботов";
   if (room.started) return "Игра уже началась";
-  if (room.players.length >= 6) return "Максимум 6 игроков";
+  if (room.players.length >= 4) return "Максимум 4 игрока";
 
   const botName = BOT_NAMES[botCounter % BOT_NAMES.length];
   botCounter++;
