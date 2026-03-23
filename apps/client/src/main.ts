@@ -94,6 +94,8 @@ function startLocal() {
   localState = createMatch(LOCAL_PLAYERS, deck, rng);
   localState = startDraft(localState);
   render();
+  // Let bots make their draft picks if human isn't first
+  setTimeout(runLocalBots, 300);
 }
 
 function showLobbyScreen(action: "create" | "join") {
