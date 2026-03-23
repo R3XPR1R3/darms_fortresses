@@ -2,6 +2,7 @@ import type { GameState, GameAction } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import type { LobbyPlayer, PlayerView, PlayerViewEntry, DraftView } from "./protocol.js";
 import type { WebSocket } from "ws";
+import { generateMatchSummary, saveMatchSummary } from "./match-log.js";
 
 export interface Room {
   id: string;
@@ -9,6 +10,8 @@ export interface Room {
   players: RoomPlayer[];
   state: GameState | null; // null = still in lobby
   started: boolean;
+  startedAt: Date | null;
+  matchLogged: boolean;
 }
 
 export interface RoomPlayer {
@@ -45,6 +48,8 @@ export function createRoom(hostName: string, ws: WebSocket): { roomId: string; p
     players: [{ id: playerId, name: hostName, isBot: false, ws }],
     state: null,
     started: false,
+    startedAt: null,
+    matchLogged: false,
   };
   rooms.set(roomId, room);
   return { roomId, playerId };
@@ -89,6 +94,7 @@ export function startGame(roomId: string, requesterId: string): string | null {
   room.state = createMatch(playerDescs, deck, rng);
   room.state = startDraft(room.state);
   room.started = true;
+  room.startedAt = new Date();
   return null; // success
 }
 
@@ -112,6 +118,14 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
 
   // Run bot turns
   runBots(room);
+
+  // Log match if game ended
+  if (room.state.phase === "end" && !room.matchLogged) {
+    room.matchLogged = true;
+    const botIds = new Set(room.players.filter((p) => p.isBot).map((p) => p.id));
+    const summary = generateMatchSummary(room.state, room.id, room.startedAt ?? new Date(), botIds);
+    saveMatchSummary(summary).catch((err) => console.error("[match-log] Error:", err));
+  }
 
   return null; // success
 }

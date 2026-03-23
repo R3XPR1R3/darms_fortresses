@@ -7,6 +7,10 @@ services:
     container_name: darms-fortresses
     expose:
       - "80"
+    volumes:
+      - match-logs:/data/match-logs
+    environment:
+      - LOGS_DIR=/data/match-logs
 
   tunnel:
     image: cloudflare/cloudflared:latest
@@ -15,3 +19,11 @@ services:
     command: tunnel --no-autoupdate --url http://app:80
     depends_on:
       - app
+
+volumes:
+  match-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/darms-fortresses/match-logs
