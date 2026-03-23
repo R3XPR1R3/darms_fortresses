@@ -202,24 +202,38 @@ export function getLobbyPlayers(room: Room): LobbyPlayer[] {
   }));
 }
 
+/** Server-side hero visibility: hide unrevealed heroes from the view */
+function isHeroRevealedForView(state: GameState, playerIdx: number, viewerIdx: number): boolean {
+  if (playerIdx === viewerIdx) return true;
+  if (state.phase === "end") return true;
+  if (state.phase !== "turns" || !state.turnOrder) return false;
+
+  const posInOrder = state.turnOrder.indexOf(playerIdx);
+  if (posInOrder === -1) return false;
+  return posInOrder <= state.currentTurnIndex;
+}
+
 export function createPlayerView(state: GameState, playerId: string): PlayerView {
   const myIndex = state.players.findIndex((p) => p.id === playerId);
 
-  const players: PlayerViewEntry[] = state.players.map((p, i) => ({
-    id: p.id,
-    name: p.name,
-    gold: p.gold,
-    handSize: p.hand.length,
-    hand: i === myIndex ? p.hand : null,
-    builtDistricts: p.builtDistricts,
-    hero: p.hero,
-    incomeTaken: p.incomeTaken,
-    buildsRemaining: p.buildsRemaining,
-    abilityUsed: p.abilityUsed,
-    assassinated: p.assassinated,
-    robbedHeroId: p.robbedHeroId,
-    finishedFirst: p.finishedFirst,
-  }));
+  const players: PlayerViewEntry[] = state.players.map((p, i) => {
+    const revealed = isHeroRevealedForView(state, i, myIndex);
+    return {
+      id: p.id,
+      name: p.name,
+      gold: p.gold,
+      handSize: p.hand.length,
+      hand: i === myIndex ? p.hand : null,
+      builtDistricts: p.builtDistricts,
+      hero: revealed ? p.hero : null,
+      incomeTaken: p.incomeTaken,
+      buildsRemaining: p.buildsRemaining,
+      abilityUsed: p.abilityUsed,
+      assassinated: revealed ? p.assassinated : false,
+      robbedHeroId: p.robbedHeroId,
+      finishedFirst: p.finishedFirst,
+    };
+  });
 
   let draft: DraftView | null = null;
   if (state.draft) {

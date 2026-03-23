@@ -56,6 +56,7 @@ export function takeIncome(
   if (playerIdx === -1) return null;
 
   const player = state.players[playerIdx];
+  if (player.assassinated) return null;
   if (player.incomeTaken) return null;
 
   if (choice === "gold") {
@@ -95,6 +96,7 @@ export function buildDistrict(
   if (playerIdx === -1) return null;
 
   const player = state.players[playerIdx];
+  if (player.assassinated) return null;
   if (player.buildsRemaining <= 0) return null;
 
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
@@ -128,18 +130,28 @@ export function buildDistrict(
 export function advanceTurn(state: GameState, rng: Rng): GameState {
   if (!state.turnOrder) return state;
 
-  const nextIdx = state.currentTurnIndex + 1;
+  let nextIdx = state.currentTurnIndex + 1;
+  let log = state.log;
+
+  // Skip assassinated players in turn order — reveal who was killed
+  while (nextIdx < state.turnOrder.length && state.players[state.turnOrder[nextIdx]].assassinated) {
+    const killed = state.players[state.turnOrder[nextIdx]];
+    const heroName = HEROES.find((h) => h.id === killed.hero)?.name ?? "???";
+    log = [...log, { day: state.day, message: `💀 ${heroName} (${killed.name}) был убит! Ход пропущен.` }];
+    nextIdx++;
+  }
 
   if (nextIdx >= state.turnOrder.length) {
     // Check if someone reached 8 — this was the last day
     const someoneFinished = state.players.some((p) => p.finishedFirst);
     if (someoneFinished) {
-      return calculateScores(state);
+      return calculateScores({ ...state, log });
     }
 
     // Day is over — go back to draft for next day
     return {
       ...state,
+      log,
       phase: "draft",
       draft: null,
       currentTurnIndex: 0,
@@ -150,7 +162,7 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
 
   // Apply passive for next player
   const nextPlayerIdx = state.turnOrder[nextIdx];
-  let newState: GameState = { ...state, currentTurnIndex: nextIdx };
+  let newState: GameState = { ...state, log, currentTurnIndex: nextIdx };
   newState = applyPassiveAbility(newState, nextPlayerIdx, rng);
 
   return newState;
