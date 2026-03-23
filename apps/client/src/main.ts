@@ -72,6 +72,12 @@ const LOCAL_PLAYERS = [
 let localState: GameState | null = null;
 let onlineState: PlayerView | null = null;
 
+// ---- Draft timer ----
+const DRAFT_TIMER_SECONDS = 40;
+let draftTimerInterval: ReturnType<typeof setInterval> | null = null;
+let draftTimerRemaining = 0;
+let draftTimerForStep = -1; // track which draft step the timer is for
+
 // ---- Init ----
 function showMenu() {
   mode = "menu";
@@ -195,50 +201,57 @@ function dispatch(action: GameAction) {
   setTimeout(runLocalBots, 300);
 }
 
+/** Execute ONE bot action, then re-render and schedule the next one */
 function runLocalBots() {
   if (!localState || localState.phase === "end") return;
 
-  let acted = true;
-  let safety = 50;
-  while (acted && safety-- > 0) {
-    acted = false;
-    if (localState.phase === "end") break;
+  // Start new draft if needed
+  if (localState.phase === "draft" && !localState.draft) {
+    localState = startDraft(localState);
+    render();
+    setTimeout(runLocalBots, 500);
+    return;
+  }
 
-    if (localState.phase === "draft") {
-      const dIdx = currentDrafter(localState);
-      if (dIdx !== null && localState.players[dIdx].id !== HUMAN_ID) {
-        const action = botAction(localState, localState.players[dIdx].id);
-        if (action) {
-          const next = processAction(localState, action);
-          if (next) { localState = next; acted = true; }
-        }
-      }
+  // Determine if it's a bot's turn
+  let botId: string | null = null;
+  if (localState.phase === "draft") {
+    const dIdx = currentDrafter(localState);
+    if (dIdx !== null && localState.players[dIdx].id !== HUMAN_ID) {
+      botId = localState.players[dIdx].id;
     }
+  } else if (localState.phase === "turns") {
+    const pIdx = currentPlayer(localState);
+    if (pIdx !== null && localState.players[pIdx].id !== HUMAN_ID) {
+      botId = localState.players[pIdx].id;
+    }
+  }
 
-    if (localState.phase === "turns") {
-      const pIdx = currentPlayer(localState);
-      if (pIdx !== null && localState.players[pIdx].id !== HUMAN_ID) {
-        const action = botAction(localState, localState.players[pIdx].id);
-        if (action) {
-          const next = processAction(localState, action);
-          if (next) { localState = next; acted = true; }
-        }
-      }
-    }
+  if (!botId) return; // Human's turn — stop scheduling
 
-    if (localState.phase === "draft" && !localState.draft) {
-      localState = startDraft(localState);
-      acted = true;
-    }
+  const action = botAction(localState, botId);
+  if (!action) return;
+
+  const next = processAction(localState, action);
+  if (!next) return;
+
+  localState = next;
+
+  // Start new draft if day transition happened
+  if (localState.phase === "draft" && !localState.draft) {
+    localState = startDraft(localState);
   }
 
   render();
 
-  if (localState.phase !== "end") {
-    const isHumanTurn = checkLocalHumanTurn();
-    if (!isHumanTurn) {
-      setTimeout(runLocalBots, 300);
-    }
+  if (localState.phase === "end") return;
+
+  // Check if next action is still a bot's turn
+  const isHumanTurn = checkLocalHumanTurn();
+  if (!isHumanTurn) {
+    // Delay depends on action type: draft picks = 1.2s, turn actions = 1s
+    const delay = action.type === "draft_pick" ? 1200 : 1000;
+    setTimeout(runLocalBots, delay);
   }
 }
 
@@ -426,6 +439,7 @@ function renderMenu() {
   const board = document.getElementById("game-board");
   if (board) board.remove();
   selectedOpponentIndex = null;
+  stopDraftTimer();
 
   const app = document.getElementById("app")!;
   app.innerHTML = `
@@ -693,6 +707,42 @@ function renderOpponentBoard() {
   el.innerHTML = heroSection + statsBar + districtsSection + assassinated;
 }
 
+function startDraftTimer(draft: DraftView) {
+  const currentStep = draft.currentStep;
+  // Don't restart timer for the same step
+  if (draftTimerForStep === currentStep && draftTimerInterval) return;
+
+  stopDraftTimer();
+  draftTimerForStep = currentStep;
+  draftTimerRemaining = DRAFT_TIMER_SECONDS;
+
+  draftTimerInterval = setInterval(() => {
+    draftTimerRemaining--;
+    // Update the timer display without full re-render
+    const timerEl = document.getElementById("draft-timer");
+    if (timerEl) timerEl.textContent = `${draftTimerRemaining}с`;
+
+    if (draftTimerRemaining <= 0) {
+      stopDraftTimer();
+      // Auto-pick a random hero
+      const currentDraft = getDraft();
+      if (currentDraft && currentDraft.availableHeroes.length > 0 && isMyTurn()) {
+        const randomIdx = Math.floor(Math.random() * currentDraft.availableHeroes.length);
+        const heroId = currentDraft.availableHeroes[randomIdx];
+        dispatch({ type: "draft_pick", playerId: getMyId(), heroId });
+      }
+    }
+  }, 1000);
+}
+
+function stopDraftTimer() {
+  if (draftTimerInterval) {
+    clearInterval(draftTimerInterval);
+    draftTimerInterval = null;
+  }
+  draftTimerForStep = -1;
+}
+
 function renderDraft() {
   const el = document.getElementById("draft-area")!;
   if (!el) return;
@@ -701,10 +751,18 @@ function renderDraft() {
 
   if (phase !== "draft" || !draft) {
     el.innerHTML = "";
+    stopDraftTimer();
     return;
   }
 
   const myTurn = isMyTurn();
+
+  // Manage draft timer
+  if (myTurn) {
+    startDraftTimer(draft);
+  } else {
+    stopDraftTimer();
+  }
 
   const bans = draft.faceUpBans.map((h) =>
     `<span class="ban-up">${heroIcon(h)} ${heroName(h)}</span>`,
@@ -721,8 +779,12 @@ function renderDraft() {
     `).join("");
   }
 
+  const timerDisplay = myTurn
+    ? `<span id="draft-timer" class="draft-timer ${draftTimerRemaining <= 10 ? 'timer-urgent' : ''}">${draftTimerRemaining}с</span>`
+    : "";
+
   el.innerHTML = `
-    <h2>Драфт героев</h2>
+    <h2>Драфт героев ${timerDisplay}</h2>
     <div class="bans">Забанены: ${bans} + ${draft.hiddenBanCount} скрытых</div>
     ${myTurn ? '<p class="hint">Выбери героя:</p>' : '<p class="hint">Другие игроки выбирают...</p>'}
     <div class="draft-heroes">${heroButtons}</div>
@@ -731,6 +793,7 @@ function renderDraft() {
   if (myTurn) {
     el.querySelectorAll(".hero-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
+        stopDraftTimer();
         const heroId = (btn as HTMLElement).dataset.hero as HeroId;
         dispatch({ type: "draft_pick", playerId: getMyId(), heroId });
       });
