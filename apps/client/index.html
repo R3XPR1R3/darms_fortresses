@@ -14,12 +14,47 @@
       padding: 8px;
       font-size: 14px;
     }
-    h1 { font-size: 18px; text-align: center; margin-bottom: 8px; color: #e94560; }
+    h1 { font-size: 22px; text-align: center; margin-bottom: 8px; color: #e94560; letter-spacing: 1px; }
     h2 { font-size: 15px; margin-bottom: 6px; color: #0f3460; background: #e94560; padding: 4px 8px; border-radius: 4px; }
     .phase-label { text-align: center; font-size: 13px; color: #aaa; margin-bottom: 8px; }
+    .hint { font-size: 12px; color: #aaa; margin: 6px 0; }
 
     /* Layout */
     #app { max-width: 600px; margin: 0 auto; }
+
+    /* Menu screen */
+    .menu-screen {
+      display: flex; flex-direction: column; gap: 10px;
+      padding: 20px 0; align-items: center;
+    }
+    .menu-title { font-size: 14px; color: #888; margin-bottom: 10px; }
+    .menu-input {
+      background: #16213e; border: 1px solid #0f3460; color: #eee;
+      padding: 10px 14px; border-radius: 8px; font-size: 14px;
+      width: 100%; max-width: 280px; text-align: center;
+    }
+    .menu-input:focus { outline: none; border-color: #e94560; }
+    .menu-divider { color: #555; font-size: 12px; margin: 6px 0; }
+    .btn-large { width: 100%; max-width: 280px; padding: 12px 16px !important; font-size: 15px !important; }
+
+    /* Lobby */
+    .lobby-screen {
+      display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0;
+    }
+    .room-code {
+      font-size: 20px; color: #e94560; background: #16213e;
+      padding: 10px 20px; border-radius: 8px; border: 2px dashed #e94560;
+      letter-spacing: 3px;
+    }
+    .lobby-info { font-size: 12px; color: #888; }
+    .lobby-players { display: flex; flex-direction: column; gap: 4px; width: 100%; max-width: 300px; }
+    .lobby-player {
+      background: #16213e; border: 1px solid #0f3460; border-radius: 8px;
+      padding: 8px 12px; font-size: 14px;
+    }
+    .lobby-player.host { border-color: #e94560; }
+    .lobby-count { font-size: 13px; color: #888; }
+    .lobby-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
     /* Player cards */
     .player-card {
@@ -28,10 +63,23 @@
       border-radius: 8px;
       padding: 8px;
       margin-bottom: 6px;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .player-card.active { border-color: #e94560; box-shadow: 0 0 8px rgba(233,69,96,0.4); }
+    .player-card.me { border-left: 3px solid #4090f0; }
+    .player-header { display: flex; justify-content: space-between; align-items: center; }
     .player-card .name { font-weight: bold; font-size: 14px; }
-    .player-card .hero { color: #e94560; font-size: 12px; }
+    .player-card .hero-line { margin-top: 2px; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      color: #e94560; font-size: 12px;
+    }
+    .hero-badge svg { vertical-align: middle; width: 20px; height: 20px; }
+    .speed-badge {
+      background: #0f3460; color: #aaa; font-size: 10px;
+      padding: 1px 5px; border-radius: 4px;
+    }
+    .status-dead { font-size: 16px; }
     .player-card .stats { font-size: 12px; color: #aaa; margin-top: 2px; }
     .player-card .districts {
       display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
@@ -44,7 +92,11 @@
       border-radius: 4px;
       color: #000;
       font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
     }
+    .district-chip svg { width: 8px; height: 8px; }
     .color-yellow { background: #f0c040; }
     .color-blue { background: #4090f0; }
     .color-green { background: #40c060; }
@@ -68,9 +120,15 @@
       border: 1px solid #333;
       cursor: pointer;
       transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
     .hand-card:hover { transform: scale(1.05); border-color: #e94560; }
     .hand-card .card-cost { font-weight: bold; }
+    .hand-card .card-colors { display: flex; gap: 1px; }
+    .hand-card .card-colors svg { width: 8px; height: 8px; }
+    .btn-build { font-size: 10px !important; padding: 2px 6px !important; }
 
     /* Action buttons */
     #actions {
@@ -84,7 +142,11 @@
       cursor: pointer;
       font-weight: 600;
       transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
+    .btn svg { width: 18px; height: 18px; }
     .btn:active { transform: scale(0.95); }
     .btn-primary { background: #e94560; color: #fff; }
     .btn-secondary { background: #0f3460; color: #fff; }
@@ -104,13 +166,21 @@
       cursor: pointer;
       font-size: 12px;
       transition: all 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 90px;
     }
-    .hero-btn:hover { border-color: #e94560; background: #1a1a3e; }
+    .hero-btn:hover { border-color: #e94560; background: #1a1a3e; transform: scale(1.05); }
     .hero-btn .speed { color: #aaa; font-size: 10px; }
+    .hero-btn-icon svg { width: 40px; height: 40px; }
+    .hero-btn-name { font-weight: 600; font-size: 11px; }
 
     /* Bans */
     .bans { font-size: 11px; color: #888; margin-top: 4px; }
     .bans .ban-up { color: #e94560; }
+    .bans .ban-up svg { width: 14px; height: 14px; vertical-align: middle; }
 
     /* Log */
     #log {
@@ -157,7 +227,11 @@
       cursor: pointer;
       font-size: 12px;
       text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
+    .modal-option svg { width: 20px; height: 20px; flex-shrink: 0; }
     .modal-option:hover { border-color: #e94560; }
 
     /* Winner */
@@ -176,7 +250,7 @@
 </head>
 <body>
   <div id="app">
-    <h1>Darms: Fortresses</h1>
+    <h1>⚔ Darms: Fortresses</h1>
     <div id="phase-label" class="phase-label"></div>
     <div id="winner-banner"></div>
     <div id="players-area"></div>
