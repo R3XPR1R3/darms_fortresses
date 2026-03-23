@@ -1006,14 +1006,11 @@ function showAbilityModal(heroId: HeroId) {
       const myIdx = getMyIndex();
       const otherPlayers = players.filter((_, i) => i !== myIdx);
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Взять 2 карты из колоды, или обменяться рукой с другим игроком.</p>
+        <p class="hint" style="margin-bottom:8px;">Взять 2 карты из колоды, или обменяться рукой с игроком.</p>
         <button class="modal-option" data-mode="draw">${heroIcon(HeroId.Sorcerer)} Взять 2 карты</button>
-        ${otherPlayers.map((p) => {
-          const revealedIdx = players.indexOf(p);
-          const revealed = isHeroRevealed(revealedIdx);
-          const heroTag = revealed && p.hero ? ` (${heroName(p.hero)})` : "";
-          return `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 Обмен с ${p.name}${heroTag} — ${p.hand ? p.hand.length : p.handSize} карт</button>`;
-        }).join("")}
+        ${otherPlayers.map((p) =>
+          `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 ${p.name} — ${p.hand ? p.hand.length : p.handSize} карт</button>`,
+        ).join("")}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
