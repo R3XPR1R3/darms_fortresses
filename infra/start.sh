@@ -25,6 +25,9 @@ echo "  ║       ⚔  DARMS: FORTRESSES  ⚔          ║"
 echo "  ╚══════════════════════════════════════════╝"
 echo -e "${RESET}"
 
+# ── Prepare ───────────────────────────────────────
+mkdir -p /opt/darms-fortresses/match-logs
+
 # ── Build & Start ─────────────────────────────────
 echo -e "${CYAN}[1/3]${RESET} Сборка контейнеров..."
 $COMPOSE build --quiet 2>&1 | tail -3
