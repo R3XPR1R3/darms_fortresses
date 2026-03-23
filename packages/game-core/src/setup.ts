@@ -13,7 +13,7 @@ export function createMatch(
   deck: DistrictCard[],
   rng: Rng,
 ): GameState {
-  const normalCards = deck.filter((c) => !c.purple);
+  const normalCards = deck.filter((c) => !c.colors.includes("purple"));
   const shuffled = [...normalCards];
   rng.shuffle(shuffled);
 

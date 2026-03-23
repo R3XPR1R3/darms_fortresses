@@ -36,9 +36,19 @@ const TEMPLATES: CardTemplate[] = [
   { name: "Арсенал", cost: 4, colors: ["red"], count: 2 },
   { name: "Цитадель", cost: 5, colors: ["red"], count: 1 },
 
-  // Dual-color cards (bonus variety)
+  // Multi-color cards
   { name: "Торговая палата", cost: 3, colors: ["blue", "green"], count: 2 },
   { name: "Военный совет", cost: 3, colors: ["yellow", "red"], count: 2 },
+
+  // Purple — special (unique cards, not dealt in starting hand)
+  { name: "Обсерватория", cost: 5, colors: ["purple"], count: 1 },
+  { name: "Лаборатория", cost: 5, colors: ["purple"], count: 1 },
+  { name: "Кузница", cost: 5, colors: ["purple"], count: 1 },
+  { name: "Библиотека", cost: 6, colors: ["purple"], count: 1 },
+
+  // Multi-color with purple (noble-specific abilities in future)
+  { name: "Королевская библиотека", cost: 4, colors: ["yellow", "purple"], count: 1 },
+  { name: "Священная роща", cost: 4, colors: ["blue", "purple"], count: 1 },
 ];
 
 let _nextId = 0;
@@ -54,9 +64,13 @@ export function createBaseDeck(): DistrictCard[] {
         cost: t.cost,
         hp: t.cost,
         colors: t.colors,
-        purple: false,
       });
     }
   }
   return cards;
+}
+
+/** Check if a card has purple in its colors (special card) */
+export function isPurpleCard(card: DistrictCard): boolean {
+  return card.colors.includes("purple");
 }

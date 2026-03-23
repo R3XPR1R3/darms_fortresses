@@ -6,7 +6,6 @@ export interface DistrictCard {
   cost: number;
   /** Current HP on the table. Defaults to cost when built. Destroyed when < 1. */
   hp: number;
+  /** One or more colors. Multi-color cards count for all listed colors. */
   colors: CardColor[];
-  /** Purple cards are special — separate personal pool */
-  purple: boolean;
 }
