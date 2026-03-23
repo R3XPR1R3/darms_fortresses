@@ -95,6 +95,10 @@ export function startGame(roomId: string, requesterId: string): string | null {
   room.state = startDraft(room.state);
   room.started = true;
   room.startedAt = new Date();
+
+  // Let bots make their draft picks immediately
+  runBots(room);
+
   return null; // success
 }
 
