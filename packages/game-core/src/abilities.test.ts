@@ -16,7 +16,7 @@ const PLAYERS = [
 ];
 
 function makeCard(id: string, name: string, cost: number, color: "yellow" | "blue" | "green" | "red"): DistrictCard {
-  return { id, name, cost, hp: cost, colors: [color], purple: false };
+  return { id, name, cost, hp: cost, colors: [color] };
 }
 
 function makeTestState(overrides?: Partial<GameState>): GameState {

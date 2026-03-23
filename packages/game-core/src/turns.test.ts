@@ -12,7 +12,6 @@ function makeDeck(count: number): DistrictCard[] {
     cost: 1 + (i % 5),
     hp: 1 + (i % 5),
     colors: [["yellow", "blue", "green", "red"][i % 4] as "yellow" | "blue" | "green" | "red"],
-    purple: false,
   }));
 }
 
@@ -155,7 +154,7 @@ describe("setup", () => {
     for (const p of state.players) {
       expect(p.hand).toHaveLength(5);
       for (const card of p.hand) {
-        expect(card.purple).toBe(false);
+        expect(card.colors.includes("purple")).toBe(false);
       }
     }
   });

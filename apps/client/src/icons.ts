@@ -76,6 +76,7 @@ export function districtColorDot(color: string): string {
     blue: "#4090f0",
     green: "#40c060",
     red: "#e04050",
+    purple: "#9060e0",
   };
   const c = colors[color] ?? "#888";
   return `<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="${c}" stroke="${c}" stroke-width="1"/></svg>`;

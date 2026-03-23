@@ -17,7 +17,7 @@ export interface HeroDefinition {
   color: CardColor | null; // assassin/thief/sorcerer are colorless
 }
 
-export type CardColor = "yellow" | "blue" | "green" | "red";
+export type CardColor = "yellow" | "blue" | "green" | "red" | "purple";
 
 export const HEROES: readonly HeroDefinition[] = [
   { id: HeroId.Assassin, name: "Фахира Мирай", speed: 1, color: null },
