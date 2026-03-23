@@ -232,10 +232,32 @@ function runLocalBots() {
   if (!botId) return; // Human's turn — stop scheduling
 
   const action = botAction(localState, botId);
-  if (!action) return;
+  if (!action) {
+    // Bot has no action — force end turn
+    const fallback = processAction(localState, { type: "end_turn", playerId: botId });
+    if (fallback) localState = fallback;
+    if (localState.phase === "draft" && !localState.draft) {
+      localState = startDraft(localState);
+    }
+    render();
+    setTimeout(runLocalBots, 500);
+    return;
+  }
 
   const next = processAction(localState, action);
-  if (!next) return;
+  if (!next) {
+    // Action failed — force end turn to prevent infinite loop
+    if (action.type !== "end_turn") {
+      const fallback = processAction(localState, { type: "end_turn", playerId: botId });
+      if (fallback) localState = fallback;
+      if (localState.phase === "draft" && !localState.draft) {
+        localState = startDraft(localState);
+      }
+      render();
+      setTimeout(runLocalBots, 500);
+    }
+    return;
+  }
 
   localState = next;
 

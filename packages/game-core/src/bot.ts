@@ -106,7 +106,7 @@ function pickAbility(
         return { type: "ability", playerId, ability: { hero: "sorcerer", mode: "draw" } };
       }
       const richest = state.players
-        .filter((p) => p.id !== playerId)
+        .filter((p) => p.id !== playerId && !p.assassinated)
         .sort((a, b) => b.hand.length - a.hand.length)[0];
       if (richest && richest.hand.length > player.hand.length) {
         return {
@@ -121,7 +121,7 @@ function pickAbility(
       // Target lowest HP district that can be destroyed, or damage the weakest
       if (player.gold < 1) return null;
       const targets = state.players
-        .filter((p) => p.id !== playerId && p.builtDistricts.length > 0 && p.hero !== HeroId.Cleric)
+        .filter((p) => p.id !== playerId && !p.assassinated && p.builtDistricts.length > 0 && p.hero !== HeroId.Cleric)
         .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length);
       if (targets.length === 0) return null;
       const target = targets[0];
