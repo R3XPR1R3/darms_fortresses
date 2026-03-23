@@ -251,8 +251,10 @@ function runLocalBots() {
   // Check if next action is still a bot's turn
   const isHumanTurn = checkLocalHumanTurn();
   if (!isHumanTurn) {
-    // Delay depends on action type: draft picks = 1.2s, turn actions = 1s
-    const delay = action.type === "draft_pick" ? 1200 : 1000;
+    // Delay: draft picks = 1.2s, end_turn = 5s, other actions = 1s
+    const delay = action.type === "draft_pick" ? 1200
+      : action.type === "end_turn" ? 5000
+      : 1000;
     setTimeout(runLocalBots, delay);
   }
 }
@@ -408,10 +410,14 @@ function colorStyle(colors: string[]): { cls: string; style: string } {
   };
 }
 
-function districtChipHtml(d: { colors: string[]; name: string; cost: number }): string {
+function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number }): string {
   const cs = colorStyle(d.colors);
-  const dots = d.colors.map(c => districtColorDot(c)).join("");
-  return `<span class="district-chip ${cs.cls}" style="${cs.style}">${dots} ${d.name} (${d.cost})</span>`;
+  const hpLabel = d.hp != null && d.hp !== d.cost ? `<div class="card-hp">HP ${d.hp}</div>` : "";
+  return `<div class="district-card ${cs.cls}" style="${cs.style}">
+    <div class="card-cost-badge">${d.cost}</div>
+    <div class="card-name">${d.name}</div>
+    ${hpLabel}
+  </div>`;
 }
 
 // ---- Player switching state ----
@@ -716,7 +722,7 @@ function renderOpponentBoard() {
 
   // Districts
   const districts = p.builtDistricts.map(
-    (d) => districtChipHtml(d),
+    (d) => districtCardHtml(d),
   ).join("");
   const districtsSection = districts
     ? `<div class="opp-districts">${districts}</div>`
@@ -772,7 +778,27 @@ function renderDraft() {
   const phase = getPhase();
   const draft = getDraft();
 
-  if (phase !== "draft" || !draft) {
+  if (phase !== "draft" && phase !== "turns") {
+    el.innerHTML = "";
+    stopDraftTimer();
+    return;
+  }
+
+  // During turns phase, just show bans (no draft UI)
+  if (phase === "turns") {
+    stopDraftTimer();
+    if (draft) {
+      const bans = draft.faceUpBans.map((h) =>
+        `<span class="ban-up">${heroIcon(h)} ${heroName(h)}</span>`,
+      ).join(", ");
+      el.innerHTML = `<div class="bans">Забанены: ${bans} + ${draft.hiddenBanCount} скрытых</div>`;
+    } else {
+      el.innerHTML = "";
+    }
+    return;
+  }
+
+  if (!draft) {
     el.innerHTML = "";
     stopDraftTimer();
     return;
@@ -871,7 +897,7 @@ function renderMyBoard() {
 
   // My districts
   const districts = me.builtDistricts.map(
-    (d) => districtChipHtml(d),
+    (d) => districtCardHtml(d),
   ).join("");
   const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
 

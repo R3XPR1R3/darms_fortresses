@@ -51,6 +51,14 @@ function broadcastState(roomId: string) {
   }
 }
 
+/** Set the broadcastState callback on the room so async bot steps can broadcast */
+function ensureBroadcast(roomId: string) {
+  const room = getRoom(roomId);
+  if (room && !room.broadcastState) {
+    room.broadcastState = () => broadcastState(roomId);
+  }
+}
+
 wss.on("connection", (ws) => {
   ws.on("message", (raw) => {
     let msg: ClientMessage;
@@ -97,6 +105,7 @@ wss.on("connection", (ws) => {
         const meta = socketMeta.get(ws);
         if (!meta) { send(ws, { type: "error", message: "Вы не в комнате" }); break; }
         try {
+          ensureBroadcast(meta.roomId);
           const err = startGame(meta.roomId, meta.playerId);
           if (err) {
             send(ws, { type: "error", message: err });
@@ -113,6 +122,7 @@ wss.on("connection", (ws) => {
       case "action": {
         const meta = socketMeta.get(ws);
         if (!meta) { send(ws, { type: "error", message: "Вы не в комнате" }); break; }
+        ensureBroadcast(meta.roomId);
         const err = handleAction(meta.roomId, meta.playerId, msg.action);
         if (err) {
           send(ws, { type: "error", message: err });
