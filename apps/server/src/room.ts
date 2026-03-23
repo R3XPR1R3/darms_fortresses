@@ -12,6 +12,10 @@ export interface Room {
   started: boolean;
   startedAt: Date | null;
   matchLogged: boolean;
+  /** Callback set by index.ts to broadcast state to all players */
+  broadcastState: (() => void) | null;
+  /** Pending bot timer (so we can cancel if needed) */
+  botTimer: ReturnType<typeof setTimeout> | null;
 }
 
 export interface RoomPlayer {
@@ -50,6 +54,8 @@ export function createRoom(hostName: string, ws: WebSocket): { roomId: string; p
     started: false,
     startedAt: null,
     matchLogged: false,
+    broadcastState: null,
+    botTimer: null,
   };
   rooms.set(roomId, room);
   return { roomId, playerId };
@@ -96,8 +102,8 @@ export function startGame(roomId: string, requesterId: string): string | null {
   room.started = true;
   room.startedAt = new Date();
 
-  // Let bots make their draft picks immediately
-  runBots(room);
+  // Schedule async bot actions (with delays)
+  scheduleBotStep(room);
 
   return null; // success
 }
@@ -120,9 +126,6 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
     room.state = startDraft(room.state);
   }
 
-  // Run bot turns
-  runBots(room);
-
   // Log match if game ended
   if (room.state.phase === "end" && !room.matchLogged) {
     room.matchLogged = true;
@@ -131,53 +134,93 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
     saveMatchSummary(summary).catch((err) => console.error("[match-log] Error:", err));
   }
 
+  // Schedule async bot actions after human action
+  scheduleBotStep(room);
+
   return null; // success
 }
 
-function runBots(room: Room) {
+/**
+ * Schedule a single bot action step with appropriate delay.
+ * After executing, broadcasts state and schedules the next step.
+ */
+function scheduleBotStep(room: Room) {
+  // Clear any existing timer
+  if (room.botTimer) {
+    clearTimeout(room.botTimer);
+    room.botTimer = null;
+  }
+
   if (!room.state || room.state.phase === "end") return;
 
-  let acted = true;
-  let safety = 200;
-  while (acted && safety-- > 0) {
-    acted = false;
-    if (room.state.phase === "end") break;
+  // Start new draft if needed
+  if (room.state.phase === "draft" && !room.state.draft) {
+    room.state = startDraft(room.state);
+    room.broadcastState?.();
+  }
 
-    if (room.state.phase === "draft") {
-      const dIdx = currentDrafter(room.state);
-      if (dIdx !== null) {
-        const player = room.state.players[dIdx];
-        const rp = room.players.find((p) => p.id === player.id);
-        if (rp?.isBot) {
-          const action = botAction(room.state, player.id);
-          if (action) {
-            const next = processAction(room.state, action);
-            if (next) { room.state = next; acted = true; }
-          }
-        }
-      }
-    }
+  // Determine if it's a bot's turn
+  const botInfo = getBotTurn(room);
+  if (!botInfo) return; // Human's turn — stop scheduling
 
-    if (room.state.phase === "turns") {
-      const pIdx = currentPlayer(room.state);
-      if (pIdx !== null) {
-        const player = room.state.players[pIdx];
-        const rp = room.players.find((p) => p.id === player.id);
-        if (rp?.isBot) {
-          const action = botAction(room.state, player.id);
-          if (action) {
-            const next = processAction(room.state, action);
-            if (next) { room.state = next; acted = true; }
-          }
-        }
-      }
-    }
+  // Determine delay: draft = 1.2s, end_turn = 5s, other actions = 1s
+  const action = botAction(room.state, botInfo.botId);
+  if (!action) return;
 
+  const delay = action.type === "draft_pick" ? 1200
+    : action.type === "end_turn" ? 5000
+    : 1000;
+
+  room.botTimer = setTimeout(() => {
+    room.botTimer = null;
+    if (!room.state || room.state.phase === "end") return;
+
+    const next = processAction(room.state, action);
+    if (!next) return;
+    room.state = next;
+
+    // Start new draft if day transition happened
     if (room.state.phase === "draft" && !room.state.draft) {
       room.state = startDraft(room.state);
-      acted = true;
     }
+
+    // Log match if game ended
+    if (room.state.phase === "end" && !room.matchLogged) {
+      room.matchLogged = true;
+      const botIds = new Set(room.players.filter((p) => p.isBot).map((p) => p.id));
+      const summary = generateMatchSummary(room.state, room.id, room.startedAt ?? new Date(), botIds);
+      saveMatchSummary(summary).catch((err) => console.error("[match-log] Error:", err));
+    }
+
+    // Broadcast updated state
+    room.broadcastState?.();
+
+    // Schedule next bot step
+    scheduleBotStep(room);
+  }, delay);
+}
+
+/** Get the bot player whose turn it is, or null if it's a human's turn */
+function getBotTurn(room: Room): { botId: string } | null {
+  if (!room.state) return null;
+
+  if (room.state.phase === "draft") {
+    const dIdx = currentDrafter(room.state);
+    if (dIdx === null) return null;
+    const player = room.state.players[dIdx];
+    const rp = room.players.find((p) => p.id === player.id);
+    if (rp?.isBot) return { botId: player.id };
   }
+
+  if (room.state.phase === "turns") {
+    const pIdx = currentPlayer(room.state);
+    if (pIdx === null) return null;
+    const player = room.state.players[pIdx];
+    const rp = room.players.find((p) => p.id === player.id);
+    if (rp?.isBot) return { botId: player.id };
+  }
+
+  return null;
 }
 
 export function getRoom(roomId: string): Room | undefined {
@@ -189,6 +232,7 @@ export function removePlayer(roomId: string, playerId: string) {
   if (!room) return;
   room.players = room.players.filter((p) => p.id !== playerId);
   if (room.players.filter((p) => !p.isBot).length === 0) {
+    if (room.botTimer) clearTimeout(room.botTimer);
     rooms.delete(roomId);
   }
 }
