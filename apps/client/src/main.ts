@@ -1004,9 +1004,10 @@ function showAbilityModal(heroId: HeroId) {
       title.textContent = "Способность Чародея";
       const players = getPlayers();
       const myIdx = getMyIndex();
-      const otherPlayers = players.filter((_, i) => i !== myIdx);
+      // Can swap with any living player (not assassinated, not self)
+      const otherPlayers = players.filter((p, i) => i !== myIdx && !p.assassinated);
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Взять 2 карты из колоды, или обменяться рукой с игроком.</p>
+        <p class="hint" style="margin-bottom:8px;">Взять 2 карты из колоды, или обменяться рукой с игроком (кроме убитых).</p>
         <button class="modal-option" data-mode="draw">${heroIcon(HeroId.Sorcerer)} Взять 2 карты</button>
         ${otherPlayers.map((p) =>
           `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 ${p.name} — ${p.hand ? p.hand.length : p.handSize} карт</button>`,

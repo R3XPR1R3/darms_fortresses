@@ -158,9 +158,10 @@ export function useAbility(
         };
         log = addLog({ ...state, log }, `${player.name} (Чародей) взял 2 карты`);
       } else {
-        // Swap hands
+        // Swap hands — can't target self or assassinated players
         const targetIdx = state.players.findIndex((p) => p.id === ability.targetPlayerId);
         if (targetIdx === -1 || targetIdx === playerIdx) return null;
+        if (state.players[targetIdx].assassinated) return null;
         const targetHand = [...state.players[targetIdx].hand];
         const myHand = [...player.hand];
         newPlayers[playerIdx] = { ...player, hand: targetHand, abilityUsed: true };
