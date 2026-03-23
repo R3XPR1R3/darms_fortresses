@@ -196,22 +196,55 @@
     /* -- Hand -- */
     #my-hand { margin-bottom: 6px; }
     #my-hand h3 { font-size: 12px; color: #e94560; margin-bottom: 4px; }
-    .hand-cards { display: flex; flex-wrap: wrap; gap: 4px; }
+    .hand-cards { display: flex; flex-wrap: wrap; gap: 6px; }
     .hand-card {
-      font-size: 11px;
-      padding: 4px 8px;
-      border-radius: 6px;
-      border: 1px solid #333;
+      width: 90px;
+      min-height: 126px;
+      border-radius: 8px;
+      border: 2px solid rgba(255,255,255,0.15);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
       cursor: pointer;
       transition: all 0.15s;
       display: inline-flex;
+      flex-direction: column;
       align-items: center;
-      gap: 4px;
+      justify-content: space-between;
+      padding: 8px 6px;
+      font-size: 11px;
+      text-align: center;
+      line-height: 1.3;
+      color: #000;
+      font-weight: 600;
+      flex-shrink: 0;
     }
-    .hand-card:hover { transform: scale(1.05); border-color: #e94560; }
-    .hand-card .card-cost { font-weight: bold; }
-    .hand-card .card-colors { display: flex; gap: 1px; }
-    .hand-card .card-colors svg { width: 8px; height: 8px; }
+    .hand-card:hover { transform: scale(1.08); border-color: #e94560; box-shadow: 0 4px 12px rgba(233,69,96,0.4); }
+    .hand-card .card-cost {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    .hand-card .card-name-text {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      word-break: break-word;
+      hyphens: auto;
+    }
+    .hand-card .card-colors { display: none; }
+    .hand-card .btn-build {
+      width: 100%;
+      font-size: 9px !important;
+      padding: 4px 6px !important;
+      border-radius: 4px;
+    }
     .btn-build { font-size: 10px !important; padding: 2px 6px !important; }
 
     /* -- Actions -- */
@@ -253,35 +286,38 @@
 
     /* ===== SHARED COMPONENTS ===== */
 
-    /* District cards (tall, card-shaped) */
+    /* District cards (poker-card proportions, ~2.5:3.5 ratio) */
     .district-card {
-      width: 64px;
-      min-height: 88px;
-      border-radius: 6px;
+      width: 90px;
+      height: 126px;
+      border-radius: 8px;
       color: #000;
       font-weight: 600;
       display: inline-flex;
       flex-direction: column;
       align-items: center;
       justify-content: space-between;
-      padding: 6px 4px;
-      font-size: 9px;
+      padding: 8px 6px;
+      font-size: 11px;
       text-align: center;
-      border: 1px solid rgba(0,0,0,0.2);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-      line-height: 1.2;
+      border: 2px solid rgba(255,255,255,0.15);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      line-height: 1.3;
       flex-shrink: 0;
+      position: relative;
     }
     .district-card .card-cost-badge {
-      width: 22px;
-      height: 22px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
-      background: rgba(0,0,0,0.2);
+      background: rgba(0,0,0,0.25);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: 16px;
       font-weight: 800;
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
     }
     .district-card .card-name {
       flex: 1;
@@ -289,12 +325,16 @@
       align-items: center;
       word-break: break-word;
       hyphens: auto;
+      padding: 2px 0;
     }
     .district-card .card-hp {
-      font-size: 8px;
-      opacity: 0.7;
+      font-size: 9px;
+      opacity: 0.8;
+      background: rgba(0,0,0,0.15);
+      padding: 1px 6px;
+      border-radius: 4px;
     }
-    .district-card svg { width: 8px; height: 8px; }
+    .district-card svg { width: 10px; height: 10px; }
     .color-yellow { background: #f0c040; }
     .color-blue { background: #4090f0; color: #fff; }
     .color-green { background: #40c060; }

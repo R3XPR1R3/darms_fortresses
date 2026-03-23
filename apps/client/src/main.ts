@@ -934,8 +934,8 @@ function renderMyBoard() {
       const cs = colorStyle(c.colors);
       return `
         <div class="hand-card ${cs.cls}" style="${cs.style}">
-          <span class="card-colors">${c.colors.map(col => districtColorDot(col)).join("")}</span>
-          <span class="card-cost">${c.cost}</span> ${c.name}
+          <div class="card-cost">${c.cost}</div>
+          <div class="card-name-text">${c.name}</div>
           ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">Строить</button>` : ""}
         </div>
       `;
