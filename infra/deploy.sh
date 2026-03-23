@@ -11,6 +11,9 @@ echo "Repo: $REPO_DIR"
 
 cd "$REPO_DIR"
 
+# Ensure match-logs directory exists on host
+mkdir -p /opt/darms-fortresses/match-logs
+
 # Rebuild and restart
 echo "--- Rebuilding Docker containers ---"
 docker compose -f infra/docker/docker-compose.yml build
@@ -26,4 +29,7 @@ echo "Waiting for tunnel to start..."
 sleep 5
 docker compose -f infra/docker/docker-compose.yml logs tunnel 2>&1 | grep -oP 'https://[^\s]+' | tail -1 || echo "URL not ready yet. Check: docker compose -f infra/docker/docker-compose.yml logs tunnel"
 
+echo ""
 echo "=== Deploy complete ==="
+echo "Для красивого терминала: bash infra/start.sh"
+echo "История каток: bash infra/history.sh"
