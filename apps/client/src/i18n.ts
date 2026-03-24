@@ -91,10 +91,10 @@ const dict: Record<string, { en: string; ru: string }> = {
   },
   "modal.sorcerer_title": { en: "Sorcerer Ability", ru: "Способность Чародея" },
   "modal.sorcerer_hint": {
-    en: "Draw 2 cards from the deck, or swap hands with a player (except killed ones).",
-    ru: "Взять 2 карты из колоды, или обменяться рукой с игроком (кроме убитых).",
+    en: "Discard 2 random cards and draw 3 from the deck, or swap hands with any player.",
+    ru: "Сбросить 2 случайные карты и взять 3 из колоды, или обменяться рукой с любым игроком.",
   },
-  "modal.sorcerer_draw": { en: "Draw 2 cards", ru: "Взять 2 карты" },
+  "modal.sorcerer_draw": { en: "Discard 2, draw 3", ru: "Сбросить 2, взять 3" },
   "modal.sorcerer_cards": { en: "cards", ru: "карт" },
   "modal.general_title": { en: "Destroy a district", ru: "Разрушить квартал" },
   "modal.general_hint": {
@@ -223,7 +223,7 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string }> =
   { pattern: /(.+?) \(Генерал\) \+(\d+) золота за красные кварталы/, en: (_, n, g) => `${n} (General) +${g} gold for red districts` },
   { pattern: /(.+?) совершил убийство\.\.\./, en: (_, n) => `${n} committed murder...` },
   { pattern: /(.+?) готовит ограбление\.\.\./, en: (_, n) => `${n} prepares a robbery...` },
-  { pattern: /(.+?) \(Чародей\) взял 2 карты/, en: (_, n) => `${n} (Sorcerer) drew 2 cards` },
+  { pattern: /(.+?) \(Чародей\) сбросил (\d+) карт, взял (\d+)/, en: (_, n, d, w) => `${n} (Sorcerer) discarded ${d} cards, drew ${w}` },
   { pattern: /(.+?) \(Чародей\) обменялся рукой с (.+)/, en: (_, n, t) => `${n} (Sorcerer) swapped hands with ${t}` },
   { pattern: /(.+?) \(Генерал\) разрушил (.+?) у (.+?) за (\d+) золота/, en: (_, n, d, t, g) => `${n} (General) destroyed ${tDistrict(d)} from ${t} for ${g} gold` },
   { pattern: /(.+?) \(Генерал\) повредил (.+?) у (.+?) \((\d+)→(\d+) HP\) за (\d+) золота/, en: (_, n, d, t, hp1, hp2, g) => `${n} (General) damaged ${tDistrict(d)} of ${t} (${hp1}→${hp2} HP) for ${g} gold` },

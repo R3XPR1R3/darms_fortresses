@@ -81,15 +81,18 @@ describe("hero abilities", () => {
     expect(result).toBeNull();
   });
 
-  it("sorcerer draws 2 cards", () => {
+  it("sorcerer discards 2 random cards and draws 3", () => {
     const rng = createRng(1);
     let state = makeTestState();
     state = assignHeroes(state, [HeroId.Sorcerer, HeroId.King, HeroId.Merchant, HeroId.General]);
     const handBefore = state.players[0].hand.length;
+    const deckBefore = state.deck.length;
 
     const result = useAbility(state, "p1", { hero: "sorcerer", mode: "draw" }, rng);
     expect(result).not.toBeNull();
-    expect(result!.players[0].hand.length).toBe(handBefore + 2);
+    // hand = handBefore - 2 discarded + 3 drawn = handBefore + 1
+    expect(result!.players[0].hand.length).toBe(handBefore + 1);
+    expect(result!.deck.length).toBe(deckBefore - 3);
   });
 
   it("sorcerer swaps hands", () => {
@@ -103,6 +106,19 @@ describe("hero abilities", () => {
     expect(result).not.toBeNull();
     expect(result!.players[0].hand).toEqual(hand1);
     expect(result!.players[1].hand).toEqual(hand0);
+  });
+
+  it("sorcerer can swap hands with assassinated player", () => {
+    const rng = createRng(1);
+    let state = makeTestState();
+    state = assignHeroes(state, [HeroId.Sorcerer, HeroId.King, HeroId.Merchant, HeroId.General]);
+    // Mark p2 as assassinated
+    const newPlayers = [...state.players];
+    newPlayers[1] = { ...newPlayers[1], assassinated: true };
+    state = { ...state, players: newPlayers };
+
+    const result = useAbility(state, "p1", { hero: "sorcerer", mode: "swap", targetPlayerId: "p2" }, rng);
+    expect(result).not.toBeNull();
   });
 
   it("general destroys a district for its cost", () => {

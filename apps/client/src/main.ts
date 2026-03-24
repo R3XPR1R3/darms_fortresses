@@ -952,8 +952,23 @@ function renderMyBoard() {
   const me = players[getMyIndex()];
   if (!me) { el.innerHTML = ""; return; }
 
-  if (phase === "draft" || phase === "setup") {
+  if (phase === "setup") {
     el.innerHTML = "";
+    return;
+  }
+
+  // During draft — show simplified board (stats + districts only, no hand/actions)
+  if (phase === "draft") {
+    const draftStats = `
+      <div class="my-stats-bar">
+        <span>💰 ${me.gold}</span>
+        <span>🃏 ${me.hand ? me.hand.length : me.handSize}</span>
+        <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      </div>
+    `;
+    const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
+    const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
+    el.innerHTML = draftStats + districtsSection;
     return;
   }
 
@@ -1150,8 +1165,8 @@ function showAbilityModal(heroId: HeroId) {
       title.textContent = t("modal.sorcerer_title");
       const players = getPlayers();
       const myIdx = getMyIndex();
-      // Can swap with any living player (not assassinated, not self)
-      const otherPlayers = players.filter((p, i) => i !== myIdx && !p.assassinated);
+      // Can swap with any player (including assassinated, not self)
+      const otherPlayers = players.filter((_p, i) => i !== myIdx);
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${t("modal.sorcerer_hint")}</p>
         <button class="modal-option" data-mode="draw">${heroPortrait(HeroId.Sorcerer, 24)} ${t("modal.sorcerer_draw")}</button>
