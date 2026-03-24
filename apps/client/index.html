@@ -59,6 +59,7 @@
       50% { opacity: 0.85; }
     }
     #turn-banner svg { width: 18px; height: 18px; }
+    #turn-banner .hero-portrait { border-radius: 50%; vertical-align: middle; }
 
     /* -- Opponent Tabs -- */
     #opponent-tabs {
@@ -95,6 +96,7 @@
     }
     .opp-tab .tab-hero { font-size: 10px; color: #e94560; }
     .opp-tab .tab-hero svg { width: 14px; height: 14px; vertical-align: middle; }
+    .opp-tab .tab-hero .hero-portrait { border-radius: 50%; vertical-align: middle; border: 1px solid #e94560; }
     .opp-tab .tab-stats { font-size: 10px; color: #666; }
     .opp-tab .tab-sleep { font-size: 12px; opacity: 0.5; }
 
@@ -112,6 +114,7 @@
       margin-bottom: 8px;
     }
     .opp-hero-display .hero-icon-large svg { width: 48px; height: 48px; }
+    .opp-hero-display .hero-icon-large .hero-portrait { border-radius: 50%; border: 2px solid #e94560; box-shadow: 0 2px 8px rgba(233,69,96,0.4); }
     .opp-hero-display .hero-name { font-size: 14px; font-weight: 600; color: #e94560; }
     .opp-hero-display .hero-speed { font-size: 11px; color: #888; }
     .opp-hero-display .sleep-display {
@@ -165,6 +168,7 @@
       margin-bottom: 6px;
     }
     .my-hero-row .hero-icon-large svg { width: 40px; height: 40px; }
+    .my-hero-row .hero-icon-large .hero-portrait { border-radius: 50%; border: 2px solid #e94560; box-shadow: 0 2px 8px rgba(233,69,96,0.3); }
     .my-hero-row .my-hero-info { flex: 1; }
     .my-hero-row .my-hero-name { font-size: 14px; font-weight: 700; color: #e94560; }
     .my-hero-row .my-hero-speed { font-size: 11px; color: #888; }
@@ -383,6 +387,8 @@
     .hero-btn:hover { border-color: #e94560; background: #1a1a3e; transform: scale(1.05); }
     .hero-btn .speed { color: #aaa; font-size: 10px; }
     .hero-btn-icon svg { width: 36px; height: 36px; }
+    .hero-btn-icon .hero-portrait { border-radius: 8px; border: 2px solid #0f3460; transition: all 0.15s; }
+    .hero-btn:hover .hero-btn-icon .hero-portrait { border-color: #e94560; }
     .hero-btn-name { font-weight: 600; font-size: 11px; }
 
     /* Draft timer */
@@ -405,6 +411,9 @@
     .bans { font-size: 11px; color: #888; margin-top: 4px; text-align: center; }
     .bans .ban-up { color: #e94560; }
     .bans .ban-up svg { width: 14px; height: 14px; vertical-align: middle; }
+    .bans .ban-up .hero-portrait { border-radius: 50%; vertical-align: middle; opacity: 0.6; }
+    .btn .hero-portrait { border-radius: 50%; vertical-align: middle; }
+    .hero-portrait { object-fit: cover; }
 
     /* Menu screen */
     .menu-screen {
@@ -474,6 +483,7 @@
       gap: 6px;
     }
     .modal-option svg { width: 20px; height: 20px; flex-shrink: 0; }
+    .modal-option .hero-portrait { border-radius: 50%; flex-shrink: 0; }
     .modal-option:hover { border-color: #e94560; }
 
     /* Winner */
