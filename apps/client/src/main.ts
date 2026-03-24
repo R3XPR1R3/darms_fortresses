@@ -561,6 +561,7 @@ function ensureGameLayout() {
       <div id="draft-area"></div>
     </div>
     <div id="my-board"></div>
+    <div id="ban-list"></div>
     <div id="log-toggle">📜 Журнал</div>
     <div id="game-log"></div>
   `;
@@ -580,6 +581,7 @@ function render() {
   renderOpponentBoard();
   renderDraft();
   renderMyBoard();
+  renderBanList();
   renderLog();
   renderWinner();
 }
@@ -806,17 +808,10 @@ function renderDraft() {
     return;
   }
 
-  // During turns phase, just show bans (no draft UI)
+  // During turns phase, bans are rendered in #ban-list (above journal)
   if (phase === "turns") {
     stopDraftTimer();
-    if (draft) {
-      const bans = draft.faceUpBans.map((h) =>
-        `<span class="ban-up">${heroPortraitSmall(h)} ${heroName(h)}</span>`,
-      ).join(", ");
-      el.innerHTML = `<div class="bans">Забанены: ${bans} + ${draft.hiddenBanCount} скрытых</div>`;
-    } else {
-      el.innerHTML = "";
-    }
+    el.innerHTML = "";
     return;
   }
 
@@ -1154,6 +1149,22 @@ function renderLog() {
     `<div class="log-entry"><span class="day-tag">[День ${e.day}]</span> ${e.message}</div>`,
   ).join("");
   el.scrollTop = el.scrollHeight;
+}
+
+function renderBanList() {
+  const el = document.getElementById("ban-list")!;
+  if (!el) return;
+  const phase = getPhase();
+  const draft = getDraft();
+
+  if ((phase === "turns" || phase === "end") && draft) {
+    const bans = draft.faceUpBans.map((h) =>
+      `<span class="ban-up">${heroPortraitSmall(h)} ${heroName(h)}</span>`,
+    ).join(", ");
+    el.innerHTML = `Забанены: ${bans} + ${draft.hiddenBanCount} скрытых`;
+  } else {
+    el.innerHTML = "";
+  }
 }
 
 function renderWinner() {
