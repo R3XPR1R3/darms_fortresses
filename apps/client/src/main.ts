@@ -2,11 +2,7 @@ import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/
 import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroPortrait, heroPortraitLarge, heroPortraitSmall } from "./icons.js";
-import {
-  animateCardsAppear, animateDraftHeroes, animateBannerSwitch,
-  animateOpponentBoard, animateMyBoard, animateBuild, animateIncome,
-  animateWinner, animateLogEntry, animateActiveArrow, animateTimerUrgent,
-} from "./anim.js";
+import { animateChanges, resetAnimState } from "./anim.js";
 import { t, tHero, tDistrict, tLog, tName, getLang, setLang } from "./i18n.js";
 
 // ---- Types for online mode ----
@@ -92,9 +88,6 @@ let turnTimerInterval: ReturnType<typeof setInterval> | null = null;
 let turnTimerRemaining = 0;
 let turnTimerForPlayer = -1; // track which player's turn the timer is for
 
-// ---- Track last action for animations ----
-let lastAction: string | null = null;
-
 // ---- Init ----
 function showMenu() {
   mode = "menu";
@@ -105,6 +98,7 @@ function showMenu() {
 
 function startLocal() {
   mode = "local";
+  resetAnimState();
   const seed = Date.now();
   const rng = createRng(seed);
   const deck = createBaseDeck();
@@ -185,6 +179,7 @@ function handleServerMessage(msg: Record<string, unknown>) {
       break;
 
     case "game_state":
+      if (mode !== "online") resetAnimState();
       mode = "online";
       onlineState = msg.state as PlayerView;
       render();
@@ -204,7 +199,6 @@ function sendAction(action: GameAction) {
 
 // ---- Dispatch (works for both modes) ----
 function dispatch(action: GameAction) {
-  lastAction = action.type;
   if (mode === "online") {
     sendAction(action);
     return;
@@ -607,6 +601,24 @@ function render() {
   renderBanList();
   renderLog();
   renderWinner();
+
+  // Diff-based animations: compare current state to previous, animate only changes
+  const players = getPlayers();
+  const myIdx = getMyIndex();
+  const me = players[myIdx];
+  const draft = getDraft();
+  animateChanges({
+    phase: getPhase(),
+    activeIdx: getActiveIndex(),
+    myDistrictCount: me?.builtDistricts.length ?? 0,
+    myGold: me?.gold ?? 0,
+    myHandSize: me?.hand ? me.hand.length : (me?.handSize ?? 0),
+    oppIdx: selectedOpponentIndex,
+    oppDistrictCount: selectedOpponentIndex !== null ? (players[selectedOpponentIndex]?.builtDistricts.length ?? 0) : 0,
+    logCount: getLog().length,
+    winner: getWinner(),
+    draftStep: draft?.currentStep ?? -1,
+  });
 }
 
 function renderTurnBanner() {
@@ -650,7 +662,6 @@ function renderTurnBanner() {
         el.innerHTML = `⏳ ${t("banner.turn_of")}${tName(activePlayer?.name ?? "...")}`;
       }
     }
-    animateBannerSwitch();
     return;
   }
 
@@ -729,8 +740,6 @@ function renderOpponentTabs() {
     });
   });
 
-  // Animate the active player arrow
-  animateActiveArrow();
 }
 
 function renderOpponentBoard() {
@@ -794,8 +803,6 @@ function renderOpponentBoard() {
     : "";
 
   el.innerHTML = heroSection + statsBar + districtsSection + assassinated;
-  animateOpponentBoard();
-  animateCardsAppear(".opp-districts");
 }
 
 function startDraftTimer(draft: DraftView) {
@@ -848,7 +855,6 @@ function startTurnTimer(playerIdx: number) {
       timerEl.textContent = `${turnTimerRemaining}s`;
       if (turnTimerRemaining <= 10) {
         timerEl.className = "turn-timer timer-urgent";
-        animateTimerUrgent();
       }
     }
     if (turnTimerRemaining <= 0) {
@@ -928,7 +934,6 @@ function renderDraft() {
   `;
 
   if (myTurn) {
-    animateDraftHeroes();
     el.querySelectorAll(".hero-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         stopDraftTimer();
@@ -1045,17 +1050,6 @@ function renderMyBoard() {
   }
 
   el.innerHTML = heroRow + statsBar + districtsSection + handSection + actionsSection;
-
-  // Animations
-  if (lastAction === "build") {
-    animateBuild();
-    lastAction = null;
-  } else if (lastAction === "income") {
-    animateIncome();
-    lastAction = null;
-  }
-  animateCardsAppear(".my-districts");
-  animateMyBoard();
 
   // Wire up events
   el.querySelectorAll("[data-build]").forEach((btn) => {
@@ -1232,7 +1226,6 @@ function renderLog() {
     `<div class="log-entry"><span class="day-tag">[${t("log.day")} ${e.day}]</span> ${tLog(e.message)}</div>`,
   ).join("");
   el.scrollTop = el.scrollHeight;
-  animateLogEntry();
 }
 
 function renderBanList() {
@@ -1261,7 +1254,6 @@ function renderWinner() {
     const players = getPlayers();
     overlay.classList.add("show");
     card.innerHTML = `🏆 ${tName(players[winner]?.name ?? "???")} ${t("winner.title")}!<br><button class="btn btn-primary" id="btn-to-menu" style="margin-top:10px;">← ${t("winner.to_menu")}</button>`;
-    animateWinner();
     document.getElementById("btn-to-menu")?.addEventListener("click", () => {
       ws?.close();
       showMenu();
