@@ -7,6 +7,7 @@ import {
   animateOpponentBoard, animateMyBoard, animateBuild, animateIncome,
   animateWinner, animateLogEntry, animateActiveArrow, animateTimerUrgent,
 } from "./anim.js";
+import { t, tHero, tDistrict, tLog, tName, getLang, setLang } from "./i18n.js";
 
 // ---- Types for online mode ----
 interface PlayerView {
@@ -67,12 +68,14 @@ let lobbyPlayers: LobbyPlayer[] = [];
 // ---- Local game state ----
 const HUMAN_ID = "human";
 const BOT_IDS = ["bot-1", "bot-2", "bot-3"];
-const LOCAL_PLAYERS = [
-  { id: HUMAN_ID, name: "Ты" },
-  { id: BOT_IDS[0], name: "Бот Алиса" },
-  { id: BOT_IDS[1], name: "Бот Борис" },
-  { id: BOT_IDS[2], name: "Бот Вика" },
-];
+function getLocalPlayers() {
+  return [
+    { id: HUMAN_ID, name: t("lobby.you") },
+    { id: BOT_IDS[0], name: "Бот Алиса" },
+    { id: BOT_IDS[1], name: "Бот Борис" },
+    { id: BOT_IDS[2], name: "Бот Вика" },
+  ];
+}
 
 let localState: GameState | null = null;
 let onlineState: PlayerView | null = null;
@@ -105,7 +108,7 @@ function startLocal() {
   const seed = Date.now();
   const rng = createRng(seed);
   const deck = createBaseDeck();
-  localState = createMatch(LOCAL_PLAYERS, deck, rng);
+  localState = createMatch(getLocalPlayers(), deck, rng);
   localState = startDraft(localState);
   render();
   // Let bots make their draft picks if human isn't first
@@ -114,12 +117,12 @@ function startLocal() {
 
 function showLobbyScreen(action: "create" | "join") {
   const app = document.getElementById("app")!;
-  const playerName = (document.getElementById("player-name") as HTMLInputElement)?.value?.trim() || "Игрок";
+  const playerName = (document.getElementById("player-name") as HTMLInputElement)?.value?.trim() || t("menu.default_name");
 
   if (action === "create") {
     connectWS(playerName, null);
   } else {
-    const roomInput = prompt("Введи код комнаты:");
+    const roomInput = prompt(t("lobby.enter_code"));
     if (!roomInput) return;
     connectWS(playerName, roomInput.toUpperCase().trim());
   }
@@ -127,7 +130,7 @@ function showLobbyScreen(action: "create" | "join") {
   mode = "lobby";
   app.innerHTML = `
     <h1>⚔ Darms: Fortresses</h1>
-    <div class="phase-label">Подключение...</div>
+    <div class="phase-label">${t("lobby.connecting")}</div>
   `;
 }
 
@@ -164,7 +167,7 @@ function handleServerMessage(msg: Record<string, unknown>) {
       myRoomId = msg.roomId as string;
       myPlayerId = msg.playerId as string;
       isHost = true;
-      lobbyPlayers = [{ id: myPlayerId, name: "Ты", isBot: false, isHost: true }];
+      lobbyPlayers = [{ id: myPlayerId, name: t("lobby.you"), isBot: false, isHost: true }];
       renderLobby();
       break;
 
@@ -414,7 +417,7 @@ function isMyTurn(): boolean {
 
 // ---- Hero helpers ----
 function heroName(id: HeroId): string {
-  return HEROES.find((h) => h.id === id)?.name ?? id;
+  return tHero(id);
 }
 
 function heroSpeed(id: HeroId): number {
@@ -452,7 +455,7 @@ function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?
   const hpLabel = d.hp != null && d.hp !== d.cost ? `<div class="card-hp">HP ${d.hp}</div>` : "";
   return `<div class="district-card ${cs.cls}" style="${cs.style}">
     <div class="card-cost-badge">${d.cost}</div>
-    <div class="card-name">${d.name}</div>
+    <div class="card-name">${tDistrict(d.name)}</div>
     ${hpLabel}
   </div>`;
 }
@@ -511,15 +514,20 @@ function renderMenu() {
   app.innerHTML = `
     <h1>⚔ Darms: Fortresses</h1>
     <div class="menu-screen">
-      <div class="menu-title">Карточная стратегия</div>
-      <input type="text" id="player-name" placeholder="Твоё имя" value="Игрок" class="menu-input" maxlength="20"/>
-      <button class="btn btn-primary btn-large" id="btn-local">🎮 Локальная игра (с ботами)</button>
-      <div class="menu-divider">— онлайн —</div>
-      <button class="btn btn-secondary btn-large" id="btn-create">🌐 Создать комнату</button>
-      <button class="btn btn-secondary btn-large" id="btn-join">🔗 Войти по коду</button>
+      <div class="menu-title">${t("menu.subtitle")}</div>
+      <button class="btn btn-secondary btn-small" id="btn-lang">${t("lang.toggle")}</button>
+      <input type="text" id="player-name" placeholder="${t("menu.name_placeholder")}" value="${t("menu.default_name")}" class="menu-input" maxlength="20"/>
+      <button class="btn btn-primary btn-large" id="btn-local">🎮 ${t("menu.local")}</button>
+      <div class="menu-divider">${t("menu.online_divider")}</div>
+      <button class="btn btn-secondary btn-large" id="btn-create">🌐 ${t("menu.create_room")}</button>
+      <button class="btn btn-secondary btn-large" id="btn-join">🔗 ${t("menu.join_room")}</button>
     </div>
   `;
 
+  document.getElementById("btn-lang")!.addEventListener("click", () => {
+    setLang(getLang() === "en" ? "ru" : "en");
+    renderMenu();
+  });
   document.getElementById("btn-local")!.addEventListener("click", startLocal);
   document.getElementById("btn-create")!.addEventListener("click", () => showLobbyScreen("create"));
   document.getElementById("btn-join")!.addEventListener("click", () => showLobbyScreen("join"));
@@ -529,24 +537,24 @@ function renderLobby() {
   const app = document.getElementById("app")!;
   const playersList = lobbyPlayers.map((p) =>
     `<div class="lobby-player ${p.isHost ? "host" : ""}">
-      ${p.isBot ? "🤖" : "👤"} ${p.name} ${p.isHost ? "(хост)" : ""}
+      ${p.isBot ? "🤖" : "👤"} ${tName(p.name)} ${p.isHost ? t("lobby.host") : ""}
     </div>`
   ).join("");
 
   app.innerHTML = `
     <h1>⚔ Darms: Fortresses</h1>
     <div class="lobby-screen">
-      <div class="room-code">Код комнаты: <strong>${myRoomId}</strong></div>
-      <div class="lobby-info">Отправь код друзьям для подключения</div>
+      <div class="room-code">${t("lobby.room_code")}<strong>${myRoomId}</strong></div>
+      <div class="lobby-info">${t("lobby.share_code")}</div>
       <div class="lobby-players">${playersList}</div>
-      <div class="lobby-count">${lobbyPlayers.length}/4 игрока</div>
+      <div class="lobby-count">${lobbyPlayers.length}/4 ${t("lobby.players_count")}</div>
       ${isHost ? `
         <div class="lobby-actions">
-          <button class="btn btn-secondary" id="btn-add-bot">🤖 Добавить бота</button>
-          <button class="btn btn-primary btn-large" id="btn-start" ${lobbyPlayers.length < 4 ? "disabled" : ""}>▶ Начать игру</button>
+          <button class="btn btn-secondary" id="btn-add-bot">🤖 ${t("lobby.add_bot")}</button>
+          <button class="btn btn-primary btn-large" id="btn-start" ${lobbyPlayers.length < 4 ? "disabled" : ""}>▶ ${t("lobby.start_game")}</button>
         </div>
-      ` : '<div class="lobby-info">Ожидаем запуска хостом...</div>'}
-      <button class="btn btn-secondary" id="btn-back-menu" style="margin-top:12px;">← Назад</button>
+      ` : `<div class="lobby-info">${t("lobby.waiting_host")}</div>`}
+      <button class="btn btn-secondary" id="btn-back-menu" style="margin-top:12px;">← ${t("lobby.back")}</button>
     </div>
   `;
 
@@ -577,7 +585,7 @@ function ensureGameLayout() {
     </div>
     <div id="my-board"></div>
     <div id="ban-list"></div>
-    <div id="log-toggle">📜 Журнал</div>
+    <div id="log-toggle">📜 ${t("log.toggle")}</div>
     <div id="game-log"></div>
   `;
   document.body.insertBefore(board, document.body.firstChild);
@@ -614,8 +622,8 @@ function renderTurnBanner() {
     el.className = "turn-banner" + (myTurn ? " my-turn" : "");
     el.id = "turn-banner";
     el.innerHTML = myTurn
-      ? `⚔ День ${day} — Твой выбор героя!`
-      : `День ${day} — Выбор героя...`;
+      ? `⚔ ${t("banner.day")} ${day} — ${t("banner.your_pick")}`
+      : `${t("banner.day")} ${day} — ${t("banner.hero_pick")}`;
     return;
   }
 
@@ -629,17 +637,17 @@ function renderTurnBanner() {
     if (myTurn) {
       startTurnTimer(activeIdx);
       const timerCls = turnTimerRemaining <= 10 ? "turn-timer timer-urgent" : "turn-timer";
-      const timerHtml = `<span id="turn-timer" class="${timerCls}">${turnTimerRemaining}с</span>`;
+      const timerHtml = `<span id="turn-timer" class="${timerCls}">${turnTimerRemaining}s</span>`;
       const heroId = activePlayer?.hero;
       el.innerHTML = heroId
-        ? `${heroPortraitSmall(heroId)} Твой ход — ${heroName(heroId)} ${timerHtml}`
-        : `⚔ Твой ход! ${timerHtml}`;
+        ? `${heroPortraitSmall(heroId)} ${t("banner.your_turn")} — ${heroName(heroId)} ${timerHtml}`
+        : `⚔ ${t("banner.your_turn")}! ${timerHtml}`;
     } else {
       stopTurnTimer();
       if (revealed && activePlayer?.hero) {
-        el.innerHTML = `${heroPortraitSmall(activePlayer.hero)} Ход: ${heroName(activePlayer.hero)} (${activePlayer.name})`;
+        el.innerHTML = `${heroPortraitSmall(activePlayer.hero)} ${t("banner.turn_of")}${heroName(activePlayer.hero)} (${tName(activePlayer.name)})`;
       } else {
-        el.innerHTML = `⏳ Ход: ${activePlayer?.name ?? "..."}`;
+        el.innerHTML = `⏳ ${t("banner.turn_of")}${tName(activePlayer?.name ?? "...")}`;
       }
     }
     animateBannerSwitch();
@@ -649,14 +657,14 @@ function renderTurnBanner() {
   if (phase === "end") {
     el.className = "";
     el.id = "turn-banner";
-    el.innerHTML = "🏆 Игра окончена";
+    el.innerHTML = `🏆 ${t("banner.game_over")}`;
     stopTurnTimer();
     return;
   }
 
   el.className = "";
   el.id = "turn-banner";
-  el.innerHTML = `День ${day}`;
+  el.innerHTML = `${t("banner.day")} ${day}`;
 }
 
 function renderOpponentTabs() {
@@ -696,7 +704,7 @@ function renderOpponentTabs() {
       label = heroName(p.hero);
       heroLine = `<span class="tab-hero">${heroPortraitSmall(p.hero)}</span>`;
     } else {
-      label = p.name;
+      label = tName(p.name);
       heroLine = `<span class="tab-sleep">💤</span>`;
     }
 
@@ -749,15 +757,15 @@ function renderOpponentBoard() {
       <div class="opp-hero-display">
         <div class="hero-icon-large">${heroPortrait(p.hero, 64)}</div>
         <div class="hero-name">${heroName(p.hero)}</div>
-        <div class="hero-speed">Скорость ${heroDef?.speed ?? "?"}</div>
+        <div class="hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
       </div>
     `;
   } else {
     heroSection = `
       <div class="opp-hero-display">
         <div class="sleep-display">💤</div>
-        <div class="hero-name" style="color: #888;">${p.name}</div>
-        <div class="hero-speed">Роль скрыта</div>
+        <div class="hero-name" style="color: #888;">${tName(p.name)}</div>
+        <div class="hero-speed">${t("opp.role_hidden")}</div>
       </div>
     `;
   }
@@ -778,11 +786,11 @@ function renderOpponentBoard() {
   ).join("");
   const districtsSection = districts
     ? `<div class="opp-districts">${districts}</div>`
-    : '<div class="opp-districts" style="color:#666;font-size:12px;">Нет построек</div>';
+    : `<div class="opp-districts" style="color:#666;font-size:12px;">${t("opp.no_districts")}</div>`;
 
   // Assassination status
   const assassinated = p.assassinated
-    ? `<div class="opp-assassinated">💀 Убит в этот день</div>`
+    ? `<div class="opp-assassinated">💀 ${t("opp.killed_today")}</div>`
     : "";
 
   el.innerHTML = heroSection + statsBar + districtsSection + assassinated;
@@ -803,7 +811,7 @@ function startDraftTimer(draft: DraftView) {
     draftTimerRemaining--;
     // Update the timer display without full re-render
     const timerEl = document.getElementById("draft-timer");
-    if (timerEl) timerEl.textContent = `${draftTimerRemaining}с`;
+    if (timerEl) timerEl.textContent = `${draftTimerRemaining}s`;
 
     if (draftTimerRemaining <= 0) {
       stopDraftTimer();
@@ -837,7 +845,7 @@ function startTurnTimer(playerIdx: number) {
     turnTimerRemaining--;
     const timerEl = document.getElementById("turn-timer");
     if (timerEl) {
-      timerEl.textContent = `${turnTimerRemaining}с`;
+      timerEl.textContent = `${turnTimerRemaining}s`;
       if (turnTimerRemaining <= 10) {
         timerEl.className = "turn-timer timer-urgent";
         animateTimerUrgent();
@@ -903,19 +911,19 @@ function renderDraft() {
       <button class="hero-btn" data-hero="${h}">
         <div class="hero-btn-icon">${heroPortraitLarge(h)}</div>
         <div class="hero-btn-name">${heroName(h)}</div>
-        <div class="speed">Скорость ${heroSpeed(h)}</div>
+        <div class="speed">${t("draft.speed")} ${heroSpeed(h)}</div>
       </button>
     `).join("");
   }
 
   const timerDisplay = myTurn
-    ? `<span id="draft-timer" class="draft-timer ${draftTimerRemaining <= 10 ? 'timer-urgent' : ''}">${draftTimerRemaining}с</span>`
+    ? `<span id="draft-timer" class="draft-timer ${draftTimerRemaining <= 10 ? 'timer-urgent' : ''}">${draftTimerRemaining}s</span>`
     : "";
 
   el.innerHTML = `
-    <h2>Драфт героев ${timerDisplay}</h2>
-    <div class="bans">Забанены: ${bans} + ${draft.hiddenBanCount} скрытых</div>
-    ${myTurn ? '<p class="hint">Выбери героя:</p>' : '<p class="hint">Другие игроки выбирают...</p>'}
+    <h2>${t("draft.title")} ${timerDisplay}</h2>
+    <div class="bans">${t("draft.banned")}${bans} + ${draft.hiddenBanCount} ${t("draft.hidden")}</div>
+    ${myTurn ? `<p class="hint">${t("draft.choose_hero")}</p>` : `<p class="hint">${t("draft.others_choosing")}</p>`}
     <div class="draft-heroes">${heroButtons}</div>
   `;
 
@@ -959,7 +967,7 @@ function renderMyBoard() {
         <div class="hero-icon-large">${heroPortrait(me.hero, 48)}</div>
         <div class="my-hero-info">
           <div class="my-hero-name">${heroName(me.hero)}</div>
-          <div class="my-hero-speed">Скорость ${heroDef?.speed ?? "?"}</div>
+          <div class="my-hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
           ${abilityTag}
         </div>
       </div>
@@ -972,7 +980,7 @@ function renderMyBoard() {
       <span>💰 ${me.gold}</span>
       <span>🃏 ${hand.length}</span>
       <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
-      ${me.finishedFirst ? "<span>⭐ Первый!</span>" : ""}
+      ${me.finishedFirst ? `<span>⭐ ${t("my.first")}</span>` : ""}
     </div>
   `;
 
@@ -994,14 +1002,14 @@ function renderMyBoard() {
       return `
         <div class="hand-card ${cs.cls}" style="${cs.style}">
           <div class="card-cost">${c.cost}</div>
-          <div class="card-name-text">${c.name}</div>
-          ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">Строить</button>` : ""}
+          <div class="card-name-text">${tDistrict(c.name)}</div>
+          ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : ""}
         </div>
       `;
     }).join("");
     handSection = `
       <div id="my-hand">
-        <h3>Рука</h3>
+        <h3>${t("my.hand")}</h3>
         <div class="hand-cards">${cards}</div>
       </div>
     `;
@@ -1011,27 +1019,27 @@ function renderMyBoard() {
   let actionsSection = "";
   if (phase === "turns") {
     if (me.assassinated) {
-      actionsSection = '<div id="my-actions"><p class="hint">💀 Вы убиты в этот день. Ваш ход пропущен.</p></div>';
+      actionsSection = `<div id="my-actions"><p class="hint">💀 ${t("my.killed_skip")}</p></div>`;
     } else if (!myTurnNow) {
-      actionsSection = '<div id="my-actions"><p class="hint">Ждём ход других игроков...</p></div>';
+      actionsSection = `<div id="my-actions"><p class="hint">${t("my.waiting")}</p></div>`;
     } else {
       const buttons: string[] = [];
 
       if (!me.abilityUsed && me.hero) {
         const hasActiveAbility = [HeroId.Assassin, HeroId.Thief, HeroId.Sorcerer, HeroId.General].includes(me.hero);
         if (hasActiveAbility) {
-          buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroPortraitSmall(me.hero)} Способность</button>`);
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroPortraitSmall(me.hero)} ${t("my.ability")}</button>`);
         } else {
-          buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ Пассивка</button>`);
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ ${t("my.passive")}</button>`);
         }
       }
 
       if (!me.incomeTaken) {
-        buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 +1 Золото</button>`);
-        buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 Взять карту</button>`);
+        buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
+        buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
       }
 
-      buttons.push(`<button class="btn btn-primary" id="btn-end">Завершить ход ➡</button>`);
+      buttons.push(`<button class="btn btn-primary" id="btn-end">${t("my.end_turn")} ➡</button>`);
       actionsSection = `<div id="my-actions">${buttons.join("")}</div>`;
     }
   }
@@ -1076,14 +1084,14 @@ function renderMyBoard() {
 
 function getAbilityDescription(heroId: HeroId): string {
   switch (heroId) {
-    case HeroId.Assassin: return "Убийство";
-    case HeroId.Thief: return "Грабёж";
-    case HeroId.Sorcerer: return "Магия";
-    case HeroId.King: return "Корона + жёлтый доход";
-    case HeroId.Cleric: return "Защита + синий доход";
-    case HeroId.Merchant: return "Бонус + зелёный доход";
-    case HeroId.Architect: return "3 постройки за ход";
-    case HeroId.General: return "Разрушение + красный доход";
+    case HeroId.Assassin: return t("ability.assassin");
+    case HeroId.Thief: return t("ability.thief");
+    case HeroId.Sorcerer: return t("ability.sorcerer");
+    case HeroId.King: return t("ability.king");
+    case HeroId.Cleric: return t("ability.cleric");
+    case HeroId.Merchant: return t("ability.merchant");
+    case HeroId.Architect: return t("ability.architect");
+    case HeroId.General: return t("ability.general");
     default: return "";
   }
 }
@@ -1099,7 +1107,7 @@ function showAbilityModal(heroId: HeroId) {
 
   switch (heroId) {
     case HeroId.Assassin: {
-      title.textContent = "Убить персонажа";
+      title.textContent = t("modal.assassin_title");
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
       // Exclude self and face-up banned heroes (known to not be in play)
@@ -1107,7 +1115,7 @@ function showAbilityModal(heroId: HeroId) {
         h !== HeroId.Assassin && !faceUpBans.includes(h),
       );
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Ты не знаешь, кто взял какую роль. Выбери персонажа — если кто-то его взял, он пропустит ход.</p>
+        <p class="hint" style="margin-bottom:8px;">${t("modal.assassin_hint")}</p>
         ${targets.map((h) =>
           `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
         ).join("")}
@@ -1122,7 +1130,7 @@ function showAbilityModal(heroId: HeroId) {
       break;
     }
     case HeroId.Thief: {
-      title.textContent = "Обокрасть персонажа";
+      title.textContent = t("modal.thief_title");
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
       // Exclude self, assassin, and face-up banned heroes
@@ -1130,7 +1138,7 @@ function showAbilityModal(heroId: HeroId) {
         h !== HeroId.Thief && h !== HeroId.Assassin && !faceUpBans.includes(h),
       );
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Выбери роль — когда начнётся ход этого персонажа, ты заберёшь всё его золото.</p>
+        <p class="hint" style="margin-bottom:8px;">${t("modal.thief_hint")}</p>
         ${targets.map((h) =>
           `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
         ).join("")}
@@ -1145,16 +1153,16 @@ function showAbilityModal(heroId: HeroId) {
       break;
     }
     case HeroId.Sorcerer: {
-      title.textContent = "Способность Чародея";
+      title.textContent = t("modal.sorcerer_title");
       const players = getPlayers();
       const myIdx = getMyIndex();
       // Can swap with any living player (not assassinated, not self)
       const otherPlayers = players.filter((p, i) => i !== myIdx && !p.assassinated);
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Взять 2 карты из колоды, или обменяться рукой с игроком (кроме убитых).</p>
-        <button class="modal-option" data-mode="draw">${heroPortrait(HeroId.Sorcerer, 24)} Взять 2 карты</button>
+        <p class="hint" style="margin-bottom:8px;">${t("modal.sorcerer_hint")}</p>
+        <button class="modal-option" data-mode="draw">${heroPortrait(HeroId.Sorcerer, 24)} ${t("modal.sorcerer_draw")}</button>
         ${otherPlayers.map((p) =>
-          `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 ${p.name} — ${p.hand ? p.hand.length : p.handSize} карт</button>`,
+          `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 ${tName(p.name)} — ${p.hand ? p.hand.length : p.handSize} ${t("modal.sorcerer_cards")}</button>`,
         ).join("")}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
@@ -1172,13 +1180,13 @@ function showAbilityModal(heroId: HeroId) {
       break;
     }
     case HeroId.General: {
-      title.textContent = "Разрушить квартал";
+      title.textContent = t("modal.general_title");
       const players = getPlayers();
       const me = players[getMyIndex()];
       const targets = players
         .filter((p, i) => i !== getMyIndex() && p.builtDistricts.length > 0 && p.hero !== HeroId.Cleric);
       if (targets.length === 0) {
-        options.innerHTML = '<p class="hint">Нет доступных целей</p>';
+        options.innerHTML = `<p class="hint">${t("modal.general_no_targets")}</p>`;
         break;
       }
       const targetButtons = targets.flatMap((p) => {
@@ -1189,13 +1197,13 @@ function showAbilityModal(heroId: HeroId) {
           .filter((d) => me && d.cost <= me.gold)
           .map((d) =>
             `<button class="modal-option" data-target="${p.id}" data-card="${d.id}">
-              💥 ${d.name} (${d.cost}💰) у ${p.name}${heroTag}
+              💥 ${tDistrict(d.name)} (${d.cost}💰) ${t("modal.general_at")} ${tName(p.name)}${heroTag}
             </button>`,
           );
       });
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Потрать золото чтобы разрушить квартал противника. Клерик защищён.</p>
-        ${targetButtons.join("") || '<p class="hint">Не хватает золота</p>'}
+        <p class="hint" style="margin-bottom:8px;">${t("modal.general_hint")}</p>
+        ${targetButtons.join("") || `<p class="hint">${t("modal.general_no_gold")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1221,7 +1229,7 @@ function renderLog() {
   if (!el) return;
   const entries = getLog().slice(-30);
   el.innerHTML = entries.map((e) =>
-    `<div class="log-entry"><span class="day-tag">[День ${e.day}]</span> ${e.message}</div>`,
+    `<div class="log-entry"><span class="day-tag">[${t("log.day")} ${e.day}]</span> ${tLog(e.message)}</div>`,
   ).join("");
   el.scrollTop = el.scrollHeight;
   animateLogEntry();
@@ -1237,7 +1245,7 @@ function renderBanList() {
     const bans = draft.faceUpBans.map((h) =>
       `<span class="ban-up">${heroPortraitSmall(h)} ${heroName(h)}</span>`,
     ).join(", ");
-    el.innerHTML = `Забанены: ${bans} + ${draft.hiddenBanCount} скрытых`;
+    el.innerHTML = `${t("ban.banned")}${bans} + ${draft.hiddenBanCount} ${t("ban.hidden")}`;
   } else {
     el.innerHTML = "";
   }
@@ -1252,7 +1260,7 @@ function renderWinner() {
   if (phase === "end" && winner !== null) {
     const players = getPlayers();
     overlay.classList.add("show");
-    card.innerHTML = `🏆 Победил ${players[winner]?.name ?? "???"}!<br><button class="btn btn-primary" id="btn-to-menu" style="margin-top:10px;">← В меню</button>`;
+    card.innerHTML = `🏆 ${tName(players[winner]?.name ?? "???")} ${t("winner.title")}!<br><button class="btn btn-primary" id="btn-to-menu" style="margin-top:10px;">← ${t("winner.to_menu")}</button>`;
     animateWinner();
     document.getElementById("btn-to-menu")?.addEventListener("click", () => {
       ws?.close();
