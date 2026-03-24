@@ -130,13 +130,14 @@ export function buildDistrict(
 export function advanceTurn(state: GameState, rng: Rng): GameState {
   if (!state.turnOrder) return state;
 
+  const turnOrder = state.turnOrder;
   let nextIdx = state.currentTurnIndex + 1;
   let log = state.log;
 
   // Skip assassinated players — but still process theft against them
   let players = [...state.players];
-  while (nextIdx < state.turnOrder.length && players[state.turnOrder[nextIdx]].assassinated) {
-    const killedIdx = state.turnOrder[nextIdx];
+  while (nextIdx < turnOrder.length && players[turnOrder[nextIdx]].assassinated) {
+    const killedIdx = turnOrder[nextIdx];
     const killed = players[killedIdx];
     const killedHeroName = HEROES.find((h) => h.id === killed.hero)?.name ?? "???";
     log = [...log, { day: state.day, message: `💀 ${killedHeroName} (${killed.name}) был убит! Ход пропущен.` }];
@@ -157,7 +158,7 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   }
   state = { ...state, players, log };
 
-  if (nextIdx >= state.turnOrder.length) {
+  if (nextIdx >= turnOrder.length) {
     // Check if someone reached 8 — this was the last day
     const someoneFinished = state.players.some((p) => p.finishedFirst);
     if (someoneFinished) {
@@ -177,7 +178,7 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   }
 
   // Apply passive for next player
-  const nextPlayerIdx = state.turnOrder[nextIdx];
+  const nextPlayerIdx = turnOrder[nextIdx];
   let newState: GameState = { ...state, log, currentTurnIndex: nextIdx };
   newState = applyPassiveAbility(newState, nextPlayerIdx, rng);
 
