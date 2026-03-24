@@ -82,27 +82,35 @@ function pickAbility(
 
   switch (heroId) {
     case HeroId.Assassin: {
-      // Pick a random non-assassin hero to kill
-      const targets = state.players
-        .filter((p) => p.hero && p.hero !== HeroId.Assassin && p.id !== playerId)
-        .map((p) => p.hero!);
-      if (targets.length === 0) return null;
-      const target = targets[rng.int(0, targets.length - 1)];
+      // Target the most threatening opponent (most districts, then most gold)
+      const candidates = state.players
+        .filter((p) => p.hero && p.hero !== HeroId.Assassin && p.id !== playerId);
+      if (candidates.length === 0) return null;
+      candidates.sort((a, b) => {
+        const da = a.builtDistricts.length, db = b.builtDistricts.length;
+        if (da !== db) return db - da;
+        return (b.gold + b.hand.length) - (a.gold + a.hand.length);
+      });
+      const target = candidates[0].hero!;
       const ability: AbilityPayload = { hero: "assassin", targetHeroId: target };
       return { type: "ability", playerId, ability };
     }
     case HeroId.Thief: {
-      const validTargets = state.players
-        .filter((p) => p.hero && p.hero !== HeroId.Thief && p.hero !== HeroId.Assassin && p.id !== playerId && !p.assassinated)
-        .map((p) => p.hero!);
-      if (validTargets.length === 0) return null;
-      const target = validTargets[rng.int(0, validTargets.length - 1)];
+      // Target the richest opponent (most gold, then most cards)
+      const candidates = state.players
+        .filter((p) => p.hero && p.hero !== HeroId.Thief && p.hero !== HeroId.Assassin && p.id !== playerId && !p.assassinated);
+      if (candidates.length === 0) return null;
+      candidates.sort((a, b) => {
+        if (a.gold !== b.gold) return b.gold - a.gold;
+        return b.hand.length - a.hand.length;
+      });
+      const target = candidates[0].hero!;
       const ability: AbilityPayload = { hero: "thief", targetHeroId: target };
       return { type: "ability", playerId, ability };
     }
     case HeroId.Sorcerer: {
-      // Draw cards if hand is small, else swap with richest hand
-      if (player.hand.length <= 3) {
+      // Swap with opponent who has the most cards, or draw if hand is very small
+      if (player.hand.length <= 1) {
         return { type: "ability", playerId, ability: { hero: "sorcerer", mode: "draw" } };
       }
       const richest = state.players
@@ -200,11 +208,12 @@ function scoreDraftPick(
     [HeroId.General]: 4,    // destruction (expensive)
   };
 
-  // If someone is close to winning, boost assassin/general
-  const maxDistricts = Math.max(...state.players
-    .filter((p) => p.id !== player.id)
-    .map((p) => p.builtDistricts.length));
+  // Evaluate opponents' resources
+  const opponents = state.players.filter((p) => p.id !== player.id);
+  const maxDistricts = Math.max(...opponents.map((p) => p.builtDistricts.length));
   const threatLevel = maxDistricts >= 6 ? 3 : maxDistricts >= 5 ? 1.5 : 0;
+  const maxOppGold = Math.max(...opponents.map((p) => p.gold));
+  const maxOppHand = Math.max(...opponents.map((p) => p.hand.length));
 
   // Known banned heroes (face-up bans) tell us what ISN'T in play
   const faceUpBans = state.draft?.faceUpBans ?? [];
@@ -228,6 +237,18 @@ function scoreDraftPick(
     if (threatLevel > 0) {
       if (h === HeroId.Assassin) score += threatLevel;
       if (h === HeroId.General) score += threatLevel * 0.7;
+    }
+
+    // Thief is more valuable when opponents have lots of gold
+    if (h === HeroId.Thief) {
+      if (maxOppGold >= 5) score += 3;
+      else if (maxOppGold >= 3) score += 1.5;
+    }
+
+    // Sorcerer is more valuable when opponents have many cards (swap potential)
+    if (h === HeroId.Sorcerer) {
+      if (maxOppHand >= 5) score += 3;
+      else if (maxOppHand >= 3 && maxOppHand > player.hand.length) score += 2;
     }
 
     // If architect is banned (face-up), building-focused heroes are safer

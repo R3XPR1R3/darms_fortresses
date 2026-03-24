@@ -1,7 +1,7 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
 import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
-import { HERO_ICONS, districtColorDot, heroPortrait, heroPortraitLarge, heroPortraitSmall } from "./icons.js";
+import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
 import { t, tHero, tDistrict, tLog, tName, getLang, setLang } from "./i18n.js";
 
@@ -93,6 +93,10 @@ function showMenu() {
   mode = "menu";
   localState = null;
   onlineState = null;
+  stopDraftTimer();
+  stopTurnTimer();
+  document.getElementById("winner-overlay")?.classList.remove("show");
+  document.getElementById("ability-modal")?.classList.remove("show");
   renderMenu();
 }
 
@@ -652,12 +656,12 @@ function renderTurnBanner() {
       const timerHtml = `<span id="turn-timer" class="${timerCls}">${turnTimerRemaining}s</span>`;
       const heroId = activePlayer?.hero;
       el.innerHTML = heroId
-        ? `${heroPortraitSmall(heroId)} ${t("banner.your_turn")} — ${heroName(heroId)} ${timerHtml}`
+        ? `${heroPortraitSmall(heroId)} ${t("banner.your_turn")} — <span style="color:${heroColor(heroId)}">${heroName(heroId)}</span> ${timerHtml}`
         : `⚔ ${t("banner.your_turn")}! ${timerHtml}`;
     } else {
       stopTurnTimer();
       if (revealed && activePlayer?.hero) {
-        el.innerHTML = `${heroPortraitSmall(activePlayer.hero)} ${t("banner.turn_of")}${heroName(activePlayer.hero)} (${tName(activePlayer.name)})`;
+        el.innerHTML = `${heroPortraitSmall(activePlayer.hero)} ${t("banner.turn_of")}<span style="color:${heroColor(activePlayer.hero)}">${heroName(activePlayer.hero)}</span> (${tName(activePlayer.name)})`;
       } else {
         el.innerHTML = `⏳ ${t("banner.turn_of")}${tName(activePlayer?.name ?? "...")}`;
       }
@@ -710,6 +714,7 @@ function renderOpponentTabs() {
 
     let label: string;
     let heroLine = "";
+    const hColor = (revealed && p.hero) ? heroColor(p.hero) : "";
 
     if (revealed && p.hero) {
       label = heroName(p.hero);
@@ -721,9 +726,10 @@ function renderOpponentTabs() {
 
     const stats = `<span class="tab-stats">💰${p.gold} 🏠${p.builtDistricts.length}/${WIN_DISTRICTS}</span>`;
     const arrow = isActive ? `<span class="active-arrow">▼</span>` : "";
+    const tabStyle = hColor ? `style="--hero-clr:${hColor}"` : "";
 
     return `
-      <button class="opp-tab ${selected ? "active" : ""} ${isActive ? "is-current-turn" : ""}" data-opp-idx="${i}">
+      <button class="opp-tab ${selected ? "active" : ""} ${isActive ? "is-current-turn" : ""}" data-opp-idx="${i}" ${tabStyle}>
         ${arrow}
         ${heroLine}
         <span>${label}</span>
@@ -762,8 +768,9 @@ function renderOpponentBoard() {
   let heroSection: string;
   if (revealed && p.hero) {
     const heroDef = HEROES.find((h) => h.id === p.hero);
+    const hClr = heroColor(p.hero);
     heroSection = `
-      <div class="opp-hero-display">
+      <div class="opp-hero-display" style="--hero-clr:${hClr}">
         <div class="hero-icon-large">${heroPortrait(p.hero, 64)}</div>
         <div class="hero-name">${heroName(p.hero)}</div>
         <div class="hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
@@ -913,13 +920,24 @@ function renderDraft() {
 
   let heroButtons = "";
   if (myTurn) {
-    heroButtons = draft.availableHeroes.map((h) => `
-      <button class="hero-btn" data-hero="${h}">
-        <div class="hero-btn-icon">${heroPortraitLarge(h)}</div>
-        <div class="hero-btn-name">${heroName(h)}</div>
-        <div class="speed">${t("draft.speed")} ${heroSpeed(h)}</div>
-      </button>
-    `).join("");
+    heroButtons = draft.availableHeroes.map((h) => {
+      const hColor = heroColor(h);
+      const colorTag = HEROES.find((hd) => hd.id === h)?.color;
+      const colorDot = colorTag ? `<span class="hero-card-color-dot" style="background:${COLOR_HEX[colorTag] ?? '#888'}"></span>` : "";
+      return `
+      <button class="hero-card" data-hero="${h}" style="--hero-clr:${hColor}">
+        <div class="hero-card-portrait">
+          <img src="${heroPortraitUrl(h)}" alt="${h}" />
+        </div>
+        <div class="hero-card-body">
+          <div class="hero-card-class">${t("class." + h)} ${colorDot}</div>
+          <div class="hero-card-name">${heroName(h)}</div>
+          <div class="hero-card-speed">⚡ ${heroSpeed(h)}</div>
+          <div class="hero-card-ability">${t("ability." + h)}</div>
+          <div class="hero-card-desc">${t("ability_desc." + h)}</div>
+        </div>
+      </button>`;
+    }).join("");
   }
 
   const timerDisplay = myTurn
@@ -934,7 +952,7 @@ function renderDraft() {
   `;
 
   if (myTurn) {
-    el.querySelectorAll(".hero-btn").forEach((btn) => {
+    el.querySelectorAll(".hero-card").forEach((btn) => {
       btn.addEventListener("click", () => {
         stopDraftTimer();
         const heroId = (btn as HTMLElement).dataset.hero as HeroId;
@@ -952,8 +970,23 @@ function renderMyBoard() {
   const me = players[getMyIndex()];
   if (!me) { el.innerHTML = ""; return; }
 
-  if (phase === "draft" || phase === "setup") {
+  if (phase === "setup") {
     el.innerHTML = "";
+    return;
+  }
+
+  // During draft — show simplified board (stats + districts only, no hand/actions)
+  if (phase === "draft") {
+    const draftStats = `
+      <div class="my-stats-bar">
+        <span>💰 ${me.gold}</span>
+        <span>🃏 ${me.hand ? me.hand.length : me.handSize}</span>
+        <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      </div>
+    `;
+    const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
+    const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
+    el.innerHTML = draftStats + districtsSection;
     return;
   }
 
@@ -967,8 +1000,9 @@ function renderMyBoard() {
     const abilityTag = heroDef
       ? `<span class="my-hero-ability-tag">${getAbilityDescription(me.hero)}</span>`
       : "";
+    const myHClr = heroColor(me.hero);
     heroRow = `
-      <div class="my-hero-row">
+      <div class="my-hero-row" style="--hero-clr:${myHClr}">
         <div class="hero-icon-large">${heroPortrait(me.hero, 48)}</div>
         <div class="my-hero-info">
           <div class="my-hero-name">${heroName(me.hero)}</div>
@@ -1150,8 +1184,8 @@ function showAbilityModal(heroId: HeroId) {
       title.textContent = t("modal.sorcerer_title");
       const players = getPlayers();
       const myIdx = getMyIndex();
-      // Can swap with any living player (not assassinated, not self)
-      const otherPlayers = players.filter((p, i) => i !== myIdx && !p.assassinated);
+      // Can swap with any player (including assassinated, not self)
+      const otherPlayers = players.filter((_p, i) => i !== myIdx);
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${t("modal.sorcerer_hint")}</p>
         <button class="modal-option" data-mode="draw">${heroPortrait(HeroId.Sorcerer, 24)} ${t("modal.sorcerer_draw")}</button>

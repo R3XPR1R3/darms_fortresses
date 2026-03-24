@@ -149,20 +149,27 @@ export function useAbility(
     case "sorcerer": {
       if (player.hero !== HeroId.Sorcerer) return null;
       if (ability.mode === "draw") {
-        // Draw 2 cards
+        // Discard 2 random cards from hand, then draw 3 from deck
         newDeck = [...state.deck];
-        const drawn = newDeck.splice(0, Math.min(2, newDeck.length));
+        let newHand = [...player.hand];
+        const discarded: string[] = [];
+        for (let i = 0; i < 2 && newHand.length > 0; i++) {
+          const idx = rng.int(0, newHand.length - 1);
+          discarded.push(newHand[idx].name);
+          newHand.splice(idx, 1);
+        }
+        const drawn = newDeck.splice(0, Math.min(3, newDeck.length));
+        newHand = [...newHand, ...drawn];
         newPlayers[playerIdx] = {
           ...player,
-          hand: [...player.hand, ...drawn],
+          hand: newHand,
           abilityUsed: true,
         };
-        log = addLog({ ...state, log }, `${player.name} (Чародей) взял 2 карты`);
+        log = addLog({ ...state, log }, `${player.name} (Чародей) сбросил ${discarded.length} карт, взял ${drawn.length}`);
       } else {
-        // Swap hands — can't target self or assassinated players
+        // Swap hands — can target any player (including assassinated)
         const targetIdx = state.players.findIndex((p) => p.id === ability.targetPlayerId);
         if (targetIdx === -1 || targetIdx === playerIdx) return null;
-        if (state.players[targetIdx].assassinated) return null;
         const targetHand = [...state.players[targetIdx].hand];
         const myHand = [...player.hand];
         newPlayers[playerIdx] = { ...player, hand: targetHand, abilityUsed: true };

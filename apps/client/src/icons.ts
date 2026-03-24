@@ -89,9 +89,33 @@ export function heroIconLarge(heroId: string): string {
   return icon.replace(`width="${SZ}"`, 'width="40"').replace(`height="${SZ}"`, 'height="40"');
 }
 
-/** Hero portrait image URL */
+/** Color associated with each hero class */
+const HERO_COLORS: Record<string, string> = {
+  assassin: "#e94560",
+  thief: "#c0a040",
+  sorcerer: "#7c3aed",
+  king: "#f0c040",
+  cleric: "#4090f0",
+  merchant: "#40c060",
+  architect: "#f090a0",
+  general: "#e04050",
+};
+
+export function heroColor(heroId: string): string {
+  return HERO_COLORS[heroId] ?? "#e94560";
+}
+
+/** Active skin per hero (default = "default"). Can be a static .png or animated .gif */
+const activeSkins: Record<string, string> = {};
+
+export function setHeroSkin(heroId: string, skinName: string) {
+  activeSkins[heroId] = skinName;
+}
+
+/** Hero portrait image URL — supports skins and GIF animations */
 export function heroPortraitUrl(heroId: string): string {
-  return `/heroes/${heroId}.png`;
+  const skin = activeSkins[heroId] || "default";
+  return `/heroes/${heroId}/skins/${skin}/portrait.png`;
 }
 
 /** Hero portrait <img> tag at given size */

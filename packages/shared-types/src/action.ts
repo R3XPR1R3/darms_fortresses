@@ -39,7 +39,7 @@ export interface AbilityAction {
 export type AbilityPayload =
   | { hero: "assassin"; targetHeroId: HeroId }
   | { hero: "thief"; targetHeroId: HeroId }
-  | { hero: "sorcerer"; mode: "draw" }
+  | { hero: "sorcerer"; mode: "draw" }  // discard 2 random, draw 3
   | { hero: "sorcerer"; mode: "swap"; targetPlayerId: string }
   | { hero: "king" } // passive — auto-applied
   | { hero: "cleric" } // passive — auto-applied

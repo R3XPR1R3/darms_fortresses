@@ -68,7 +68,17 @@ const dict: Record<string, { en: string; ru: string }> = {
   "my.build": { en: "Build", ru: "Строить" },
   "my.ability": { en: "Ability", ru: "Способность" },
 
-  // Abilities
+  // Hero classes
+  "class.assassin": { en: "Assassin", ru: "Убийца" },
+  "class.thief": { en: "Thief", ru: "Вор" },
+  "class.sorcerer": { en: "Sorcerer", ru: "Чародей" },
+  "class.king": { en: "King", ru: "Король" },
+  "class.cleric": { en: "Cleric", ru: "Клерик" },
+  "class.merchant": { en: "Merchant", ru: "Торговец" },
+  "class.architect": { en: "Architect", ru: "Архитектор" },
+  "class.general": { en: "General", ru: "Генерал" },
+
+  // Abilities (short)
   "ability.assassin": { en: "Assassination", ru: "Убийство" },
   "ability.thief": { en: "Robbery", ru: "Грабёж" },
   "ability.sorcerer": { en: "Magic", ru: "Магия" },
@@ -77,6 +87,40 @@ const dict: Record<string, { en: string; ru: string }> = {
   "ability.merchant": { en: "Bonus + green income", ru: "Бонус + зелёный доход" },
   "ability.architect": { en: "3 builds per turn", ru: "3 постройки за ход" },
   "ability.general": { en: "Destroy + red income", ru: "Разрушение + красный доход" },
+
+  // Ability descriptions (detailed, for draft cards)
+  "ability_desc.assassin": {
+    en: "Choose a hero — if a player has that role, they skip their turn entirely.",
+    ru: "Выбери героя — если игрок взял эту роль, он пропустит свой ход полностью.",
+  },
+  "ability_desc.thief": {
+    en: "Choose a hero — when that hero's turn begins, you steal all their gold.",
+    ru: "Выбери героя — когда начнётся его ход, ты заберёшь всё его золото.",
+  },
+  "ability_desc.sorcerer": {
+    en: "Discard 2 cards and draw 3 from the deck, or swap your entire hand with another player.",
+    ru: "Сбросить 2 карты и взять 3 из колоды, или обменяться рукой с любым игроком.",
+  },
+  "ability_desc.king": {
+    en: "Take the Crown (first pick next round). Gain 1 gold per yellow district you own.",
+    ru: "Забери Корону (первый выбор в следующем раунде). +1 золото за каждый жёлтый квартал.",
+  },
+  "ability_desc.cleric": {
+    en: "Your districts cannot be destroyed this turn. Gain 1 gold per blue district you own.",
+    ru: "Ваши кварталы нельзя разрушить в этот ход. +1 золото за каждый синий квартал.",
+  },
+  "ability_desc.merchant": {
+    en: "Gain +1 bonus gold automatically. Also gain 1 gold per green district you own.",
+    ru: "+1 бонусное золото автоматически. Также +1 золото за каждый зелёный квартал.",
+  },
+  "ability_desc.architect": {
+    en: "Draw 2 extra cards. You may build up to 3 districts this turn instead of 1.",
+    ru: "Возьми 2 дополнительные карты. Можешь построить до 3 кварталов за ход вместо 1.",
+  },
+  "ability_desc.general": {
+    en: "Spend gold to destroy or damage an opponent's district. Gain 1 gold per red district.",
+    ru: "Потрать золото чтобы разрушить квартал противника. +1 золото за каждый красный квартал.",
+  },
 
   // Ability modals
   "modal.assassin_title": { en: "Kill a character", ru: "Убить персонажа" },
@@ -91,10 +135,10 @@ const dict: Record<string, { en: string; ru: string }> = {
   },
   "modal.sorcerer_title": { en: "Sorcerer Ability", ru: "Способность Чародея" },
   "modal.sorcerer_hint": {
-    en: "Draw 2 cards from the deck, or swap hands with a player (except killed ones).",
-    ru: "Взять 2 карты из колоды, или обменяться рукой с игроком (кроме убитых).",
+    en: "Discard 2 random cards and draw 3 from the deck, or swap hands with any player.",
+    ru: "Сбросить 2 случайные карты и взять 3 из колоды, или обменяться рукой с любым игроком.",
   },
-  "modal.sorcerer_draw": { en: "Draw 2 cards", ru: "Взять 2 карты" },
+  "modal.sorcerer_draw": { en: "Discard 2, draw 3", ru: "Сбросить 2, взять 3" },
   "modal.sorcerer_cards": { en: "cards", ru: "карт" },
   "modal.general_title": { en: "Destroy a district", ru: "Разрушить квартал" },
   "modal.general_hint": {
@@ -223,7 +267,7 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string }> =
   { pattern: /(.+?) \(Генерал\) \+(\d+) золота за красные кварталы/, en: (_, n, g) => `${n} (General) +${g} gold for red districts` },
   { pattern: /(.+?) совершил убийство\.\.\./, en: (_, n) => `${n} committed murder...` },
   { pattern: /(.+?) готовит ограбление\.\.\./, en: (_, n) => `${n} prepares a robbery...` },
-  { pattern: /(.+?) \(Чародей\) взял 2 карты/, en: (_, n) => `${n} (Sorcerer) drew 2 cards` },
+  { pattern: /(.+?) \(Чародей\) сбросил (\d+) карт, взял (\d+)/, en: (_, n, d, w) => `${n} (Sorcerer) discarded ${d} cards, drew ${w}` },
   { pattern: /(.+?) \(Чародей\) обменялся рукой с (.+)/, en: (_, n, t) => `${n} (Sorcerer) swapped hands with ${t}` },
   { pattern: /(.+?) \(Генерал\) разрушил (.+?) у (.+?) за (\d+) золота/, en: (_, n, d, t, g) => `${n} (General) destroyed ${tDistrict(d)} from ${t} for ${g} gold` },
   { pattern: /(.+?) \(Генерал\) повредил (.+?) у (.+?) \((\d+)→(\d+) HP\) за (\d+) золота/, en: (_, n, d, t, hp1, hp2, g) => `${n} (General) damaged ${tDistrict(d)} of ${t} (${hp1}→${hp2} HP) for ${g} gold` },
