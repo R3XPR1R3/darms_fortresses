@@ -93,6 +93,10 @@ function showMenu() {
   mode = "menu";
   localState = null;
   onlineState = null;
+  stopDraftTimer();
+  stopTurnTimer();
+  document.getElementById("winner-overlay")?.classList.remove("show");
+  document.getElementById("ability-modal")?.classList.remove("show");
   renderMenu();
 }
 
