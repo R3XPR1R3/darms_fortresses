@@ -2,6 +2,11 @@ import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/
 import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroPortrait, heroPortraitLarge, heroPortraitSmall } from "./icons.js";
+import {
+  animateCardsAppear, animateDraftHeroes, animateBannerSwitch,
+  animateOpponentBoard, animateMyBoard, animateBuild, animateIncome,
+  animateWinner, animateLogEntry, animateActiveArrow, animateTimerUrgent,
+} from "./anim.js";
 
 // ---- Types for online mode ----
 interface PlayerView {
@@ -73,10 +78,19 @@ let localState: GameState | null = null;
 let onlineState: PlayerView | null = null;
 
 // ---- Draft timer ----
-const DRAFT_TIMER_SECONDS = 40;
+const DRAFT_TIMER_SECONDS = 60;
 let draftTimerInterval: ReturnType<typeof setInterval> | null = null;
 let draftTimerRemaining = 0;
 let draftTimerForStep = -1; // track which draft step the timer is for
+
+// ---- Turn timer (player turn, 60s) ----
+const TURN_TIMER_SECONDS = 60;
+let turnTimerInterval: ReturnType<typeof setInterval> | null = null;
+let turnTimerRemaining = 0;
+let turnTimerForPlayer = -1; // track which player's turn the timer is for
+
+// ---- Track last action for animations ----
+let lastAction: string | null = null;
 
 // ---- Init ----
 function showMenu() {
@@ -187,6 +201,7 @@ function sendAction(action: GameAction) {
 
 // ---- Dispatch (works for both modes) ----
 function dispatch(action: GameAction) {
+  lastAction = action.type;
   if (mode === "online") {
     sendAction(action);
     return;
@@ -273,10 +288,10 @@ function runLocalBots() {
   // Check if next action is still a bot's turn
   const isHumanTurn = checkLocalHumanTurn();
   if (!isHumanTurn) {
-    // Delay: draft picks = 1.2s, end_turn = 5s, other actions = 1s
-    const delay = action.type === "draft_pick" ? 1200
-      : action.type === "end_turn" ? 5000
-      : 1000;
+    // Delay: draft picks = 2s, end_turn = 10s, other bot actions = 5s
+    const delay = action.type === "draft_pick" ? 2000
+      : action.type === "end_turn" ? 10000
+      : 5000;
     setTimeout(runLocalBots, delay);
   }
 }
@@ -561,6 +576,7 @@ function ensureGameLayout() {
       <div id="draft-area"></div>
     </div>
     <div id="my-board"></div>
+    <div id="ban-list"></div>
     <div id="log-toggle">📜 Журнал</div>
     <div id="game-log"></div>
   `;
@@ -580,6 +596,7 @@ function render() {
   renderOpponentBoard();
   renderDraft();
   renderMyBoard();
+  renderBanList();
   renderLog();
   renderWinner();
 }
@@ -607,18 +624,25 @@ function renderTurnBanner() {
     const revealed = isHeroRevealed(activeIdx);
     el.className = "turn-banner" + (myTurn ? " my-turn" : "");
     el.id = "turn-banner";
+
+    // Manage turn timer for human player
     if (myTurn) {
+      startTurnTimer(activeIdx);
+      const timerCls = turnTimerRemaining <= 10 ? "turn-timer timer-urgent" : "turn-timer";
+      const timerHtml = `<span id="turn-timer" class="${timerCls}">${turnTimerRemaining}с</span>`;
       const heroId = activePlayer?.hero;
       el.innerHTML = heroId
-        ? `${heroPortraitSmall(heroId)} Твой ход — ${heroName(heroId)}`
-        : `⚔ Твой ход!`;
+        ? `${heroPortraitSmall(heroId)} Твой ход — ${heroName(heroId)} ${timerHtml}`
+        : `⚔ Твой ход! ${timerHtml}`;
     } else {
+      stopTurnTimer();
       if (revealed && activePlayer?.hero) {
         el.innerHTML = `${heroPortraitSmall(activePlayer.hero)} Ход: ${heroName(activePlayer.hero)} (${activePlayer.name})`;
       } else {
         el.innerHTML = `⏳ Ход: ${activePlayer?.name ?? "..."}`;
       }
     }
+    animateBannerSwitch();
     return;
   }
 
@@ -626,6 +650,7 @@ function renderTurnBanner() {
     el.className = "";
     el.id = "turn-banner";
     el.innerHTML = "🏆 Игра окончена";
+    stopTurnTimer();
     return;
   }
 
@@ -642,8 +667,8 @@ function renderOpponentTabs() {
   const activeIdx = getActiveIndex();
   const phase = getPhase();
 
-  // Only show tabs during turns or end phase
-  if (phase !== "turns" && phase !== "end") {
+  // Show tabs during draft, turns, and end phases
+  if (phase !== "draft" && phase !== "turns" && phase !== "end") {
     el.innerHTML = "";
     return;
   }
@@ -676,9 +701,11 @@ function renderOpponentTabs() {
     }
 
     const stats = `<span class="tab-stats">💰${p.gold} 🏠${p.builtDistricts.length}/${WIN_DISTRICTS}</span>`;
+    const arrow = isActive ? `<span class="active-arrow">▼</span>` : "";
 
     return `
       <button class="opp-tab ${selected ? "active" : ""} ${isActive ? "is-current-turn" : ""}" data-opp-idx="${i}">
+        ${arrow}
         ${heroLine}
         <span>${label}</span>
         ${stats}
@@ -693,6 +720,9 @@ function renderOpponentTabs() {
       renderOpponentBoard();
     });
   });
+
+  // Animate the active player arrow
+  animateActiveArrow();
 }
 
 function renderOpponentBoard() {
@@ -700,7 +730,7 @@ function renderOpponentBoard() {
   if (!el) return;
   const phase = getPhase();
 
-  if ((phase !== "turns" && phase !== "end") || selectedOpponentIndex === null) {
+  if ((phase !== "draft" && phase !== "turns" && phase !== "end") || selectedOpponentIndex === null) {
     el.innerHTML = "";
     return;
   }
@@ -756,6 +786,8 @@ function renderOpponentBoard() {
     : "";
 
   el.innerHTML = heroSection + statsBar + districtsSection + assassinated;
+  animateOpponentBoard();
+  animateCardsAppear(".opp-districts");
 }
 
 function startDraftTimer(draft: DraftView) {
@@ -794,6 +826,39 @@ function stopDraftTimer() {
   draftTimerForStep = -1;
 }
 
+// ---- Turn timer ----
+function startTurnTimer(playerIdx: number) {
+  if (turnTimerForPlayer === playerIdx && turnTimerInterval) return;
+  stopTurnTimer();
+  turnTimerForPlayer = playerIdx;
+  turnTimerRemaining = TURN_TIMER_SECONDS;
+
+  turnTimerInterval = setInterval(() => {
+    turnTimerRemaining--;
+    const timerEl = document.getElementById("turn-timer");
+    if (timerEl) {
+      timerEl.textContent = `${turnTimerRemaining}с`;
+      if (turnTimerRemaining <= 10) {
+        timerEl.className = "turn-timer timer-urgent";
+        animateTimerUrgent();
+      }
+    }
+    if (turnTimerRemaining <= 0) {
+      stopTurnTimer();
+      // Auto end turn when timer expires
+      dispatch({ type: "end_turn", playerId: getMyId() });
+    }
+  }, 1000);
+}
+
+function stopTurnTimer() {
+  if (turnTimerInterval) {
+    clearInterval(turnTimerInterval);
+    turnTimerInterval = null;
+  }
+  turnTimerForPlayer = -1;
+}
+
 function renderDraft() {
   const el = document.getElementById("draft-area")!;
   if (!el) return;
@@ -806,17 +871,10 @@ function renderDraft() {
     return;
   }
 
-  // During turns phase, just show bans (no draft UI)
+  // During turns phase, bans are rendered in #ban-list (above journal)
   if (phase === "turns") {
     stopDraftTimer();
-    if (draft) {
-      const bans = draft.faceUpBans.map((h) =>
-        `<span class="ban-up">${heroPortraitSmall(h)} ${heroName(h)}</span>`,
-      ).join(", ");
-      el.innerHTML = `<div class="bans">Забанены: ${bans} + ${draft.hiddenBanCount} скрытых</div>`;
-    } else {
-      el.innerHTML = "";
-    }
+    el.innerHTML = "";
     return;
   }
 
@@ -862,6 +920,7 @@ function renderDraft() {
   `;
 
   if (myTurn) {
+    animateDraftHeroes();
     el.querySelectorAll(".hero-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         stopDraftTimer();
@@ -978,6 +1037,17 @@ function renderMyBoard() {
   }
 
   el.innerHTML = heroRow + statsBar + districtsSection + handSection + actionsSection;
+
+  // Animations
+  if (lastAction === "build") {
+    animateBuild();
+    lastAction = null;
+  } else if (lastAction === "income") {
+    animateIncome();
+    lastAction = null;
+  }
+  animateCardsAppear(".my-districts");
+  animateMyBoard();
 
   // Wire up events
   el.querySelectorAll("[data-build]").forEach((btn) => {
@@ -1154,6 +1224,23 @@ function renderLog() {
     `<div class="log-entry"><span class="day-tag">[День ${e.day}]</span> ${e.message}</div>`,
   ).join("");
   el.scrollTop = el.scrollHeight;
+  animateLogEntry();
+}
+
+function renderBanList() {
+  const el = document.getElementById("ban-list")!;
+  if (!el) return;
+  const phase = getPhase();
+  const draft = getDraft();
+
+  if ((phase === "turns" || phase === "end") && draft) {
+    const bans = draft.faceUpBans.map((h) =>
+      `<span class="ban-up">${heroPortraitSmall(h)} ${heroName(h)}</span>`,
+    ).join(", ");
+    el.innerHTML = `Забанены: ${bans} + ${draft.hiddenBanCount} скрытых`;
+  } else {
+    el.innerHTML = "";
+  }
 }
 
 function renderWinner() {
@@ -1166,6 +1253,7 @@ function renderWinner() {
     const players = getPlayers();
     overlay.classList.add("show");
     card.innerHTML = `🏆 Победил ${players[winner]?.name ?? "???"}!<br><button class="btn btn-primary" id="btn-to-menu" style="margin-top:10px;">← В меню</button>`;
+    animateWinner();
     document.getElementById("btn-to-menu")?.addEventListener("click", () => {
       ws?.close();
       showMenu();

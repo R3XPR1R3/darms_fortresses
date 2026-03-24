@@ -99,11 +99,12 @@
     .opp-tab .tab-hero .hero-portrait { border-radius: 50%; vertical-align: middle; border: 1px solid #e94560; }
     .opp-tab .tab-stats { font-size: 10px; color: #666; }
     .opp-tab .tab-sleep { font-size: 12px; opacity: 0.5; }
+    .opp-tab .active-arrow { color: #e94560; font-size: 10px; line-height: 1; }
 
     /* -- Opponent Board -- */
     #opponent-board {
       flex: 1;
-      min-height: 0;
+      min-height: 160px;
       overflow-y: auto;
       padding: 8px;
       background: #12182a;
@@ -159,7 +160,7 @@
       border-top: 2px solid #0f3460;
       padding: 8px;
       overflow-y: auto;
-      max-height: 45vh;
+      max-height: 38vh;
     }
     .my-hero-row {
       display: flex;
@@ -257,6 +258,20 @@
       flex-wrap: wrap;
       gap: 6px;
     }
+
+    /* -- Ban list (above journal) -- */
+    #ban-list {
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+      padding: 4px 8px;
+      background: #0d1117;
+      border-top: 1px solid #1a1f2e;
+      flex-shrink: 0;
+    }
+    #ban-list:empty { display: none; }
+    #ban-list .ban-up { color: #e94560; }
+    #ban-list .ban-up .hero-portrait { border-radius: 50%; vertical-align: middle; opacity: 0.6; }
 
     /* -- Log (collapsible) -- */
     #log-toggle {
@@ -402,6 +417,22 @@
       margin-left: 8px;
     }
     .draft-timer.timer-urgent {
+      color: #fff;
+      background: #e94560;
+      animation: pulse-banner 0.8s ease-in-out infinite;
+    }
+
+    /* Turn timer */
+    .turn-timer {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f0c040;
+      background: #0f3460;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+    .turn-timer.timer-urgent {
       color: #fff;
       background: #e94560;
       animation: pulse-banner 0.8s ease-in-out infinite;
