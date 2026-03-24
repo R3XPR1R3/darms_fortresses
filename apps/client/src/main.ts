@@ -1,7 +1,7 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
 import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
-import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall } from "./icons.js";
+import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
 import { t, tHero, tDistrict, tLog, tName, getLang, setLang } from "./i18n.js";
 
@@ -920,13 +920,24 @@ function renderDraft() {
 
   let heroButtons = "";
   if (myTurn) {
-    heroButtons = draft.availableHeroes.map((h) => `
-      <button class="hero-btn" data-hero="${h}">
-        <div class="hero-btn-icon">${heroPortraitLarge(h)}</div>
-        <div class="hero-btn-name">${heroName(h)}</div>
-        <div class="speed">${t("draft.speed")} ${heroSpeed(h)}</div>
-      </button>
-    `).join("");
+    heroButtons = draft.availableHeroes.map((h) => {
+      const hColor = heroColor(h);
+      const colorTag = HEROES.find((hd) => hd.id === h)?.color;
+      const colorDot = colorTag ? `<span class="hero-card-color-dot" style="background:${COLOR_HEX[colorTag] ?? '#888'}"></span>` : "";
+      return `
+      <button class="hero-card" data-hero="${h}" style="--hero-clr:${hColor}">
+        <div class="hero-card-portrait">
+          <img src="${heroPortraitUrl(h)}" alt="${h}" />
+        </div>
+        <div class="hero-card-body">
+          <div class="hero-card-class">${t("class." + h)} ${colorDot}</div>
+          <div class="hero-card-name">${heroName(h)}</div>
+          <div class="hero-card-speed">⚡ ${heroSpeed(h)}</div>
+          <div class="hero-card-ability">${t("ability." + h)}</div>
+          <div class="hero-card-desc">${t("ability_desc." + h)}</div>
+        </div>
+      </button>`;
+    }).join("");
   }
 
   const timerDisplay = myTurn
@@ -941,7 +952,7 @@ function renderDraft() {
   `;
 
   if (myTurn) {
-    el.querySelectorAll(".hero-btn").forEach((btn) => {
+    el.querySelectorAll(".hero-card").forEach((btn) => {
       btn.addEventListener("click", () => {
         stopDraftTimer();
         const heroId = (btn as HTMLElement).dataset.hero as HeroId;

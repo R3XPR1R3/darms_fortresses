@@ -105,9 +105,17 @@ export function heroColor(heroId: string): string {
   return HERO_COLORS[heroId] ?? "#e94560";
 }
 
-/** Hero portrait image URL */
+/** Active skin per hero (default = "default"). Can be a static .png or animated .gif */
+const activeSkins: Record<string, string> = {};
+
+export function setHeroSkin(heroId: string, skinName: string) {
+  activeSkins[heroId] = skinName;
+}
+
+/** Hero portrait image URL — supports skins and GIF animations */
 export function heroPortraitUrl(heroId: string): string {
-  return `/heroes/${heroId}.png`;
+  const skin = activeSkins[heroId] || "default";
+  return `/heroes/${heroId}/skins/${skin}/portrait.png`;
 }
 
 /** Hero portrait <img> tag at given size */
