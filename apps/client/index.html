@@ -88,18 +88,18 @@
     .opp-tab:hover { background: #16213e; }
     .opp-tab.active {
       color: #eee;
-      border-bottom-color: #e94560;
+      border-bottom-color: var(--hero-clr, #e94560);
       background: #16213e;
     }
     .opp-tab.is-current-turn {
-      color: #e94560;
+      color: var(--hero-clr, #e94560);
     }
-    .opp-tab .tab-hero { font-size: 10px; color: #e94560; }
+    .opp-tab .tab-hero { font-size: 10px; color: var(--hero-clr, #e94560); }
     .opp-tab .tab-hero svg { width: 14px; height: 14px; vertical-align: middle; }
-    .opp-tab .tab-hero .hero-portrait { border-radius: 50%; vertical-align: middle; border: 1px solid #e94560; }
+    .opp-tab .tab-hero .hero-portrait { border-radius: 50%; vertical-align: middle; border: 1px solid var(--hero-clr, #e94560); }
     .opp-tab .tab-stats { font-size: 10px; color: #666; }
     .opp-tab .tab-sleep { font-size: 12px; opacity: 0.5; }
-    .opp-tab .active-arrow { color: #e94560; font-size: 10px; line-height: 1; }
+    .opp-tab .active-arrow { color: var(--hero-clr, #e94560); font-size: 10px; line-height: 1; }
 
     /* -- Opponent Board -- */
     #opponent-board {
@@ -115,8 +115,8 @@
       margin-bottom: 8px;
     }
     .opp-hero-display .hero-icon-large svg { width: 48px; height: 48px; }
-    .opp-hero-display .hero-icon-large .hero-portrait { border-radius: 50%; border: 2px solid #e94560; box-shadow: 0 2px 8px rgba(233,69,96,0.4); }
-    .opp-hero-display .hero-name { font-size: 14px; font-weight: 600; color: #e94560; }
+    .opp-hero-display .hero-icon-large .hero-portrait { border-radius: 50%; border: 2px solid var(--hero-clr, #e94560); box-shadow: 0 2px 8px color-mix(in srgb, var(--hero-clr, #e94560) 40%, transparent); }
+    .opp-hero-display .hero-name { font-size: 14px; font-weight: 600; color: var(--hero-clr, #e94560); }
     .opp-hero-display .hero-speed { font-size: 11px; color: #888; }
     .opp-hero-display .sleep-display {
       font-size: 32px;
@@ -169,9 +169,9 @@
       margin-bottom: 6px;
     }
     .my-hero-row .hero-icon-large svg { width: 40px; height: 40px; }
-    .my-hero-row .hero-icon-large .hero-portrait { border-radius: 50%; border: 2px solid #e94560; box-shadow: 0 2px 8px rgba(233,69,96,0.3); }
+    .my-hero-row .hero-icon-large .hero-portrait { border-radius: 50%; border: 2px solid var(--hero-clr, #e94560); box-shadow: 0 2px 8px color-mix(in srgb, var(--hero-clr, #e94560) 30%, transparent); }
     .my-hero-row .my-hero-info { flex: 1; }
-    .my-hero-row .my-hero-name { font-size: 14px; font-weight: 700; color: #e94560; }
+    .my-hero-row .my-hero-name { font-size: 14px; font-weight: 700; color: var(--hero-clr, #e94560); }
     .my-hero-row .my-hero-speed { font-size: 11px; color: #888; }
     .my-hero-row .my-hero-ability-tag {
       font-size: 10px;

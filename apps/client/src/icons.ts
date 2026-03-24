@@ -89,6 +89,22 @@ export function heroIconLarge(heroId: string): string {
   return icon.replace(`width="${SZ}"`, 'width="40"').replace(`height="${SZ}"`, 'height="40"');
 }
 
+/** Color associated with each hero class */
+const HERO_COLORS: Record<string, string> = {
+  assassin: "#e94560",
+  thief: "#c0a040",
+  sorcerer: "#7c3aed",
+  king: "#f0c040",
+  cleric: "#4090f0",
+  merchant: "#40c060",
+  architect: "#f090a0",
+  general: "#e04050",
+};
+
+export function heroColor(heroId: string): string {
+  return HERO_COLORS[heroId] ?? "#e94560";
+}
+
 /** Hero portrait image URL */
 export function heroPortraitUrl(heroId: string): string {
   return `/heroes/${heroId}.png`;
