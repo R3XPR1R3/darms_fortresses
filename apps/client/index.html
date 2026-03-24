@@ -99,6 +99,7 @@
     .opp-tab .tab-hero .hero-portrait { border-radius: 50%; vertical-align: middle; border: 1px solid #e94560; }
     .opp-tab .tab-stats { font-size: 10px; color: #666; }
     .opp-tab .tab-sleep { font-size: 12px; opacity: 0.5; }
+    .opp-tab .active-arrow { color: #e94560; font-size: 10px; line-height: 1; }
 
     /* -- Opponent Board -- */
     #opponent-board {
@@ -416,6 +417,22 @@
       margin-left: 8px;
     }
     .draft-timer.timer-urgent {
+      color: #fff;
+      background: #e94560;
+      animation: pulse-banner 0.8s ease-in-out infinite;
+    }
+
+    /* Turn timer */
+    .turn-timer {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f0c040;
+      background: #0f3460;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+    .turn-timer.timer-urgent {
       color: #fff;
       background: #e94560;
       animation: pulse-banner 0.8s ease-in-out infinite;
