@@ -88,3 +88,23 @@ export function heroIconLarge(heroId: string): string {
   if (!icon) return "";
   return icon.replace(`width="${SZ}"`, 'width="40"').replace(`height="${SZ}"`, 'height="40"');
 }
+
+/** Hero portrait image URL */
+export function heroPortraitUrl(heroId: string): string {
+  return `/heroes/${heroId}.png`;
+}
+
+/** Hero portrait <img> tag at given size */
+export function heroPortrait(heroId: string, size: number = 48): string {
+  return `<img src="${heroPortraitUrl(heroId)}" alt="${heroId}" class="hero-portrait" width="${size}" height="${size}" style="width:${size}px;height:${size}px;" />`;
+}
+
+/** Hero portrait for large displays (draft buttons, player panels) */
+export function heroPortraitLarge(heroId: string): string {
+  return heroPortrait(heroId, 56);
+}
+
+/** Hero portrait for small inline use (tabs, banners) */
+export function heroPortraitSmall(heroId: string): string {
+  return heroPortrait(heroId, 20);
+}

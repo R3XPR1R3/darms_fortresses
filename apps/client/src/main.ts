@@ -1,7 +1,7 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
 import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
-import { HERO_ICONS, heroIconLarge, districtColorDot } from "./icons.js";
+import { HERO_ICONS, districtColorDot, heroPortrait, heroPortraitLarge, heroPortraitSmall } from "./icons.js";
 
 // ---- Types for online mode ----
 interface PlayerView {
@@ -610,11 +610,11 @@ function renderTurnBanner() {
     if (myTurn) {
       const heroId = activePlayer?.hero;
       el.innerHTML = heroId
-        ? `${heroIcon(heroId)} Твой ход — ${heroName(heroId)}`
+        ? `${heroPortraitSmall(heroId)} Твой ход — ${heroName(heroId)}`
         : `⚔ Твой ход!`;
     } else {
       if (revealed && activePlayer?.hero) {
-        el.innerHTML = `${heroIcon(activePlayer.hero)} Ход: ${heroName(activePlayer.hero)} (${activePlayer.name})`;
+        el.innerHTML = `${heroPortraitSmall(activePlayer.hero)} Ход: ${heroName(activePlayer.hero)} (${activePlayer.name})`;
       } else {
         el.innerHTML = `⏳ Ход: ${activePlayer?.name ?? "..."}`;
       }
@@ -669,7 +669,7 @@ function renderOpponentTabs() {
 
     if (revealed && p.hero) {
       label = heroName(p.hero);
-      heroLine = `<span class="tab-hero">${heroIcon(p.hero)}</span>`;
+      heroLine = `<span class="tab-hero">${heroPortraitSmall(p.hero)}</span>`;
     } else {
       label = p.name;
       heroLine = `<span class="tab-sleep">💤</span>`;
@@ -717,7 +717,7 @@ function renderOpponentBoard() {
     const heroDef = HEROES.find((h) => h.id === p.hero);
     heroSection = `
       <div class="opp-hero-display">
-        <div class="hero-icon-large">${heroIconLarge(p.hero)}</div>
+        <div class="hero-icon-large">${heroPortrait(p.hero, 64)}</div>
         <div class="hero-name">${heroName(p.hero)}</div>
         <div class="hero-speed">Скорость ${heroDef?.speed ?? "?"}</div>
       </div>
@@ -811,7 +811,7 @@ function renderDraft() {
     stopDraftTimer();
     if (draft) {
       const bans = draft.faceUpBans.map((h) =>
-        `<span class="ban-up">${heroIcon(h)} ${heroName(h)}</span>`,
+        `<span class="ban-up">${heroPortraitSmall(h)} ${heroName(h)}</span>`,
       ).join(", ");
       el.innerHTML = `<div class="bans">Забанены: ${bans} + ${draft.hiddenBanCount} скрытых</div>`;
     } else {
@@ -836,14 +836,14 @@ function renderDraft() {
   }
 
   const bans = draft.faceUpBans.map((h) =>
-    `<span class="ban-up">${heroIcon(h)} ${heroName(h)}</span>`,
+    `<span class="ban-up">${heroPortraitSmall(h)} ${heroName(h)}</span>`,
   ).join(", ");
 
   let heroButtons = "";
   if (myTurn) {
     heroButtons = draft.availableHeroes.map((h) => `
       <button class="hero-btn" data-hero="${h}">
-        <div class="hero-btn-icon">${heroIconLarge(h)}</div>
+        <div class="hero-btn-icon">${heroPortraitLarge(h)}</div>
         <div class="hero-btn-name">${heroName(h)}</div>
         <div class="speed">Скорость ${heroSpeed(h)}</div>
       </button>
@@ -897,7 +897,7 @@ function renderMyBoard() {
       : "";
     heroRow = `
       <div class="my-hero-row">
-        <div class="hero-icon-large">${heroIconLarge(me.hero)}</div>
+        <div class="hero-icon-large">${heroPortrait(me.hero, 48)}</div>
         <div class="my-hero-info">
           <div class="my-hero-name">${heroName(me.hero)}</div>
           <div class="my-hero-speed">Скорость ${heroDef?.speed ?? "?"}</div>
@@ -961,7 +961,7 @@ function renderMyBoard() {
       if (!me.abilityUsed && me.hero) {
         const hasActiveAbility = [HeroId.Assassin, HeroId.Thief, HeroId.Sorcerer, HeroId.General].includes(me.hero);
         if (hasActiveAbility) {
-          buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroIcon(me.hero)} Способность</button>`);
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroPortraitSmall(me.hero)} Способность</button>`);
         } else {
           buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ Пассивка</button>`);
         }
@@ -1039,7 +1039,7 @@ function showAbilityModal(heroId: HeroId) {
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">Ты не знаешь, кто взял какую роль. Выбери персонажа — если кто-то его взял, он пропустит ход.</p>
         ${targets.map((h) =>
-          `<button class="modal-option" data-target="${h}">${heroIcon(h)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
+          `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
         ).join("")}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
@@ -1062,7 +1062,7 @@ function showAbilityModal(heroId: HeroId) {
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">Выбери роль — когда начнётся ход этого персонажа, ты заберёшь всё его золото.</p>
         ${targets.map((h) =>
-          `<button class="modal-option" data-target="${h}">${heroIcon(h)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
+          `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
         ).join("")}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
@@ -1082,7 +1082,7 @@ function showAbilityModal(heroId: HeroId) {
       const otherPlayers = players.filter((p, i) => i !== myIdx && !p.assassinated);
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">Взять 2 карты из колоды, или обменяться рукой с игроком (кроме убитых).</p>
-        <button class="modal-option" data-mode="draw">${heroIcon(HeroId.Sorcerer)} Взять 2 карты</button>
+        <button class="modal-option" data-mode="draw">${heroPortrait(HeroId.Sorcerer, 24)} Взять 2 карты</button>
         ${otherPlayers.map((p) =>
           `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 ${p.name} — ${p.hand ? p.hand.length : p.handSize} карт</button>`,
         ).join("")}
