@@ -87,6 +87,7 @@ const TURN_TIMER_SECONDS = 60;
 let turnTimerInterval: ReturnType<typeof setInterval> | null = null;
 let turnTimerRemaining = 0;
 let turnTimerForPlayer = -1; // track which player's turn the timer is for
+let draftCarryOverTime = 0; // remaining draft time carried to turn timer for first player
 
 // ---- Init ----
 function showMenu() {
@@ -853,7 +854,12 @@ function startTurnTimer(playerIdx: number) {
   if (turnTimerForPlayer === playerIdx && turnTimerInterval) return;
   stopTurnTimer();
   turnTimerForPlayer = playerIdx;
-  turnTimerRemaining = TURN_TIMER_SECONDS;
+  if (draftCarryOverTime > 0) {
+    turnTimerRemaining = draftCarryOverTime;
+    draftCarryOverTime = 0;
+  } else {
+    turnTimerRemaining = TURN_TIMER_SECONDS;
+  }
 
   turnTimerInterval = setInterval(() => {
     turnTimerRemaining--;
@@ -954,6 +960,7 @@ function renderDraft() {
   if (myTurn) {
     el.querySelectorAll(".hero-card").forEach((btn) => {
       btn.addEventListener("click", () => {
+        draftCarryOverTime = draftTimerRemaining;
         stopDraftTimer();
         const heroId = (btn as HTMLElement).dataset.hero as HeroId;
         dispatch({ type: "draft_pick", playerId: getMyId(), heroId });

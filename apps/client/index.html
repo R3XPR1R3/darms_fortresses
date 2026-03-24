@@ -385,13 +385,16 @@
     /* Draft — card-style hero selection */
     .draft-heroes {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+      flex-wrap: nowrap;
+      gap: 6px;
       justify-content: center;
       padding: 4px 0;
+      overflow-x: auto;
     }
     .hero-card {
-      width: 110px;
+      width: 0;
+      min-width: 0;
+      flex: 1 1 0;
       border-radius: 10px;
       border: 2px solid #0f3460;
       background: linear-gradient(180deg, #1a1a3e 0%, #16213e 100%);
@@ -412,7 +415,7 @@
     }
     .hero-card-portrait {
       width: 100%;
-      height: 100px;
+      height: 72px;
       overflow: hidden;
       background: #0d1117;
     }
