@@ -32,6 +32,8 @@ export function createMatch(
       assassinated: false,
       robbedHeroId: null,
       finishedFirst: false,
+      companion: null,
+      companionUsed: false,
     };
   });
 
