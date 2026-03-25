@@ -1,4 +1,4 @@
-import type { GameAction, GameState, PlayerState, DraftState } from "@darms/shared-types";
+import type { GameAction, GameState, PlayerState, DraftState, CompanionId } from "@darms/shared-types";
 
 // ---- Client → Server ----
 
@@ -57,6 +57,8 @@ export interface PlayerViewEntry {
   assassinated: boolean;
   robbedHeroId: PlayerState["robbedHeroId"];
   finishedFirst: boolean;
+  companion: PlayerState["companion"];
+  companionUsed: boolean;
 }
 
 export interface DraftView {
@@ -65,4 +67,6 @@ export interface DraftView {
   hiddenBanCount: number;
   draftOrder: DraftState["draftOrder"];
   currentStep: DraftState["currentStep"];
+  draftPhase: DraftState["draftPhase"];
+  companionChoices: CompanionId[] | null; // only this player's choices
 }
