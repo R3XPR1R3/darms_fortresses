@@ -607,15 +607,17 @@ function ensureGameLayout() {
   board.id = "game-board";
   board.innerHTML = `
     <div id="turn-banner"></div>
-    <div id="opp-hero-panel"></div>
     <div id="table-center">
       <div id="opp-board-area"></div>
       <div id="my-board-area"></div>
       <div id="draft-overlay"></div>
     </div>
+    <div id="opp-hero-panel"></div>
     <div id="my-hero-panel"></div>
-    <div id="actions-bar"></div>
-    <div id="hand-area"></div>
+    <div id="bottom-area">
+      <div id="actions-bar"></div>
+      <div id="hand-area"></div>
+    </div>
     <div id="footer-bar">
       <div id="log-toggle">📜 ${t("log.toggle")}</div>
       <div id="game-log"></div>
@@ -776,7 +778,7 @@ function renderOppHeroPanel() {
     const hClr = heroColor(p.hero);
     const heroDef = HEROES.find((h) => h.id === p.hero);
     heroSection = `
-      <div class="hero-panel-portrait tooltip-host tooltip-right" style="--hero-clr:${hClr}">
+      <div class="hero-panel-portrait tooltip-host tooltip-left" style="--hero-clr:${hClr}">
         ${heroPortrait(p.hero, 64)}
         <div class="tooltip-content" style="--hero-clr:${hClr}">
           <div class="tt-name">${heroName(p.hero)}</div>
@@ -865,7 +867,7 @@ function renderMyHeroPanel() {
     const hClr = heroColor(me.hero);
     const heroDef = HEROES.find((h) => h.id === me.hero);
     heroSection = `
-      <div class="hero-panel-portrait tooltip-host tooltip-left" style="--hero-clr:${hClr}">
+      <div class="hero-panel-portrait tooltip-host tooltip-right" style="--hero-clr:${hClr}">
         ${heroPortrait(me.hero, 64)}
         <div class="tooltip-content" style="--hero-clr:${hClr}">
           <div class="tt-name">${heroName(me.hero)}</div>
@@ -891,7 +893,7 @@ function renderMyHeroPanel() {
   `;
 
   const companion = (me.companion) ? `
-    <div class="hero-panel-companion tooltip-host tooltip-left">
+    <div class="hero-panel-companion tooltip-host tooltip-right">
       <div class="companion-name">🧑‍🌾 ${COMPANIONS.find((c) => c.id === me.companion)?.name ?? me.companion}</div>
       <div style="font-size:9px;color:#888">${COMPANIONS.find((c) => c.id === me.companion)?.description ?? ""}</div>
       ${!me.companionUsed && isMyTurn() && phase === "turns" ? `<button class="btn btn-secondary btn-companion-use" style="margin-top:4px;font-size:10px;padding:4px 8px;">${t("my.ability")}</button>` : ""}
