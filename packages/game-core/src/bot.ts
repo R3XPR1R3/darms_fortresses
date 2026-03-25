@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload } from "@darms/shared-types";
-import { HeroId } from "@darms/shared-types";
+import { HeroId, WIN_DISTRICTS } from "@darms/shared-types";
 import { currentDrafter } from "./draft.js";
 import { currentPlayer } from "./turns.js";
 import { createRng } from "./rng.js";
@@ -51,9 +51,14 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
 
     // Step 3: Build if possible
     if (player.buildsRemaining > 0) {
+      const distToWin = WIN_DISTRICTS - player.builtDistricts.length;
+      const rushing = player.hero === HeroId.Architect && distToWin <= 3 && player.buildsRemaining > 1;
       const buildable = player.hand
         .filter((c) => c.cost <= player.gold && !player.builtDistricts.some((d) => d.name === c.name))
-        .sort((a, b) => b.cost - a.cost); // prefer expensive
+        .sort((a, b) => rushing
+          ? a.cost - b.cost   // when rushing: prefer cheap to build more
+          : b.cost - a.cost   // normally: prefer expensive for score
+        );
 
       if (buildable.length > 0) {
         return {
@@ -208,6 +213,12 @@ function scoreDraftPick(
     [HeroId.General]: 4,    // destruction (expensive)
   };
 
+  // Evaluate own resources
+  const myDistricts = player.builtDistricts.length;
+  const myGold = player.gold;
+  const myHandSize = player.hand.length;
+  const distancesToWin = WIN_DISTRICTS - myDistricts;
+
   // Evaluate opponents' resources
   const opponents = state.players.filter((p) => p.id !== player.id);
   const maxDistricts = Math.max(...opponents.map((p) => p.builtDistricts.length));
@@ -264,7 +275,27 @@ function scoreDraftPick(
     if (player.hand.length >= 4 && h === HeroId.Architect) score += 2;
 
     // Cleric protection is more valuable with more built districts
-    if (h === HeroId.Cleric && player.builtDistricts.length >= 4) score += 2;
+    if (h === HeroId.Cleric && myDistricts >= 4) score += 2;
+
+    // === ENDGAME STRATEGY: Defend with Cleric when close to winning ===
+    // If bot has 6+ districts, strongly prefer Cleric for immunity from General
+    if (h === HeroId.Cleric && distancesToWin <= 2) score += 5;
+    if (h === HeroId.Cleric && distancesToWin <= 3) score += 3;
+
+    // === ENDGAME STRATEGY: Rush with Architect when resources allow ===
+    // Architect draws 2 cards + builds 3 per turn — ideal for fast finish
+    if (h === HeroId.Architect && distancesToWin <= 3) {
+      const buildableCards = player.hand.filter(
+        (c) => c.cost <= myGold && !player.builtDistricts.some((d) => d.name === c.name),
+      ).length;
+      // Strong rush bonus if can build multiple this turn
+      if (buildableCards >= 2) score += 6;
+      else if (buildableCards >= 1 && myHandSize >= 3) score += 4;
+      else if (myGold >= 4) score += 3; // have gold to build drawn cards
+    }
+
+    // If bot is behind, prefer economy heroes
+    if (distancesToWin >= 5 && (h === HeroId.Merchant || h === HeroId.King)) score += 1.5;
 
     // Random noise for variety (±1.5)
     score += (rng.next() - 0.5) * 3;

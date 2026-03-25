@@ -1,5 +1,5 @@
 import type { GameState } from "@darms/shared-types";
-import { HeroId, HEROES } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
 
@@ -159,8 +159,21 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   state = { ...state, players, log };
 
   if (nextIdx >= turnOrder.length) {
-    // Check if someone reached 8 — this was the last day
-    const someoneFinished = state.players.some((p) => p.finishedFirst);
+    // Re-check: if a player was marked finishedFirst but districts were destroyed
+    // below the threshold, clear the flag — the game continues
+    let playersCheck = [...state.players];
+    let flagCleared = false;
+    for (let i = 0; i < playersCheck.length; i++) {
+      if (playersCheck[i].finishedFirst && playersCheck[i].builtDistricts.length < WIN_DISTRICTS) {
+        playersCheck[i] = { ...playersCheck[i], finishedFirst: false };
+        flagCleared = true;
+      }
+    }
+    if (flagCleared) {
+      state = { ...state, players: playersCheck };
+    }
+
+    const someoneFinished = state.players.some((p) => p.finishedFirst && p.builtDistricts.length >= WIN_DISTRICTS);
     if (someoneFinished) {
       return calculateScores({ ...state, log });
     }

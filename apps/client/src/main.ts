@@ -87,7 +87,6 @@ const TURN_TIMER_SECONDS = 60;
 let turnTimerInterval: ReturnType<typeof setInterval> | null = null;
 let turnTimerRemaining = 0;
 let turnTimerForPlayer = -1; // track which player's turn the timer is for
-let draftCarryOverTime = 0; // remaining draft time carried to turn timer for first player
 
 // ---- Init ----
 function showMenu() {
@@ -449,10 +448,19 @@ function colorStyle(colors: string[]): { cls: string; style: string } {
   };
 }
 
+/** Map building name → texture file (color_cost) */
+function buildingTextureUrl(d: { colors: string[]; cost: number }): string {
+  const color = d.colors[0] ?? "purple";
+  const key = `${color}_${d.cost}`;
+  return `/buildings/${key}.png`;
+}
+
 function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number }): string {
   const cs = colorStyle(d.colors);
   const hpLabel = d.hp != null && d.hp !== d.cost ? `<div class="card-hp">HP ${d.hp}</div>` : "";
+  const texUrl = buildingTextureUrl(d);
   return `<div class="district-card ${cs.cls}" style="${cs.style}">
+    <img class="card-texture" src="${texUrl}" alt="" />
     <div class="card-cost-badge">${d.cost}</div>
     <div class="card-name">${tDistrict(d.name)}</div>
     ${hpLabel}
@@ -854,12 +862,7 @@ function startTurnTimer(playerIdx: number) {
   if (turnTimerForPlayer === playerIdx && turnTimerInterval) return;
   stopTurnTimer();
   turnTimerForPlayer = playerIdx;
-  if (draftCarryOverTime > 0) {
-    turnTimerRemaining = draftCarryOverTime;
-    draftCarryOverTime = 0;
-  } else {
-    turnTimerRemaining = TURN_TIMER_SECONDS;
-  }
+  turnTimerRemaining = TURN_TIMER_SECONDS;
 
   turnTimerInterval = setInterval(() => {
     turnTimerRemaining--;
@@ -960,7 +963,6 @@ function renderDraft() {
   if (myTurn) {
     el.querySelectorAll(".hero-card").forEach((btn) => {
       btn.addEventListener("click", () => {
-        draftCarryOverTime = draftTimerRemaining;
         stopDraftTimer();
         const heroId = (btn as HTMLElement).dataset.hero as HeroId;
         dispatch({ type: "draft_pick", playerId: getMyId(), heroId });
@@ -1045,8 +1047,10 @@ function renderMyBoard() {
       const duplicate = me.builtDistricts.some((d) => d.name === c.name);
       const buildable = canBuild && affordable && !duplicate;
       const cs = colorStyle(c.colors);
+      const texUrl = buildingTextureUrl(c);
       return `
         <div class="hand-card ${cs.cls}" style="${cs.style}">
+          <img class="card-texture" src="${texUrl}" alt="" />
           <div class="card-cost">${c.cost}</div>
           <div class="card-name-text">${tDistrict(c.name)}</div>
           ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : ""}
