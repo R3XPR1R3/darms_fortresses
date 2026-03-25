@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload } from "@darms/shared-types";
-import { HeroId, WIN_DISTRICTS } from "@darms/shared-types";
+import { HeroId, CompanionId, WIN_DISTRICTS } from "@darms/shared-types";
 import { currentDrafter } from "./draft.js";
 import { currentPlayer } from "./turns.js";
 import { createRng } from "./rng.js";
@@ -12,11 +12,24 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
   const rng = createRng(state.rng + botPlayerId.charCodeAt(0));
 
   if (state.phase === "draft") {
+    const draft = state.draft!;
+
+    // Companion draft phase — simultaneous, bot picks first offered
+    if (draft.draftPhase === "companion") {
+      const botIdx = state.players.findIndex((p) => p.id === botPlayerId);
+      if (botIdx === -1) return null;
+      if (state.players[botIdx].companion !== null) return null; // already picked
+      const choices = draft.companionChoices?.[botIdx];
+      if (!choices || choices.length === 0) return null;
+      return { type: "companion_pick", playerId: botPlayerId, companionId: choices[0] };
+    }
+
+    // Hero draft phase — sequential
     const drafterIdx = currentDrafter(state);
     if (drafterIdx === null) return null;
     if (state.players[drafterIdx].id !== botPlayerId) return null;
 
-    const available = state.draft!.availableHeroes;
+    const available = draft.availableHeroes;
     if (available.length === 0) return null;
 
     const player = state.players[drafterIdx];
@@ -34,6 +47,11 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
     if (!player.abilityUsed && player.hero) {
       const abilityAction = pickAbility(state, player.id, player.hero, rng);
       if (abilityAction) return abilityAction;
+    }
+
+    // Step 1.5: Use companion if available
+    if (!player.companionUsed && player.companion) {
+      return { type: "use_companion", playerId: botPlayerId };
     }
 
     // Step 2: Take income if not taken

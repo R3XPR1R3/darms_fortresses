@@ -1,5 +1,6 @@
 export { HeroId, type HeroDefinition, type CardColor, HEROES } from "./hero.js";
 export type { DistrictCard } from "./card.js";
+export { CompanionId, type CompanionDefinition, COMPANIONS } from "./companion.js";
 export {
   WIN_DISTRICTS,
   type GameState,
@@ -11,9 +12,11 @@ export {
 export type {
   GameAction,
   DraftPickAction,
+  CompanionPickAction,
   IncomeAction,
   BuildAction,
   AbilityAction,
   AbilityPayload,
+  UseCompanionAction,
   EndTurnAction,
 } from "./action.js";

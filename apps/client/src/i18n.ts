@@ -42,6 +42,8 @@ const dict: Record<string, { en: string; ru: string }> = {
   "draft.choose_hero": { en: "Choose your hero:", ru: "Выбери героя:" },
   "draft.others_choosing": { en: "Other players are choosing...", ru: "Другие игроки выбирают..." },
   "draft.speed": { en: "Speed", ru: "Скорость" },
+  "draft.companion_title": { en: "Choose Companion", ru: "Выбери компаньона" },
+  "draft.choose_companion": { en: "Pick a companion for this day:", ru: "Выбери компаньона на этот день:" },
 
   // Turn banner
   "banner.your_pick": { en: "Your hero pick!", ru: "Твой выбор героя!" },

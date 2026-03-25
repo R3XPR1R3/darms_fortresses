@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
@@ -34,6 +34,8 @@ interface PlayerViewEntry {
   assassinated: boolean;
   robbedHeroId: PlayerState["robbedHeroId"];
   finishedFirst: boolean;
+  companion: PlayerState["companion"];
+  companionUsed: boolean;
 }
 
 interface DraftView {
@@ -42,6 +44,8 @@ interface DraftView {
   hiddenBanCount: number;
   draftOrder: number[];
   currentStep: number;
+  draftPhase: "hero" | "companion";
+  companionChoices: CompanionId[] | null; // my choices only
 }
 
 interface LobbyPlayer {
@@ -234,9 +238,16 @@ function runLocalBots() {
   // Determine if it's a bot's turn
   let botId: string | null = null;
   if (localState.phase === "draft") {
-    const dIdx = currentDrafter(localState);
-    if (dIdx !== null && localState.players[dIdx].id !== HUMAN_ID) {
-      botId = localState.players[dIdx].id;
+    const draft = localState.draft;
+    if (draft?.draftPhase === "companion") {
+      // Companion draft is simultaneous — find any bot that hasn't picked yet
+      const bot = localState.players.find((p) => p.id !== HUMAN_ID && p.companion === null);
+      if (bot) botId = bot.id;
+    } else {
+      const dIdx = currentDrafter(localState);
+      if (dIdx !== null && localState.players[dIdx].id !== HUMAN_ID) {
+        botId = localState.players[dIdx].id;
+      }
     }
   } else if (localState.phase === "turns") {
     const pIdx = currentPlayer(localState);
@@ -300,6 +311,12 @@ function runLocalBots() {
 function checkLocalHumanTurn(): boolean {
   if (!localState) return false;
   if (localState.phase === "draft") {
+    const draft = localState.draft;
+    if (draft?.draftPhase === "companion") {
+      // Human needs to pick companion
+      const human = localState.players.find((p) => p.id === HUMAN_ID);
+      return human !== undefined && human.companion === null;
+    }
     const dIdx = currentDrafter(localState);
     return dIdx !== null && localState.players[dIdx].id === HUMAN_ID;
   }
@@ -340,6 +357,8 @@ function getPlayers(): PlayerViewEntry[] {
       assassinated: p.assassinated,
       robbedHeroId: p.robbedHeroId,
       finishedFirst: p.finishedFirst,
+      companion: p.companion,
+      companionUsed: p.companionUsed,
     }));
   }
   return [];
@@ -365,12 +384,15 @@ function getMyHand(): PlayerState["hand"] {
 function getDraft(): DraftView | null {
   if (mode === "online" && onlineState) return onlineState.draft;
   if (localState?.draft) {
+    const humanIdx = localState.players.findIndex((p) => p.id === HUMAN_ID);
     return {
       availableHeroes: localState.draft.availableHeroes,
       faceUpBans: localState.draft.faceUpBans,
       hiddenBanCount: localState.draft.faceDownBans.length,
       draftOrder: localState.draft.draftOrder,
       currentStep: localState.draft.currentStep,
+      draftPhase: localState.draft.draftPhase,
+      companionChoices: localState.draft.companionChoices?.[humanIdx] ?? null,
     };
   }
   return null;
@@ -644,11 +666,17 @@ function renderTurnBanner() {
   const myTurn = isMyTurn();
 
   if (phase === "draft") {
-    el.className = "turn-banner" + (myTurn ? " my-turn" : "");
+    const draft = getDraft();
+    const isCompanionPhase = draft?.draftPhase === "companion";
+    el.className = "turn-banner" + (myTurn || isCompanionPhase ? " my-turn" : "");
     el.id = "turn-banner";
-    el.innerHTML = myTurn
-      ? `⚔ ${t("banner.day")} ${day} — ${t("banner.your_pick")}`
-      : `${t("banner.day")} ${day} — ${t("banner.hero_pick")}`;
+    if (isCompanionPhase) {
+      el.innerHTML = `⚔ ${t("banner.day")} ${day} — ${t("draft.companion_title")}`;
+    } else {
+      el.innerHTML = myTurn
+        ? `⚔ ${t("banner.day")} ${day} — ${t("banner.your_pick")}`
+        : `${t("banner.day")} ${day} — ${t("banner.hero_pick")}`;
+    }
     return;
   }
 
@@ -875,7 +903,14 @@ function startTurnTimer(playerIdx: number) {
     }
     if (turnTimerRemaining <= 0) {
       stopTurnTimer();
-      // Auto end turn when timer expires
+      // Auto-act when timer expires
+      const me = getPlayers()[getMyIndex()];
+      if (me && !me.incomeTaken) {
+        // Random income choice then end turn
+        const choice = Math.random() < 0.5 ? "gold" : "card";
+        dispatch({ type: "income", playerId: getMyId(), choice });
+      }
+      // End turn after random action
       dispatch({ type: "end_turn", playerId: getMyId() });
     }
   }, 1000);
@@ -914,6 +949,46 @@ function renderDraft() {
     return;
   }
 
+  // --- Companion draft phase ---
+  if (draft.draftPhase === "companion") {
+    stopDraftTimer();
+    const me = getPlayers()[getMyIndex()];
+    const alreadyPicked = me?.companion !== null;
+    const choices = draft.companionChoices;
+
+    if (alreadyPicked || !choices) {
+      el.innerHTML = `
+        <h2>${t("draft.companion_title")}</h2>
+        <p class="hint">${t("draft.others_choosing")}</p>
+      `;
+      return;
+    }
+
+    // Deduplicate choices for display
+    const unique = [...new Set(choices)];
+    const companionButtons = unique.map((cId) => {
+      const def = COMPANIONS.find((c) => c.id === cId);
+      return `<button class="btn btn-secondary companion-btn" data-companion="${cId}">
+        🧑‍🌾 ${def?.name ?? cId} — ${def?.description ?? ""}
+      </button>`;
+    }).join("");
+
+    el.innerHTML = `
+      <h2>${t("draft.companion_title")}</h2>
+      <p class="hint">${t("draft.choose_companion")}</p>
+      <div class="companion-choices">${companionButtons}</div>
+    `;
+
+    el.querySelectorAll(".companion-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const companionId = (btn as HTMLElement).dataset.companion as CompanionId;
+        dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
+      });
+    });
+    return;
+  }
+
+  // --- Hero draft phase ---
   const myTurn = isMyTurn();
 
   // Manage draft timer
@@ -1084,6 +1159,11 @@ function renderMyBoard() {
         }
       }
 
+      if (!me.companionUsed && me.companion) {
+        const cDef = COMPANIONS.find((c) => c.id === me.companion);
+        buttons.push(`<button class="btn btn-secondary" id="btn-companion">🧑‍🌾 ${cDef?.name ?? me.companion}</button>`);
+      }
+
       if (!me.incomeTaken) {
         buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
         buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
@@ -1118,6 +1198,9 @@ function renderMyBoard() {
   });
   document.getElementById("btn-ability-passive")?.addEventListener("click", () => {
     dispatch({ type: "ability", playerId: getMyId(), ability: { hero: me.hero! } as AbilityPayload });
+  });
+  document.getElementById("btn-companion")?.addEventListener("click", () => {
+    dispatch({ type: "use_companion", playerId: getMyId() });
   });
 }
 
@@ -1200,9 +1283,14 @@ function showAbilityModal(heroId: HeroId) {
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${t("modal.sorcerer_hint")}</p>
         <button class="modal-option" data-mode="draw">${heroPortrait(HeroId.Sorcerer, 24)} ${t("modal.sorcerer_draw")}</button>
-        ${otherPlayers.map((p) =>
-          `<button class="modal-option" data-mode="swap" data-target="${p.id}">🔄 ${tName(p.name)} — ${p.hand ? p.hand.length : p.handSize} ${t("modal.sorcerer_cards")}</button>`,
-        ).join("")}
+        ${otherPlayers.map((p) => {
+          const pIdx = players.indexOf(p);
+          const revealed = isHeroRevealed(pIdx);
+          const heroTag = revealed && p.hero
+            ? `${heroPortrait(p.hero, 20)} <span style="color:${heroColor(p.hero)}">${heroName(p.hero)}</span>`
+            : "❓";
+          return `<button class="modal-option" data-mode="swap" data-target="${p.id}">${heroTag} ${tName(p.name)} — ${p.hand ? p.hand.length : p.handSize} ${t("modal.sorcerer_cards")}</button>`;
+        }).join("")}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1222,6 +1310,7 @@ function showAbilityModal(heroId: HeroId) {
       title.textContent = t("modal.general_title");
       const players = getPlayers();
       const me = players[getMyIndex()];
+      // Target any player except self and Cleric (Cleric's districts are immune)
       const targets = players
         .filter((p, i) => i !== getMyIndex() && p.builtDistricts.length > 0 && p.hero !== HeroId.Cleric);
       if (targets.length === 0) {
@@ -1231,7 +1320,9 @@ function showAbilityModal(heroId: HeroId) {
       const targetButtons = targets.flatMap((p) => {
         const pIdx = players.indexOf(p);
         const revealed = isHeroRevealed(pIdx);
-        const heroTag = revealed && p.hero ? ` (${heroName(p.hero)})` : "";
+        const heroTag = revealed && p.hero
+          ? ` ${heroPortrait(p.hero, 16)} <span style="color:${heroColor(p.hero)}">${heroName(p.hero)}</span>`
+          : "";
         return p.builtDistricts
           .filter((d) => me && d.cost <= me.gold)
           .map((d) =>

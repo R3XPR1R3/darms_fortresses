@@ -26,6 +26,7 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
     incomeTaken: false,
     buildsRemaining: p.hero === HeroId.Architect ? 3 : 1,
     abilityUsed: false,
+    companionUsed: false,
   }));
 
   let newState: GameState = {

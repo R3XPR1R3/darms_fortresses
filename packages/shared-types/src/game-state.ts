@@ -1,5 +1,6 @@
 import type { HeroId } from "./hero.js";
 import type { DistrictCard } from "./card.js";
+import type { CompanionId } from "./companion.js";
 
 export const WIN_DISTRICTS = 8;
 
@@ -52,6 +53,10 @@ export interface PlayerState {
   robbedHeroId: HeroId | null;
   /** Was this the first player to build 8 districts? */
   finishedFirst: boolean;
+  /** Chosen companion for this day */
+  companion: CompanionId | null;
+  /** Has the companion ability been used this turn? */
+  companionUsed: boolean;
 }
 
 /** State tracking the hero draft within a day */
@@ -66,4 +71,8 @@ export interface DraftState {
   draftOrder: number[];
   /** Which step of the draft we're on */
   currentStep: number;
+  /** Companion choices offered to each player (3 per player) */
+  companionChoices: CompanionId[][] | null;
+  /** Which phase of draft: "hero" or "companion" */
+  draftPhase: "hero" | "companion";
 }

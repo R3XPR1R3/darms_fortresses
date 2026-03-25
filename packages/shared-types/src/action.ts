@@ -1,11 +1,14 @@
 import type { HeroId } from "./hero.js";
+import type { CompanionId } from "./companion.js";
 
 /** All possible player actions — discriminated union */
 export type GameAction =
   | DraftPickAction
+  | CompanionPickAction
   | IncomeAction
   | BuildAction
   | AbilityAction
+  | UseCompanionAction
   | EndTurnAction;
 
 /** Player picks a hero during draft */
@@ -46,6 +49,19 @@ export type AbilityPayload =
   | { hero: "merchant" } // passive — auto-applied
   | { hero: "architect" } // passive — builds handled by build action
   | { hero: "general"; targetPlayerId: string; cardId: string };
+
+/** Player picks a companion during draft */
+export interface CompanionPickAction {
+  type: "companion_pick";
+  playerId: string;
+  companionId: CompanionId;
+}
+
+/** Player uses their companion ability */
+export interface UseCompanionAction {
+  type: "use_companion";
+  playerId: string;
+}
 
 /** Player explicitly ends their turn */
 export interface EndTurnAction {
