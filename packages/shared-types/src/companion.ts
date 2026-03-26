@@ -31,6 +31,8 @@ export interface CompanionDefinition {
   useCost?: number;
   /** Hero color restriction — companion only works if hero has this color */
   heroColor?: "yellow" | "blue" | "green" | "red";
+  /** Indicator circle color (CSS color). If set, overrides default blue/red */
+  indicatorColor?: string;
 }
 
 export const COMPANIONS: readonly CompanionDefinition[] = [
@@ -47,6 +49,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
     description: "В конце дня богатейший даёт вам 1💰 и 1🃏",
     emoji: "💰",
     passive: true,
+    indicatorColor: "#2ecc71",
   },
   {
     id: CompanionId.Hunter,
@@ -110,6 +113,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
     description: "+2💰 за жёлтый квартал. Следующий драфт: выбор из 8",
     emoji: "🛡️",
     passive: true,
+    indicatorColor: "#f1c40f",
   },
   {
     id: CompanionId.Swindler,

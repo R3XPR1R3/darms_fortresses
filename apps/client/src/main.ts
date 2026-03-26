@@ -16,6 +16,12 @@ function companionDef(id: CompanionId | null) {
   if (!id) return null;
   return COMPANIONS.find((c) => c.id === id) ?? null;
 }
+/** Build companion indicator HTML with optional custom color */
+function companionIndicatorHtml(id: CompanionId, cssClass: string): string {
+  const def = companionDef(id);
+  const customStyle = def?.indicatorColor ? `background:${def.indicatorColor};` : "";
+  return `<span class="companion-indicator ${cssClass}" style="${customStyle}">${companionEmoji(id)}</span>`;
+}
 
 // ---- Types for online mode ----
 interface PlayerView {
@@ -809,7 +815,7 @@ function renderOpponentBoard() {
     const hClr = heroColor(p.hero);
     heroSection = `
       <div class="opp-hero-display tooltip-host tooltip-below" style="--hero-clr:${hClr}">
-        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(p.hero, 64)}${p.companion ? `<span class="companion-indicator companion-indicator-opp">${companionEmoji(p.companion)}</span>` : ""}</div>
+        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(p.hero, 64)}${p.companion ? companionIndicatorHtml(p.companion, "companion-indicator-opp") : ""}</div>
         <div class="hero-name">${heroName(p.hero)}</div>
         <div class="hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
         <div class="tooltip-content" style="--hero-clr:${hClr}">
@@ -899,7 +905,7 @@ function renderMyBoard() {
     const myHClr = heroColor(me.hero);
     heroRow = `
       <div class="my-hero-row tooltip-host tooltip-above" style="--hero-clr:${myHClr}">
-        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(me.hero, 48)}${me.companion ? `<span class="companion-indicator companion-indicator-me">${companionEmoji(me.companion)}</span>` : ""}</div>
+        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(me.hero, 48)}${me.companion ? companionIndicatorHtml(me.companion, "companion-indicator-me") : ""}</div>
         <div class="my-hero-info">
           <div class="my-hero-name">${heroName(me.hero)}</div>
           <div class="my-hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
