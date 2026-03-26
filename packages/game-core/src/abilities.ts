@@ -301,12 +301,57 @@ export function useAbility(
       const newTargetDistricts = [...target.builtDistricts];
       const newHp = card.hp - damage;
 
+      // Fort: defender's other districts have -1 effective HP, but on destroy gets gold back
+      const hasFort = target.builtDistricts.some((d) => d.purpleAbility === "fort" && d.id !== card.id);
+
       let newDiscardPile = state.discardPile;
+      let fortGoldRefund = 0;
       if (newHp < 1) {
         // District destroyed — add to discard pile
         newTargetDistricts.splice(cardIdx, 1);
         newDiscardPile = [...state.discardPile, card];
+        // Fort: defender gets gold spent on destruction
+        if (hasFort && card.purpleAbility !== "fort") {
+          fortGoldRefund = damage;
+        }
         log = addLog({ ...state, log }, `${player.name} (Генерал) разрушил ${card.name} у ${target.name} за ${damage} золота`);
+        // Crypt: on destroy → owner gets 2 random purple cards
+        if (card.purpleAbility === "crypt") {
+          const purpleCards: typeof target.hand = [];
+          for (let i = 0; i < 2; i++) {
+            const tplIdx = rng.int(0, 8); // 9 templates
+            const tpl = (() => {
+              // inline access to templates
+              const templates = [
+                { name: "Пушка", cost: 2, colors: ["purple", "red"] as const, ability: "cannon" as const },
+                { name: "Оборонительный форт", cost: 1, colors: ["purple"] as const, ability: "fort" as const },
+                { name: "Памятник", cost: 2, colors: ["purple"] as const, ability: "monument" as const },
+                { name: "Магистраль", cost: 4, colors: ["purple"] as const, ability: "highway" as const },
+                { name: "Врата в город", cost: 8, colors: ["purple", "yellow"] as const, ability: "city_gates" as const },
+                { name: "Склеп", cost: 4, colors: ["purple"] as const, ability: "crypt" as const },
+                { name: "Склад тротила", cost: 2, colors: ["purple", "red"] as const, ability: "tnt_storage" as const },
+                { name: "Шахта", cost: 3, colors: ["purple", "green"] as const, ability: "mine" as const },
+                { name: "Секта", cost: 2, colors: ["purple", "blue"] as const, ability: "cult" as const },
+              ];
+              return templates[tplIdx];
+            })();
+            purpleCards.push({
+              id: `purple-crypt-${Date.now()}-${rng.int(0, 9999)}`,
+              name: tpl.name,
+              cost: tpl.cost,
+              hp: tpl.cost,
+              colors: [...tpl.colors],
+              purpleAbility: tpl.ability,
+            });
+          }
+          const updatedTarget = newPlayers[targetIdx] ?? { ...target, builtDistricts: newTargetDistricts };
+          newPlayers[targetIdx] = {
+            ...target,
+            builtDistricts: newTargetDistricts,
+            hand: [...updatedTarget.hand ?? target.hand, ...purpleCards],
+          };
+          log = addLog({ ...state, log }, `⚰️ Склеп ${target.name} разрушен — получено 2 фиолетовые карты`);
+        }
       } else {
         // District damaged but survives
         newTargetDistricts[cardIdx] = { ...card, hp: newHp };
@@ -314,7 +359,7 @@ export function useAbility(
       }
 
       newPlayers[playerIdx] = { ...player, gold: player.gold - damage, abilityUsed: true };
-      newPlayers[targetIdx] = { ...target, builtDistricts: newTargetDistricts };
+      newPlayers[targetIdx] = { ...newPlayers[targetIdx] ?? target, builtDistricts: newTargetDistricts, gold: (newPlayers[targetIdx]?.gold ?? target.gold) + fortGoldRefund };
       newDeck = state.deck; // preserve deck
       return { ...state, players: newPlayers, deck: newDeck, discardPile: newDiscardPile, log };
     }
@@ -362,8 +407,11 @@ export function calculateScores(state: GameState): GameState {
     let score = 0;
 
     // Sum of district HP (current HP on the table)
+    const hasFort = p.builtDistricts.some((d) => d.purpleAbility === "fort");
     for (const d of p.builtDistricts) {
-      score += d.hp;
+      // Fort: other buildings worth -1
+      const fortPenalty = (hasFort && d.purpleAbility !== "fort") ? 1 : 0;
+      score += Math.max(0, d.hp - fortPenalty);
     }
 
     // Bonus for finishing first

@@ -56,5 +56,6 @@ export function createMatch(
     rng: rng.getSeed(),
     bardUsageCount: 0,
     bannedCompanions: [],
+    purpleDraft: null,
   };
 }

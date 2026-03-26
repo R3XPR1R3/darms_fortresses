@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompanion } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompanion, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
@@ -247,10 +247,34 @@ function runLocalBots() {
   if (!localState || localState.phase === "end") return;
 
   // Start new draft if needed
-  if (localState.phase === "draft" && !localState.draft) {
+  if (localState.phase === "draft" && !localState.draft && !localState.purpleDraft) {
     localState = startDraft(localState);
     render();
     setTimeout(runLocalBots, 500);
+    return;
+  }
+
+  // Handle purple draft for bots (simultaneous — all bots pick at once)
+  if (localState.purpleDraft) {
+    let anyBotPicked = false;
+    for (const bot of BOT_IDS) {
+      if (!localState.purpleDraft) break;
+      const botIdx = localState.players.findIndex((p) => p.id === bot);
+      if (botIdx === -1) continue;
+      if (localState.purpleDraft.picked[botIdx]) continue;
+      const action = botAction(localState, bot);
+      if (action) {
+        const next = processAction(localState, action);
+        if (next) {
+          localState = next;
+          anyBotPicked = true;
+        }
+      }
+    }
+    if (anyBotPicked) {
+      render();
+      setTimeout(runLocalBots, 500);
+    }
     return;
   }
 
@@ -416,6 +440,12 @@ function getDraft(): DraftView | null {
       companionPool: localState.draft.companionChoices?.[0] ?? null,
     };
   }
+  return null;
+}
+
+function getPurpleDraft(): { offers: any[]; picked: boolean[] } | null {
+  if (mode === "online" && onlineState) return (onlineState as any).purpleDraft ?? null;
+  if (localState) return localState.purpleDraft ?? null;
   return null;
 }
 
@@ -687,6 +717,13 @@ function renderTurnBanner() {
   const myTurn = isMyTurn();
 
   if (phase === "draft") {
+    const purpleDraft = getPurpleDraft();
+    if (purpleDraft) {
+      el.className = "turn-banner my-turn";
+      el.id = "turn-banner";
+      el.innerHTML = `🔮 ${t("banner.day")} ${day} — Фиолетовый драфт`;
+      return;
+    }
     const draft = getDraft();
     const isCompanionPhase = draft?.draftPhase === "companion";
     el.className = "turn-banner" + (myTurn || isCompanionPhase ? " my-turn" : "");
@@ -954,8 +991,16 @@ function renderMyBoard() {
     `;
   }
 
-  // My districts
-  const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
+  // My districts — purple buildings with active abilities are clickable
+  const activePurple = new Set(["cannon", "crypt", "tnt_storage"]);
+  const districts = me.builtDistricts.map((d) => {
+    const isClickable = myTurnNow && d.purpleAbility && activePurple.has(d.purpleAbility);
+    const tpl = d.purpleAbility ? PURPLE_CARD_TEMPLATES.find((t) => t.ability === d.purpleAbility) : null;
+    const clickClass = isClickable ? "purple-clickable" : "";
+    const clickAttr = isClickable ? `data-activate="${d.id}"` : "";
+    const tooltipHtml = tpl ? `<div class="purple-tooltip">${tpl.emoji} ${tpl.description}</div>` : "";
+    return `<div class="district-wrapper ${clickClass}" ${clickAttr}>${districtCardHtml(d)}${tooltipHtml}</div>`;
+  }).join("");
   const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
 
   // Hand
@@ -1022,7 +1067,13 @@ function renderMyBoard() {
 
   el.innerHTML = heroRow + statsBar + companionHtml + districtsSection + handSection + actionsSection;
 
-  // Wire up events
+  // Wire up events — purple building activation
+  el.querySelectorAll("[data-activate]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cardId = (btn as HTMLElement).dataset.activate!;
+      dispatch({ type: "activate_building", playerId: getMyId(), cardId });
+    });
+  });
   el.querySelectorAll("[data-build]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1151,6 +1202,53 @@ function renderDraft() {
   if (!el) return;
   const phase = getPhase();
   const draft = getDraft();
+
+  // Purple card draft
+  const purpleDraft = getPurpleDraft();
+  if (purpleDraft) {
+    const myIdx = getMyIndex();
+    if (purpleDraft.picked[myIdx]) {
+      el.innerHTML = `
+        <h2 style="font-size:13px">🔮 Фиолетовый драфт</h2>
+        <p class="hint">Ожидание других игроков...</p>
+      `;
+      return;
+    }
+    const cards = purpleDraft.offers[myIdx];
+    if (!cards || cards.length === 0) {
+      el.innerHTML = "";
+      return;
+    }
+    const cardButtons = cards.map((card: any, idx: number) => {
+      const tpl = PURPLE_CARD_TEMPLATES.find((t) => t.ability === card.purpleAbility);
+      const desc = tpl?.description ?? card.purpleAbility ?? "";
+      const emoji = tpl?.emoji ?? "🔮";
+      return `
+        <button class="purple-card-offer" data-purple-pick="${idx}">
+          <div style="font-size:28px">${emoji}</div>
+          <div style="font-weight:bold;font-size:13px">${card.name} (${card.cost}💰)</div>
+          <div style="font-size:10px;color:#ccc;margin-top:4px">${desc}</div>
+          <div style="margin-top:4px;font-size:10px;color:#888">${card.colors.map((c: string) => districtColorDot(c)).join(" ")}</div>
+        </button>
+      `;
+    }).join("");
+    el.innerHTML = `
+      <h2 style="font-size:13px">🔮 Фиолетовый драфт — День ${getDay()}</h2>
+      <p class="hint">Выберите одну из трёх фиолетовых карт:</p>
+      <div class="purple-draft-grid">${cardButtons}</div>
+      <button class="btn btn-secondary" id="btn-purple-decline" style="margin-top:8px">❌ Пропустить</button>
+    `;
+    el.querySelectorAll("[data-purple-pick]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt((btn as HTMLElement).dataset.purplePick!, 10);
+        dispatch({ type: "purple_card_pick", playerId: getMyId(), cardIndex: idx });
+      });
+    });
+    document.getElementById("btn-purple-decline")?.addEventListener("click", () => {
+      dispatch({ type: "purple_card_pick", playerId: getMyId(), cardIndex: -1 });
+    });
+    return;
+  }
 
   if (phase !== "draft" && phase !== "turns") {
     el.innerHTML = "";

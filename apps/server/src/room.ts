@@ -321,6 +321,17 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
     };
   }
 
+  // Purple draft: only show the current player's offers
+  let purpleDraft: any = null;
+  if (state.purpleDraft) {
+    purpleDraft = {
+      offers: state.purpleDraft.offers.map((cards, i) =>
+        i === myIndex ? cards : null,
+      ),
+      picked: state.purpleDraft.picked,
+    };
+  }
+
   return {
     phase: state.phase,
     players,
@@ -333,5 +344,6 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
     winner: state.winner,
     log: state.log,
     myIndex,
+    purpleDraft,
   };
 }

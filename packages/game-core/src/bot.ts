@@ -11,6 +11,14 @@ import { createRng } from "./rng.js";
 export function botAction(state: GameState, botPlayerId: string): GameAction | null {
   const rng = createRng(state.rng + botPlayerId.charCodeAt(0));
 
+  // Purple card draft — bots always accept
+  if (state.purpleDraft) {
+    const botIdx = state.players.findIndex((p) => p.id === botPlayerId);
+    if (botIdx === -1) return null;
+    if (state.purpleDraft.picked[botIdx]) return null;
+    return { type: "purple_card_pick", playerId: botPlayerId, cardIndex: 0 }; // accept
+  }
+
   if (state.phase === "draft") {
     const draft = state.draft!;
 
@@ -68,6 +76,22 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
       if (!isPassiveCompanion(player.companion)) {
         const companionAction = pickCompanionAction(state, playerIdx, rng);
         if (companionAction) return companionAction;
+      }
+    }
+
+    // Step 2.7: Activate purple buildings
+    const activatable = player.builtDistricts.filter((d) => d.purpleAbility);
+    for (const bld of activatable) {
+      if (bld.purpleAbility === "cannon" && player.gold >= 2) {
+        // Use cannon if we have spare gold
+        return { type: "activate_building", playerId: botPlayerId, cardId: bld.id };
+      }
+      if (bld.purpleAbility === "tnt_storage" && player.gold >= 2) {
+        // Use TNT if opponent is winning
+        const maxOppDist = Math.max(...state.players.filter((p, i) => i !== playerIdx).map((p) => p.builtDistricts.length));
+        if (maxOppDist >= 6) {
+          return { type: "activate_building", playerId: botPlayerId, cardId: bld.id };
+        }
       }
     }
 

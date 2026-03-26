@@ -24,9 +24,16 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
     if (pA.companion === CompanionId.Courier && !pA.companionDisabled) {
       speedA -= 2;
     }
+    // Highway purple building: speed -1
+    if (pA.builtDistricts.some((d) => d.purpleAbility === "highway")) {
+      speedA -= 1;
+    }
     const pB = state.players[b.idx];
     if (pB.companion === CompanionId.Courier && !pB.companionDisabled) {
       speedB -= 2;
+    }
+    if (pB.builtDistricts.some((d) => d.purpleAbility === "highway")) {
+      speedB -= 1;
     }
 
     if (speedA !== speedB) return speedA - speedB;
@@ -182,6 +189,11 @@ export function buildDistrict(
   let effectiveCost = card.cost;
   const heroColor = HEROES.find((h) => h.id === player.hero)?.color ?? null;
 
+  // Monument: cost = number of other cards in hand (after removing monument)
+  if (card.purpleAbility === "monument") {
+    effectiveCost = Math.max(0, player.hand.length - 1); // minus the monument itself
+  }
+
   // Sun Priestess: blue districts cost -1 (only for blue hero)
   if (
     player.companion === CompanionId.SunPriestess
@@ -215,12 +227,21 @@ export function buildDistrict(
   const newHand = [...player.hand];
   newHand.splice(cardIdx, 1);
 
+  // Monument always has 3 HP on table
+  let builtCard = { ...card, hp: card.cost };
+  if (card.purpleAbility === "monument") {
+    builtCard = { ...card, hp: 3 };
+  }
+
+  // Fort: reduce other (non-fort) districts HP by 1 when on table
+  // (Fort effect is passive — applied when checking HP, not on build)
+
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
     ...player,
     gold: player.gold - effectiveCost,
     hand: newHand,
-    builtDistricts: [...player.builtDistricts, card],
+    builtDistricts: [...player.builtDistricts, builtCard],
     buildsRemaining: player.buildsRemaining - 1,
   };
 
@@ -340,6 +361,44 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
       players = [...players];
       players[i] = { ...p, hand: [...p.hand, ...newFlames] };
       log = [...log, { day: state.day, message: `🔥 Пламя множится у ${p.name}! (+${flameCount})` }];
+    }
+  }
+
+  // Mine: +1g at end of turn for players with mine
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i];
+    const mineCount = p.builtDistricts.filter((d) => d.purpleAbility === "mine").length;
+    if (mineCount > 0) {
+      players = [...players];
+      players[i] = { ...p, gold: p.gold + mineCount };
+      log = [...log, { day: state.day, message: `⛏️ ${p.name} — шахта: +${mineCount}💰` }];
+    }
+  }
+
+  // City Gates: HP -2 each turn, discards at 0
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i];
+    const newDistricts = [...p.builtDistricts];
+    let changed = false;
+    let discardPile = state.discardPile;
+    for (let d = newDistricts.length - 1; d >= 0; d--) {
+      if (newDistricts[d].purpleAbility === "city_gates") {
+        const newHp = newDistricts[d].hp - 2;
+        if (newHp < 1) {
+          discardPile = [...discardPile, newDistricts[d]];
+          newDistricts.splice(d, 1);
+          log = [...log, { day: state.day, message: `🚪 Врата в город ${p.name} разрушились!` }];
+        } else {
+          newDistricts[d] = { ...newDistricts[d], hp: newHp };
+          log = [...log, { day: state.day, message: `🚪 Врата в город ${p.name}: HP → ${newHp}` }];
+        }
+        changed = true;
+      }
+    }
+    if (changed) {
+      players = [...players];
+      players[i] = { ...p, builtDistricts: newDistricts };
+      state = { ...state, discardPile };
     }
   }
 

@@ -1,5 +1,5 @@
-import type { DraftState, GameState } from "@darms/shared-types";
-import { HeroId, HEROES, CompanionId, COMPANIONS } from "@darms/shared-types";
+import type { DraftState, GameState, DistrictCard, PurpleDraftState } from "@darms/shared-types";
+import { HeroId, HEROES, CompanionId, COMPANIONS, PURPLE_DRAFT_DAYS, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 const ALL_HEROES: HeroId[] = Object.values(HeroId);
@@ -191,7 +191,7 @@ export function draftPick(
 
     // Skip companion draft before day 4
     if (state.day < 4) {
-      return {
+      const baseState = {
         ...state,
         players: newPlayers,
         draft: {
@@ -199,13 +199,17 @@ export function draftPick(
           availableHeroes: [],
           faceUpBans: [...draft.faceUpBans, ...finalFaceUp],
           faceDownBans: [...draft.faceDownBans, ...finalFaceDown],
-          currentStep: draft.draftOrder.length, // mark draft as done
+          currentStep: draft.draftOrder.length,
           companionChoices: null,
-          draftPhase: "hero",
+          draftPhase: "hero" as const,
         },
-        phase: "turns",
         rng: rng.getSeed(),
       };
+      // Day 3 has purple draft even without companion draft
+      if (isPurpleDraftDay(state.day)) {
+        return initPurpleDraft({ ...baseState, phase: "draft" }, rng);
+      }
+      return { ...baseState, phase: "turns" as const };
     }
 
     // Move to companion draft phase (day 4+)
@@ -286,13 +290,17 @@ export function companionPick(
   const allPicked = nextStep >= draft.draftOrder.length;
 
   if (allPicked) {
-    return {
+    const baseState = {
       ...state,
       players: newPlayers,
       draft: { ...draft, companionChoices: null, currentStep: nextStep },
-      phase: "turns",
       rng: rng.getSeed(),
     };
+    // Check if this day has a purple card draft
+    if (isPurpleDraftDay(state.day)) {
+      return initPurpleDraft({ ...baseState, phase: "draft" }, rng);
+    }
+    return { ...baseState, phase: "turns" };
   }
 
   return {
@@ -309,4 +317,81 @@ export function currentDrafter(state: GameState): number | null {
   const step = state.draft.currentStep;
   if (step >= state.draft.draftOrder.length) return null;
   return state.draft.draftOrder[step];
+}
+
+// ---- Purple card draft ----
+
+let _purpleGenId = 5000;
+
+/** Generate a random purple card from templates */
+function generatePurpleCard(rng: Rng): DistrictCard {
+  const tpl = PURPLE_CARD_TEMPLATES[rng.int(0, PURPLE_CARD_TEMPLATES.length - 1)];
+  return {
+    id: `purple-${_purpleGenId++}`,
+    name: tpl.name,
+    cost: tpl.cost,
+    hp: tpl.cost,
+    colors: tpl.colors as DistrictCard["colors"],
+    purpleAbility: tpl.ability,
+  };
+}
+
+/** Check if this day should have a purple card draft */
+export function isPurpleDraftDay(day: number): boolean {
+  return PURPLE_DRAFT_DAYS.includes(day);
+}
+
+/** Start the purple card draft — each player gets offered 3 random cards (individual) */
+export function initPurpleDraft(state: GameState, rng: Rng): GameState {
+  const offers = state.players.map(() => {
+    return [generatePurpleCard(rng), generatePurpleCard(rng), generatePurpleCard(rng)];
+  });
+  const picked = state.players.map(() => false);
+  return {
+    ...state,
+    purpleDraft: { offers, picked },
+    rng: rng.getSeed(),
+  };
+}
+
+/** Player picks a purple card from their 3 offers (cardIndex 0-2), or -1 to decline */
+export function purpleCardPick(state: GameState, playerId: string, cardIndex: number): GameState | null {
+  if (!state.purpleDraft) return null;
+  const playerIdx = state.players.findIndex((p) => p.id === playerId);
+  if (playerIdx === -1) return null;
+  if (state.purpleDraft.picked[playerIdx]) return null;
+
+  const newPicked = [...state.purpleDraft.picked];
+  newPicked[playerIdx] = true;
+  const newPlayers = [...state.players];
+
+  const cards = state.purpleDraft.offers[playerIdx];
+  if (cardIndex >= 0 && cards && cardIndex < cards.length) {
+    const card = cards[cardIndex];
+    newPlayers[playerIdx] = {
+      ...newPlayers[playerIdx],
+      hand: [...newPlayers[playerIdx].hand, card],
+    };
+  }
+
+  const newOffers = [...state.purpleDraft.offers];
+  newOffers[playerIdx] = null; // clear offer
+
+  const allPicked = newPicked.every(Boolean);
+
+  if (allPicked) {
+    // Purple draft done — proceed to turns
+    return {
+      ...state,
+      players: newPlayers,
+      purpleDraft: null,
+      phase: "turns",
+    };
+  }
+
+  return {
+    ...state,
+    players: newPlayers,
+    purpleDraft: { offers: newOffers, picked: newPicked },
+  };
 }

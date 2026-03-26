@@ -1,7 +1,7 @@
 import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
-import { CompanionId, COMPANIONS, HEROES, FLAME_CARD_NAME } from "@darms/shared-types";
+import { CompanionId, COMPANIONS, HEROES, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
-import { initDraft, draftPick, companionPick } from "./draft.js";
+import { initDraft, draftPick, companionPick, purpleCardPick } from "./draft.js";
 import { buildTurnOrder, takeIncome, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
 import { useAbility, checkWinCondition } from "./abilities.js";
 import { generateRandomCard, generateDifferentColorCard, generateCard } from "./deck.js";
@@ -434,17 +434,32 @@ export function processAction(state: GameState, action: GameAction): GameState |
       }
       return result;
     }
+    case "purple_card_pick": {
+      const result = purpleCardPick(state, action.playerId, action.cardIndex);
+      if (!result) return null;
+      if (result.phase === "turns" && !result.purpleDraft) {
+        return buildTurnOrder(result, rng);
+      }
+      return result;
+    }
     case "income":
       return takeIncome(state, action.playerId, action.choice);
 
-    case "build":
-      return buildDistrict(state, action.playerId, action.cardId);
+    case "build": {
+      const buildResult = buildDistrict(state, action.playerId, action.cardId);
+      if (!buildResult) return null;
+      // Apply cult effect on build
+      return applyCultOnBuild(buildResult, action.playerId, action.cardId, rng);
+    }
 
     case "ability":
       return useAbility(state, action.playerId, action.ability, rng);
 
     case "use_companion":
       return useCompanion(state, action.playerId, action.targetPlayerId, action.targetCardId);
+
+    case "activate_building":
+      return activateBuilding(state, action.playerId, action.cardId, rng);
 
     case "end_turn":
       return advanceTurn(state, rng);
@@ -458,6 +473,155 @@ export function processAction(state: GameState, action: GameAction): GameState |
 export function startDraft(state: GameState): GameState {
   const rng = createRng(state.rng);
   return initDraft(state, rng);
+}
+
+/**
+ * Activate a purple building on the table.
+ */
+function activateBuilding(
+  state: GameState,
+  playerId: string,
+  cardId: string,
+  rng: Rng,
+): GameState | null {
+  const playerIdx = state.players.findIndex((p) => p.id === playerId);
+  if (playerIdx === -1) return null;
+  const player = state.players[playerIdx];
+  if (player.assassinated) return null;
+
+  const cardIdx = player.builtDistricts.findIndex((c) => c.id === cardId);
+  if (cardIdx === -1) return null;
+  const card = player.builtDistricts[cardIdx];
+  if (!card.purpleAbility) return null;
+
+  const newPlayers = [...state.players];
+
+  switch (card.purpleAbility) {
+    case "cannon": {
+      // For 1 gold, shoot random opponent district HP-1
+      if (player.gold < 1) return null;
+      const opponents = state.players
+        .map((p, i) => ({ p, i }))
+        .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0 && !x.p.assassinated);
+      if (opponents.length === 0) return null;
+      const opp = opponents[rng.int(0, opponents.length - 1)];
+      const target = state.players[opp.i];
+      const distIdx = rng.int(0, target.builtDistricts.length - 1);
+      const dist = target.builtDistricts[distIdx];
+      const newHp = dist.hp - 1;
+      const newOppDistricts = [...target.builtDistricts];
+      let discardPile = state.discardPile;
+      let msg: string;
+      if (newHp < 1) {
+        newOppDistricts.splice(distIdx, 1);
+        discardPile = [...discardPile, dist];
+        msg = `${player.name} — пушка: разрушил ${dist.name} у ${target.name}!`;
+      } else {
+        newOppDistricts[distIdx] = { ...dist, hp: newHp };
+        msg = `${player.name} — пушка: ${dist.name} у ${target.name} HP ${dist.hp}→${newHp}`;
+      }
+      newPlayers[playerIdx] = { ...player, gold: player.gold - 1 };
+      newPlayers[opp.i] = { ...target, builtDistricts: newOppDistricts };
+      return { ...addLog({ ...state, players: newPlayers, discardPile }, msg), rng: rng.getSeed() };
+    }
+
+    case "crypt": {
+      // Self-destroy for 2 gold — get 2 random purple cards
+      if (player.gold < 2) return null;
+      const newDistricts = [...player.builtDistricts];
+      newDistricts.splice(cardIdx, 1);
+      // Generate 2 random purple cards
+      const purpleCards: DistrictCard[] = [];
+      for (let i = 0; i < 2; i++) {
+        const tpl = PURPLE_CARD_TEMPLATES[rng.int(0, PURPLE_CARD_TEMPLATES.length - 1)];
+        purpleCards.push({
+          id: `purple-gen-${Date.now()}-${rng.int(0, 9999)}`,
+          name: tpl.name,
+          cost: tpl.cost,
+          hp: tpl.cost,
+          colors: tpl.colors as DistrictCard["colors"],
+          purpleAbility: tpl.ability,
+        });
+      }
+      newPlayers[playerIdx] = {
+        ...player,
+        gold: player.gold - 2,
+        builtDistricts: newDistricts,
+        hand: [...player.hand, ...purpleCards],
+      };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — склеп: уничтожен, получено 2 фиолетовые карты`), rng: rng.getSeed() };
+    }
+
+    case "tnt_storage": {
+      // Self-destroy for 2 gold — destroys 2 random districts for each player
+      if (player.gold < 2) return null;
+      const newDistricts = [...player.builtDistricts];
+      newDistricts.splice(cardIdx, 1);
+      newPlayers[playerIdx] = { ...player, gold: player.gold - 2, builtDistricts: newDistricts };
+      let discardPile = [...state.discardPile, card];
+      let log = state.log;
+
+      for (let i = 0; i < state.players.length; i++) {
+        const p = newPlayers[i];
+        const pDistricts = [...p.builtDistricts];
+        const destroyed: string[] = [];
+        for (let d = 0; d < 2 && pDistricts.length > 0; d++) {
+          const idx = rng.int(0, pDistricts.length - 1);
+          destroyed.push(pDistricts[idx].name);
+          discardPile = [...discardPile, pDistricts[idx]];
+          pDistricts.splice(idx, 1);
+        }
+        if (destroyed.length > 0) {
+          newPlayers[i] = { ...newPlayers[i], builtDistricts: pDistricts };
+          log = [...log, { day: state.day, message: `🧨 ${p.name} потерял: ${destroyed.join(", ")}` }];
+        }
+      }
+      return { ...state, players: newPlayers, discardPile, log, rng: rng.getSeed() };
+    }
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * Apply Cult effect when a cult card is built: replaces random blue/purple district of random player.
+ */
+function applyCultOnBuild(state: GameState, playerId: string, cardId: string, rng: Rng): GameState {
+  const playerIdx = state.players.findIndex((p) => p.id === playerId);
+  if (playerIdx === -1) return state;
+  const built = state.players[playerIdx].builtDistricts.find((c) => c.id === cardId);
+  if (!built?.purpleAbility || built.purpleAbility !== "cult") return state;
+
+  // Find random player with blue or purple district
+  const candidates: { pIdx: number; dIdx: number }[] = [];
+  for (let i = 0; i < state.players.length; i++) {
+    if (i === playerIdx) continue;
+    for (let d = 0; d < state.players[i].builtDistricts.length; d++) {
+      const dist = state.players[i].builtDistricts[d];
+      if (dist.colors.includes("blue") || dist.colors.includes("purple")) {
+        candidates.push({ pIdx: i, dIdx: d });
+      }
+    }
+  }
+  if (candidates.length === 0) return state;
+
+  const pick = candidates[rng.int(0, candidates.length - 1)];
+  const target = state.players[pick.pIdx];
+  const targetDist = target.builtDistricts[pick.dIdx];
+  const newDistricts = [...target.builtDistricts];
+  // Replace with a cult copy
+  newDistricts[pick.dIdx] = {
+    ...built,
+    id: `cult-copy-${Date.now()}-${rng.int(0, 9999)}`,
+  };
+  const newPlayers = [...state.players];
+  newPlayers[pick.pIdx] = { ...target, builtDistricts: newDistricts };
+
+  return {
+    ...addLog({ ...state, players: newPlayers }, `🕯️ Секта заменила ${targetDist.name} у ${target.name}!`),
+    rng: rng.getSeed(),
+  };
 }
 
 export { currentPlayer };
