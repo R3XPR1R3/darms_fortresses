@@ -31,7 +31,7 @@ let prev: Snapshot = {
 export function animateChanges(cur: Snapshot) {
   // -- New district built by me --
   if (cur.myDistrictCount > prev.myDistrictCount) {
-    const cards = document.querySelectorAll("#my-board-area .board-districts .district-card");
+    const cards = document.querySelectorAll("#my-board .my-districts .district-card");
     if (cards.length) {
       const last = cards[cards.length - 1] as HTMLElement;
       last.style.opacity = "0";
@@ -47,7 +47,7 @@ export function animateChanges(cur: Snapshot) {
 
   // -- Gold or hand size changed → pulse stats --
   if (cur.myGold !== prev.myGold || cur.myHandSize !== prev.myHandSize) {
-    const stats = document.querySelector("#my-hero-panel .hero-panel-stats");
+    const stats = document.querySelector("#my-board .my-stats-bar");
     if (stats && prev.phase !== "") {
       animate(stats, {
         scale: [1, 1.12, 1],
@@ -72,7 +72,7 @@ export function animateChanges(cur: Snapshot) {
 
   // -- Switched to a different opponent tab --
   if (cur.oppIdx !== prev.oppIdx && prev.oppIdx !== null) {
-    const board = document.getElementById("opp-board-area");
+    const board = document.getElementById("opponent-board");
     if (board) {
       animate(board, {
         opacity: [0, 1],
@@ -85,7 +85,7 @@ export function animateChanges(cur: Snapshot) {
 
   // -- Opponent built something --
   if (cur.oppIdx === prev.oppIdx && cur.oppDistrictCount > prev.oppDistrictCount) {
-    const cards = document.querySelectorAll("#opp-board-area .board-districts .district-card");
+    const cards = document.querySelectorAll("#opponent-board .opp-districts .district-card");
     if (cards.length) {
       const last = cards[cards.length - 1] as HTMLElement;
       last.style.opacity = "0";

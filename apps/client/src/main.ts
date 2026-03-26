@@ -607,21 +607,15 @@ function ensureGameLayout() {
   board.id = "game-board";
   board.innerHTML = `
     <div id="turn-banner"></div>
-    <div id="table-center">
-      <div id="opp-board-area"></div>
-      <div id="my-board-area"></div>
-      <div id="draft-overlay"></div>
+    <div id="opponent-tabs"></div>
+    <div id="opponent-board"></div>
+    <div id="center-area">
+      <div id="draft-area"></div>
     </div>
-    <div id="opp-hero-panel"></div>
-    <div id="my-hero-panel"></div>
-    <div id="bottom-area">
-      <div id="actions-bar"></div>
-      <div id="hand-area"></div>
-    </div>
-    <div id="footer-bar">
-      <div id="log-toggle">📜 ${t("log.toggle")}</div>
-      <div id="game-log"></div>
-    </div>
+    <div id="my-board"></div>
+    <div id="ban-list"></div>
+    <div id="log-toggle">📜 ${t("log.toggle")}</div>
+    <div id="game-log"></div>
   `;
   document.body.insertBefore(board, document.body.firstChild);
 
@@ -635,13 +629,11 @@ function render() {
   if (mode === "lobby") { renderLobby(); return; }
   ensureGameLayout();
   renderTurnBanner();
-  renderOppHeroPanel();
-  renderMyHeroPanel();
-  renderOppBoardArea();
-  renderMyBoardArea();
+  renderOpponentTabs();
+  renderOpponentBoard();
   renderDraft();
-  renderActionsBar();
-  renderHandArea();
+  renderMyBoard();
+  renderBanList();
   renderLog();
   renderWinner();
 
@@ -694,7 +686,6 @@ function renderTurnBanner() {
     el.className = "turn-banner" + (myTurn ? " my-turn" : "");
     el.id = "turn-banner";
 
-    // Manage turn timer for human player
     if (myTurn) {
       startTurnTimer(activeIdx);
       const timerCls = turnTimerRemaining <= 10 ? "turn-timer timer-urgent" : "turn-timer";
@@ -727,13 +718,13 @@ function renderTurnBanner() {
   el.innerHTML = `${t("banner.day")} ${day}`;
 }
 
-/** Opponent hero panel (LEFT side) — hero portrait, companion, ban list, opp tabs */
-function renderOppHeroPanel() {
-  const el = document.getElementById("opp-hero-panel")!;
+function renderOpponentTabs() {
+  const el = document.getElementById("opponent-tabs")!;
   if (!el) return;
-  const phase = getPhase();
   const players = getPlayers();
   const myIdx = getMyIndex();
+  const activeIdx = getActiveIndex();
+  const phase = getPhase();
 
   if (phase !== "draft" && phase !== "turns" && phase !== "end") {
     el.innerHTML = "";
@@ -748,174 +739,50 @@ function renderOppHeroPanel() {
     selectedOpponentIndex = opponents[0]?.index ?? null;
   }
 
-  const activeIdx = getActiveIndex();
-  const p = selectedOpponentIndex !== null ? players[selectedOpponentIndex] : null;
-  const revealed = p ? isHeroRevealed(selectedOpponentIndex!) : false;
-
-  // Opponent tabs (compact)
-  const tabs = opponents.map((x) => {
-    const op = x.player;
+  el.innerHTML = opponents.map((x) => {
+    const p = x.player;
     const i = x.index;
     const isActive = i === activeIdx;
-    const rev = isHeroRevealed(i);
+    const revealed = isHeroRevealed(i);
     const selected = i === selectedOpponentIndex;
-    const hColor = (rev && op.hero) ? heroColor(op.hero) : "";
-    const heroLine = (rev && op.hero)
-      ? `<span class="tab-hero">${heroPortraitSmall(op.hero)}</span>`
-      : `<span class="tab-sleep">💤</span>`;
-    const tabStyle = hColor ? `style="--hero-clr:${hColor}"` : "";
+
+    let label: string;
+    let heroLine = "";
+    const hColor = (revealed && p.hero) ? heroColor(p.hero) : "";
+
+    if (revealed && p.hero) {
+      label = heroName(p.hero);
+      heroLine = `<span class="tab-hero">${heroPortraitSmall(p.hero)}</span>`;
+    } else {
+      label = tName(p.name);
+      heroLine = `<span class="tab-sleep">💤</span>`;
+    }
+
+    const stats = `<span class="tab-stats">💰${p.gold} 🏠${p.builtDistricts.length}/${WIN_DISTRICTS}</span>`;
     const arrow = isActive ? `<span class="active-arrow">▼</span>` : "";
+    const tabStyle = hColor ? `style="--hero-clr:${hColor}"` : "";
+
     return `
       <button class="opp-tab ${selected ? "active" : ""} ${isActive ? "is-current-turn" : ""}" data-opp-idx="${i}" ${tabStyle}>
-        ${arrow}${heroLine}
-        <span style="font-size:9px">${tName(op.name).slice(0, 8)}</span>
-      </button>`;
+        ${arrow}
+        ${heroLine}
+        <span>${label}</span>
+        ${stats}
+      </button>
+    `;
   }).join("");
-
-  // Hero portrait section
-  let heroSection = "";
-  if (p && revealed && p.hero) {
-    const hClr = heroColor(p.hero);
-    const heroDef = HEROES.find((h) => h.id === p.hero);
-    heroSection = `
-      <div class="hero-panel-portrait tooltip-host tooltip-left" style="--hero-clr:${hClr}">
-        ${heroPortrait(p.hero, 64)}
-        <div class="tooltip-content" style="--hero-clr:${hClr}">
-          <div class="tt-name">${heroName(p.hero)}</div>
-          <div class="tt-class">${t("class." + p.hero)} — ⚡${heroDef?.speed ?? "?"}</div>
-          <div class="tt-ability">${getAbilityDescription(p.hero)}</div>
-          <div class="tt-desc">${t("ability_desc." + p.hero)}</div>
-        </div>
-      </div>
-      <div class="hero-panel-name" style="--hero-clr:${hClr}">${heroName(p.hero)}</div>
-      <div class="hero-panel-speed">⚡ ${heroDef?.speed ?? "?"}</div>
-    `;
-  } else if (p) {
-    heroSection = `
-      <div class="hero-panel-sleep">💤</div>
-      <div class="hero-panel-name" style="color:#888">${tName(p.name)}</div>
-      <div class="hero-panel-speed">${t("opp.role_hidden")}</div>
-    `;
-  }
-
-  // Stats
-  const stats = p ? `
-    <div class="hero-panel-stats">
-      <div class="stat-row">💰 ${p.gold}</div>
-      <div class="stat-row">🃏 ${p.hand ? p.hand.length : p.handSize}</div>
-      <div class="stat-row">🏠 ${p.builtDistricts.length}/${WIN_DISTRICTS}</div>
-      ${p.finishedFirst ? `<div class="stat-row">⭐ ${t("my.first")}</div>` : ""}
-    </div>
-  ` : "";
-
-  // Companion
-  const companion = (p && p.companion) ? `
-    <div class="hero-panel-companion">
-      <div class="companion-name">🧑‍🌾 ${COMPANIONS.find((c) => c.id === p.companion)?.name ?? p.companion}</div>
-    </div>
-  ` : "";
-
-  // Ban list
-  const draft = getDraft();
-  let banHtml = "";
-  if (phase === "turns" || phase === "end") {
-    const bans = draft?.faceUpBans ?? [];
-    if (bans.length > 0) {
-      const banIcons = bans.map((h) => `<span class="ban-up">${heroPortraitSmall(h)}</span>`).join(" ");
-      banHtml = `
-        <hr class="hero-panel-divider">
-        <div style="font-size:10px;color:#888;text-align:center;">
-          ${t("ban.banned")}<br>${banIcons}<br>+ ${draft?.hiddenBanCount ?? 0} ${t("ban.hidden")}
-        </div>
-      `;
-    }
-  }
-
-  el.innerHTML = `
-    <div class="hero-panel-label">${t("opp.label")}</div>
-    <div class="opp-tabs-row">${tabs}</div>
-    ${heroSection}
-    ${stats}
-    ${companion}
-    ${banHtml}
-  `;
 
   el.querySelectorAll(".opp-tab").forEach((btn) => {
     btn.addEventListener("click", () => {
       selectedOpponentIndex = parseInt((btn as HTMLElement).dataset.oppIdx!, 10);
-      renderOppHeroPanel();
-      renderOppBoardArea();
+      renderOpponentTabs();
+      renderOpponentBoard();
     });
   });
 }
 
-/** My hero panel (RIGHT side) — hero portrait, companion, resources */
-function renderMyHeroPanel() {
-  const el = document.getElementById("my-hero-panel")!;
-  if (!el) return;
-  const phase = getPhase();
-  const players = getPlayers();
-  const me = players[getMyIndex()];
-
-  if (!me || (phase !== "draft" && phase !== "turns" && phase !== "end")) {
-    el.innerHTML = "";
-    return;
-  }
-
-  let heroSection = "";
-  if (me.hero) {
-    const hClr = heroColor(me.hero);
-    const heroDef = HEROES.find((h) => h.id === me.hero);
-    heroSection = `
-      <div class="hero-panel-portrait tooltip-host tooltip-right" style="--hero-clr:${hClr}">
-        ${heroPortrait(me.hero, 64)}
-        <div class="tooltip-content" style="--hero-clr:${hClr}">
-          <div class="tt-name">${heroName(me.hero)}</div>
-          <div class="tt-class">${t("class." + me.hero)} — ⚡${heroDef?.speed ?? "?"}</div>
-          <div class="tt-ability">${getAbilityDescription(me.hero)}</div>
-          <div class="tt-desc">${t("ability_desc." + me.hero)}</div>
-        </div>
-      </div>
-      <div class="hero-panel-name" style="--hero-clr:${hClr}">${heroName(me.hero)}</div>
-      <div class="hero-panel-speed">⚡ ${heroDef?.speed ?? "?"}</div>
-      <div class="hero-panel-ability">${getAbilityDescription(me.hero)}</div>
-    `;
-  }
-
-  const hand = getMyHand();
-  const stats = `
-    <div class="hero-panel-stats">
-      <div class="stat-row">💰 ${me.gold}</div>
-      <div class="stat-row">🃏 ${hand.length}</div>
-      <div class="stat-row">🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</div>
-      ${me.finishedFirst ? `<div class="stat-row">⭐ ${t("my.first")}</div>` : ""}
-    </div>
-  `;
-
-  const companion = (me.companion) ? `
-    <div class="hero-panel-companion tooltip-host tooltip-right">
-      <div class="companion-name">🧑‍🌾 ${COMPANIONS.find((c) => c.id === me.companion)?.name ?? me.companion}</div>
-      <div style="font-size:9px;color:#888">${COMPANIONS.find((c) => c.id === me.companion)?.description ?? ""}</div>
-      ${!me.companionUsed && isMyTurn() && phase === "turns" ? `<button class="btn btn-secondary btn-companion-use" style="margin-top:4px;font-size:10px;padding:4px 8px;">${t("my.ability")}</button>` : ""}
-    </div>
-  ` : "";
-
-  el.innerHTML = `
-    <div class="hero-panel-label">${t("my.label")}</div>
-    ${heroSection}
-    <hr class="hero-panel-divider">
-    ${stats}
-    ${companion}
-  `;
-
-  el.querySelector(".btn-companion-use")?.addEventListener("click", () => {
-    dispatch({ type: "use_companion", playerId: getMyId() });
-  });
-}
-
-/** Opponent districts board (center top) */
-function renderOppBoardArea() {
-  const el = document.getElementById("opp-board-area")!;
+function renderOpponentBoard() {
+  const el = document.getElementById("opponent-board")!;
   if (!el) return;
   const phase = getPhase();
 
@@ -928,90 +795,218 @@ function renderOppBoardArea() {
   const p = players[selectedOpponentIndex];
   if (!p) { el.innerHTML = ""; return; }
 
+  const revealed = isHeroRevealed(selectedOpponentIndex);
+
+  // Hero display with tooltip
+  let heroSection: string;
+  if (revealed && p.hero) {
+    const heroDef = HEROES.find((h) => h.id === p.hero);
+    const hClr = heroColor(p.hero);
+    heroSection = `
+      <div class="opp-hero-display tooltip-host tooltip-below" style="--hero-clr:${hClr}">
+        <div class="hero-icon-large">${heroPortrait(p.hero, 64)}</div>
+        <div class="hero-name">${heroName(p.hero)}</div>
+        <div class="hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
+        <div class="tooltip-content" style="--hero-clr:${hClr}">
+          <div class="tt-name">${heroName(p.hero)}</div>
+          <div class="tt-class">${t("class." + p.hero)} — ⚡${heroDef?.speed ?? "?"}</div>
+          <div class="tt-ability">${getAbilityDescription(p.hero)}</div>
+          <div class="tt-desc">${t("ability_desc." + p.hero)}</div>
+        </div>
+      </div>
+    `;
+  } else {
+    heroSection = `
+      <div class="opp-hero-display">
+        <div class="sleep-display">💤</div>
+        <div class="hero-name" style="color: #888;">${tName(p.name)}</div>
+        <div class="hero-speed">${t("opp.role_hidden")}</div>
+      </div>
+    `;
+  }
+
+  // Stats bar
+  const statsBar = `
+    <div class="opp-stats-bar">
+      <span>💰 ${p.gold}</span>
+      <span>🃏 ${p.hand ? p.hand.length : p.handSize}</span>
+      <span>🏠 ${p.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      ${p.finishedFirst ? `<span>⭐ ${t("my.first")}</span>` : ""}
+    </div>
+  `;
+
+  // Companion
+  const companionHtml = p.companion ? `
+    <div class="opp-companion">🧑‍🌾 ${COMPANIONS.find((c) => c.id === p.companion)?.name ?? p.companion}</div>
+  ` : "";
+
+  // Districts
   const districts = p.builtDistricts.map((d) => districtCardHtml(d)).join("");
   const districtsSection = districts
-    ? `<div class="board-districts">${districts}</div>`
-    : `<div style="color:#666;font-size:11px;text-align:center;padding:12px;">${t("opp.no_districts")}</div>`;
+    ? `<div class="opp-districts">${districts}</div>`
+    : `<div class="opp-districts" style="color:#666;font-size:12px;">${t("opp.no_districts")}</div>`;
 
   const assassinated = p.assassinated
     ? `<div class="opp-assassinated">💀 ${t("opp.killed_today")}</div>`
     : "";
 
-  el.innerHTML = `
-    <div class="board-label">${tName(p.name)}</div>
-    ${districtsSection}
-    ${assassinated}
-  `;
+  el.innerHTML = heroSection + statsBar + companionHtml + districtsSection + assassinated;
 }
 
-/** My districts board (center bottom) */
-function renderMyBoardArea() {
-  const el = document.getElementById("my-board-area")!;
+function renderMyBoard() {
+  const el = document.getElementById("my-board")!;
   if (!el) return;
   const phase = getPhase();
   const players = getPlayers();
   const me = players[getMyIndex()];
   if (!me) { el.innerHTML = ""; return; }
 
-  if (phase !== "draft" && phase !== "turns" && phase !== "end") {
+  if (phase === "setup") {
     el.innerHTML = "";
     return;
   }
 
-  const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
-  const districtsSection = districts
-    ? `<div class="board-districts">${districts}</div>`
-    : `<div style="color:#666;font-size:11px;text-align:center;padding:12px;"></div>`;
-
-  el.innerHTML = `
-    <div class="board-label">${tName(me.name)}</div>
-    ${districtsSection}
-  `;
-}
-
-/** Actions bar (below boards) */
-function renderActionsBar() {
-  const el = document.getElementById("actions-bar")!;
-  if (!el) return;
-  const phase = getPhase();
-  const players = getPlayers();
-  const me = players[getMyIndex()];
-  if (!me || phase !== "turns") {
-    el.innerHTML = "";
+  // During draft — show simplified board (stats + districts only, no hand/actions)
+  if (phase === "draft") {
+    const draftStats = `
+      <div class="my-stats-bar">
+        <span>💰 ${me.gold}</span>
+        <span>🃏 ${me.hand ? me.hand.length : me.handSize}</span>
+        <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      </div>
+    `;
+    const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
+    const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
+    el.innerHTML = draftStats + districtsSection;
     return;
   }
 
   const myTurnNow = isMyTurn();
+  const hand = getMyHand();
 
-  if (me.assassinated) {
-    el.innerHTML = `<p class="hint">💀 ${t("my.killed_skip")}</p>`;
-    return;
+  // My hero row with tooltip
+  let heroRow = "";
+  if (me.hero) {
+    const heroDef = HEROES.find((h) => h.id === me.hero);
+    const abilityTag = heroDef
+      ? `<span class="my-hero-ability-tag">${getAbilityDescription(me.hero)}</span>`
+      : "";
+    const myHClr = heroColor(me.hero);
+    heroRow = `
+      <div class="my-hero-row tooltip-host tooltip-above" style="--hero-clr:${myHClr}">
+        <div class="hero-icon-large">${heroPortrait(me.hero, 48)}</div>
+        <div class="my-hero-info">
+          <div class="my-hero-name">${heroName(me.hero)}</div>
+          <div class="my-hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
+          ${abilityTag}
+        </div>
+        <div class="tooltip-content" style="--hero-clr:${myHClr}">
+          <div class="tt-name">${heroName(me.hero)}</div>
+          <div class="tt-class">${t("class." + me.hero)} — ⚡${heroDef?.speed ?? "?"}</div>
+          <div class="tt-ability">${getAbilityDescription(me.hero)}</div>
+          <div class="tt-desc">${t("ability_desc." + me.hero)}</div>
+        </div>
+      </div>
+    `;
   }
-  if (!myTurnNow) {
-    el.innerHTML = `<p class="hint">${t("my.waiting")}</p>`;
-    return;
+
+  // Stats bar
+  const statsBar = `
+    <div class="my-stats-bar">
+      <span>💰 ${me.gold}</span>
+      <span>🃏 ${hand.length}</span>
+      <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      ${me.finishedFirst ? `<span>⭐ ${t("my.first")}</span>` : ""}
+    </div>
+  `;
+
+  // Companion section
+  let companionHtml = "";
+  if (me.companion) {
+    const cDef = COMPANIONS.find((c) => c.id === me.companion);
+    companionHtml = `
+      <div class="my-companion">
+        <span class="companion-name">🧑‍🌾 ${cDef?.name ?? me.companion}</span>
+        <span style="font-size:9px;color:#888">${cDef?.description ?? ""}</span>
+      </div>
+    `;
   }
 
-  const buttons: string[] = [];
+  // My districts
+  const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
+  const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
 
-  if (!me.abilityUsed && me.hero) {
-    const hasActiveAbility = [HeroId.Assassin, HeroId.Thief, HeroId.Sorcerer, HeroId.General].includes(me.hero);
-    if (hasActiveAbility) {
-      buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroPortraitSmall(me.hero)} ${t("my.ability")}</button>`);
+  // Hand
+  const canBuild = myTurnNow && me.buildsRemaining > 0 && me.incomeTaken;
+  let handSection = "";
+  if (hand.length > 0 && phase !== "end") {
+    const cards = hand.map((c) => {
+      const affordable = me.gold >= c.cost;
+      const duplicate = me.builtDistricts.some((d) => d.name === c.name);
+      const buildable = canBuild && affordable && !duplicate;
+      const cs = colorStyle(c.colors);
+      const texUrl = buildingTextureUrl(c);
+      return `
+        <div class="hand-card ${cs.cls}" style="${cs.style}">
+          <img class="card-texture" src="${texUrl}" alt="" />
+          <div class="card-cost">${c.cost}</div>
+          <div class="card-name-text">${tDistrict(c.name)}</div>
+          ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : ""}
+        </div>
+      `;
+    }).join("");
+    handSection = `
+      <div id="my-hand">
+        <h3>${t("my.hand")}</h3>
+        <div class="hand-cards">${cards}</div>
+      </div>
+    `;
+  }
+
+  // Actions
+  let actionsSection = "";
+  if (phase === "turns") {
+    if (me.assassinated) {
+      actionsSection = `<div id="my-actions"><p class="hint">💀 ${t("my.killed_skip")}</p></div>`;
+    } else if (!myTurnNow) {
+      actionsSection = `<div id="my-actions"><p class="hint">${t("my.waiting")}</p></div>`;
     } else {
-      buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ ${t("my.passive")}</button>`);
+      const buttons: string[] = [];
+
+      if (!me.abilityUsed && me.hero) {
+        const hasActiveAbility = [HeroId.Assassin, HeroId.Thief, HeroId.Sorcerer, HeroId.General].includes(me.hero);
+        if (hasActiveAbility) {
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroPortraitSmall(me.hero)} ${t("my.ability")}</button>`);
+        } else {
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ ${t("my.passive")}</button>`);
+        }
+      }
+
+      if (!me.companionUsed && me.companion) {
+        const cDef = COMPANIONS.find((c) => c.id === me.companion);
+        buttons.push(`<button class="btn btn-secondary" id="btn-companion">🧑‍🌾 ${cDef?.name ?? me.companion}</button>`);
+      }
+
+      if (!me.incomeTaken) {
+        buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
+        buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
+      }
+
+      buttons.push(`<button class="btn btn-primary" id="btn-end">${t("my.end_turn")} ➡</button>`);
+      actionsSection = `<div id="my-actions">${buttons.join("")}</div>`;
     }
   }
 
-  if (!me.incomeTaken) {
-    buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
-    buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
-  }
+  el.innerHTML = heroRow + statsBar + companionHtml + districtsSection + handSection + actionsSection;
 
-  buttons.push(`<button class="btn btn-primary" id="btn-end">${t("my.end_turn")} ➡</button>`);
-
-  el.innerHTML = buttons.join("");
-
+  // Wire up events
+  el.querySelectorAll("[data-build]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cardId = (btn as HTMLElement).dataset.build!;
+      dispatch({ type: "build", playerId: getMyId(), cardId });
+    });
+  });
   document.getElementById("btn-gold")?.addEventListener("click", () => {
     dispatch({ type: "income", playerId: getMyId(), choice: "gold" });
   });
@@ -1027,53 +1022,8 @@ function renderActionsBar() {
   document.getElementById("btn-ability-passive")?.addEventListener("click", () => {
     dispatch({ type: "ability", playerId: getMyId(), ability: { hero: me.hero! } as AbilityPayload });
   });
-}
-
-/** Hand cards area (below actions) */
-function renderHandArea() {
-  const el = document.getElementById("hand-area")!;
-  if (!el) return;
-  const phase = getPhase();
-  const players = getPlayers();
-  const me = players[getMyIndex()];
-  if (!me || phase === "end" || phase === "setup") {
-    el.innerHTML = "";
-    return;
-  }
-
-  const hand = getMyHand();
-  if (hand.length === 0) {
-    el.innerHTML = "";
-    return;
-  }
-
-  const myTurnNow = isMyTurn();
-  const canBuild = myTurnNow && me.buildsRemaining > 0 && me.incomeTaken && phase === "turns";
-
-  const cards = hand.map((c) => {
-    const affordable = me.gold >= c.cost;
-    const duplicate = me.builtDistricts.some((d) => d.name === c.name);
-    const buildable = canBuild && affordable && !duplicate;
-    const cs = colorStyle(c.colors);
-    const texUrl = buildingTextureUrl(c);
-    return `
-      <div class="hand-card ${cs.cls}" style="${cs.style}">
-        <img class="card-texture" src="${texUrl}" alt="" />
-        <div class="card-cost">${c.cost}</div>
-        <div class="card-name-text">${tDistrict(c.name)}</div>
-        ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : ""}
-      </div>
-    `;
-  }).join("");
-
-  el.innerHTML = cards;
-
-  el.querySelectorAll("[data-build]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const cardId = (btn as HTMLElement).dataset.build!;
-      dispatch({ type: "build", playerId: getMyId(), cardId });
-    });
+  document.getElementById("btn-companion")?.addEventListener("click", () => {
+    dispatch({ type: "use_companion", playerId: getMyId() });
   });
 }
 
@@ -1153,19 +1103,23 @@ function stopTurnTimer() {
 }
 
 function renderDraft() {
-  const el = document.getElementById("draft-overlay")!;
+  const el = document.getElementById("draft-area")!;
   if (!el) return;
   const phase = getPhase();
   const draft = getDraft();
 
-  if (phase !== "draft") {
+  if (phase !== "draft" && phase !== "turns") {
     el.innerHTML = "";
-    el.classList.remove("show");
     stopDraftTimer();
     return;
   }
 
-  el.classList.add("show");
+  // During turns phase, bans are rendered in #ban-list
+  if (phase === "turns") {
+    stopDraftTimer();
+    el.innerHTML = "";
+    return;
+  }
 
   if (!draft) {
     el.innerHTML = "";
@@ -1270,7 +1224,6 @@ function renderDraft() {
   }
 }
 
-// Old renderMyBoard removed — replaced by renderMyHeroPanel, renderMyBoardArea, renderActionsBar, renderHandArea
 
 function getAbilityDescription(heroId: HeroId): string {
   switch (heroId) {
@@ -1432,7 +1385,21 @@ function renderLog() {
   el.scrollTop = el.scrollHeight;
 }
 
-// Old renderBanList removed — bans now shown in renderOppHeroPanel
+function renderBanList() {
+  const el = document.getElementById("ban-list")!;
+  if (!el) return;
+  const phase = getPhase();
+  const draft = getDraft();
+
+  if ((phase === "turns" || phase === "end") && draft) {
+    const bans = draft.faceUpBans.map((h) =>
+      `<span class="ban-up">${heroPortraitSmall(h)} ${heroName(h)}</span>`,
+    ).join(", ");
+    el.innerHTML = `${t("ban.banned")}${bans} + ${draft.hiddenBanCount} ${t("ban.hidden")}`;
+  } else {
+    el.innerHTML = "";
+  }
+}
 
 function renderWinner() {
   const overlay = document.getElementById("winner-overlay")!;
