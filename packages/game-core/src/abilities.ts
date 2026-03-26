@@ -121,6 +121,48 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
     }
   }
 
+  // Knight: takes 1 gold from richest, gives to poorest
+  if (cp.companion === CompanionId.Knight && !cp.companionDisabled) {
+    let richestIdx = -1, poorestIdx = -1;
+    let maxGold = -1, minGold = Infinity;
+    for (let j = 0; j < newPlayers.length; j++) {
+      if (newPlayers[j].gold > maxGold) { maxGold = newPlayers[j].gold; richestIdx = j; }
+      if (newPlayers[j].gold < minGold) { minGold = newPlayers[j].gold; poorestIdx = j; }
+    }
+    if (richestIdx !== -1 && poorestIdx !== -1 && richestIdx !== poorestIdx && maxGold > 0) {
+      newPlayers[richestIdx] = { ...newPlayers[richestIdx], gold: newPlayers[richestIdx].gold - 1 };
+      newPlayers[poorestIdx] = { ...newPlayers[poorestIdx], gold: newPlayers[poorestIdx].gold + 1 };
+      log = addLog({ ...state, log }, `${cp.name} — рыцарь: ${newPlayers[richestIdx].name} −1💰 → ${newPlayers[poorestIdx].name} +1💰`);
+    }
+  }
+
+  // Nobility: richest gets +1 card, non-richest get -1 card -1 gold
+  if (cp.companion === CompanionId.Nobility && !cp.companionDisabled) {
+    let maxGold = -1;
+    let richestIdx = -1;
+    for (let j = 0; j < newPlayers.length; j++) {
+      if (newPlayers[j].gold > maxGold) { maxGold = newPlayers[j].gold; richestIdx = j; }
+    }
+    if (richestIdx !== -1) {
+      // Richest gets +1 card
+      if (newDeck.length > 0) {
+        const drawn = newDeck.splice(0, 1);
+        newPlayers[richestIdx] = { ...newPlayers[richestIdx], hand: [...newPlayers[richestIdx].hand, ...drawn] };
+      }
+      // Non-richest lose 1 card and 1 gold
+      for (let j = 0; j < newPlayers.length; j++) {
+        if (j === richestIdx) continue;
+        const p = newPlayers[j];
+        const newHand = [...p.hand];
+        if (newHand.length > 0) {
+          newHand.splice(rng.int(0, newHand.length - 1), 1);
+        }
+        newPlayers[j] = { ...p, hand: newHand, gold: Math.max(0, p.gold - 1) };
+      }
+      log = addLog({ ...state, log }, `${cp.name} — знать: ${newPlayers[richestIdx].name} +1🃏, остальные −1🃏 −1💰`);
+    }
+  }
+
   return {
     ...state,
     players: newPlayers,
@@ -175,6 +217,21 @@ export function useAbility(
             newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: [] };
             log = addLog({ ...state, log }, `${player.name} совершил убийство и забрал ${victim.hand.length} карт (мародёр)!`);
             break;
+          }
+        }
+
+        // Gravedigger companion: gain victim's passive color income
+        if (player.companion === CompanionId.Gravedigger && !player.companionDisabled) {
+          const victim = state.players[targetIdx];
+          const victimHeroDef = victim.hero ? HEROES.find((h) => h.id === victim.hero) : null;
+          if (victimHeroDef?.color) {
+            const colorCount = player.builtDistricts.filter((d) => d.colors.includes(victimHeroDef.color!)).length;
+            if (colorCount > 0) {
+              newPlayers[playerIdx] = { ...newPlayers[playerIdx], gold: (newPlayers[playerIdx].gold ?? player.gold) + colorCount };
+              log = addLog({ ...state, log }, `${player.name} совершил убийство и получил +${colorCount}💰 (могильщик)!`);
+              newPlayers[playerIdx] = { ...newPlayers[playerIdx], abilityUsed: true };
+              break;
+            }
           }
         }
 
@@ -244,9 +301,11 @@ export function useAbility(
       const newTargetDistricts = [...target.builtDistricts];
       const newHp = card.hp - damage;
 
+      let newDiscardPile = state.discardPile;
       if (newHp < 1) {
-        // District destroyed
+        // District destroyed — add to discard pile
         newTargetDistricts.splice(cardIdx, 1);
+        newDiscardPile = [...state.discardPile, card];
         log = addLog({ ...state, log }, `${player.name} (Генерал) разрушил ${card.name} у ${target.name} за ${damage} золота`);
       } else {
         // District damaged but survives
@@ -256,7 +315,8 @@ export function useAbility(
 
       newPlayers[playerIdx] = { ...player, gold: player.gold - damage, abilityUsed: true };
       newPlayers[targetIdx] = { ...target, builtDistricts: newTargetDistricts };
-      break;
+      newDeck = state.deck; // preserve deck
+      return { ...state, players: newPlayers, deck: newDeck, discardPile: newDiscardPile, log };
     }
     // Passive abilities — no active action needed
     case "king":

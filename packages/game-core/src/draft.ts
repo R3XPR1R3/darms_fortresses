@@ -108,8 +108,9 @@ function canPickCompanion(companionId: CompanionId, heroColor: string | null): b
  * Generate a shared pool of 3 companion choices for the sequential draft.
  * Shuffles all 16 companions and picks 3 unique ones.
  */
-function generateCompanionPool(rng: Rng): CompanionId[] {
-  const allCompanions = COMPANIONS.map((c) => c.id);
+function generateCompanionPool(rng: Rng, banned: CompanionId[] = []): CompanionId[] {
+  const excluded = new Set(banned);
+  const allCompanions = COMPANIONS.map((c) => c.id).filter((id) => !excluded.has(id));
   const shuffled = [...allCompanions];
   rng.shuffle(shuffled);
   return shuffled.slice(0, 3);
@@ -122,8 +123,9 @@ function pickReplacementCompanion(
   currentPool: CompanionId[],
   alreadyPicked: CompanionId[],
   rng: Rng,
+  banned: CompanionId[] = [],
 ): CompanionId | null {
-  const excluded = new Set([...currentPool, ...alreadyPicked]);
+  const excluded = new Set([...currentPool, ...alreadyPicked, ...banned]);
   const available = COMPANIONS.map((c) => c.id).filter((id) => !excluded.has(id));
   if (available.length === 0) return null;
   rng.shuffle(available);
@@ -187,8 +189,27 @@ export function draftPick(
       finalFaceDown = remaining[1] ? [remaining[1]] : [];
     }
 
-    // Move to companion draft phase
-    const companionPool = generateCompanionPool(rng);
+    // Skip companion draft before day 4
+    if (state.day < 4) {
+      return {
+        ...state,
+        players: newPlayers,
+        draft: {
+          ...draft,
+          availableHeroes: [],
+          faceUpBans: [...draft.faceUpBans, ...finalFaceUp],
+          faceDownBans: [...draft.faceDownBans, ...finalFaceDown],
+          currentStep: draft.draftOrder.length, // mark draft as done
+          companionChoices: null,
+          draftPhase: "hero",
+        },
+        phase: "turns",
+        rng: rng.getSeed(),
+      };
+    }
+
+    // Move to companion draft phase (day 4+)
+    const companionPool = generateCompanionPool(rng, state.bannedCompanions);
 
     return {
       ...state,
@@ -258,7 +279,7 @@ export function companionPick(
 
   // Remove picked companion from pool and add a replacement
   let newPool = pool.filter((c) => c !== companionId);
-  const replacement = pickReplacementCompanion(newPool, alreadyPicked, rng);
+  const replacement = pickReplacementCompanion(newPool, alreadyPicked, rng, state.bannedCompanions);
   if (replacement) newPool.push(replacement);
 
   const nextStep = draft.currentStep + 1;

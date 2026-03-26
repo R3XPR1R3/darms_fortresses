@@ -1,5 +1,5 @@
-import type { GameState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId } from "@darms/shared-types";
+import type { GameState, DistrictCard } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
 import { addRandomColor } from "./deck.js";
@@ -34,7 +34,7 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
   });
 
   // Reset per-turn state
-  const newPlayers = state.players.map((p) => ({
+  let newPlayers = state.players.map((p) => ({
     ...p,
     incomeTaken: false,
     buildsRemaining: p.hero === HeroId.Architect ? 3 : 1,
@@ -42,11 +42,32 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
     companionUsed: false,
   }));
 
+  let log = state.log;
+
+  // Jester (yellow hero): shuffles all players' hands at start of day
+  const jesterPlayer = newPlayers.find(
+    (p) => p.companion === CompanionId.Jester && !p.companionDisabled
+      && HEROES.find((h) => h.id === p.hero)?.color === "yellow",
+  );
+  if (jesterPlayer) {
+    const allCards = newPlayers.flatMap((p) => p.hand);
+    rng.shuffle(allCards);
+    let offset = 0;
+    newPlayers = newPlayers.map((p) => {
+      const handSize = p.hand.length;
+      const newHand = allCards.slice(offset, offset + handSize);
+      offset += handSize;
+      return { ...p, hand: newHand };
+    });
+    log = [...log, { day: state.day, message: `${jesterPlayer.name} — шут: все карты перемешаны!` }];
+  }
+
   let newState: GameState = {
     ...state,
     players: newPlayers,
     turnOrder: indexed.map((p) => p.idx),
     currentTurnIndex: 0,
+    log,
     rng: rng.getSeed(),
   };
 
@@ -154,6 +175,9 @@ export function buildDistrict(
 
   const card = player.hand[cardIdx];
 
+  // Cannot build flame cards
+  if (card.name === FLAME_CARD_NAME) return null;
+
   // Calculate effective cost
   let effectiveCost = card.cost;
   const heroColor = HEROES.find((h) => h.id === player.hero)?.color ?? null;
@@ -169,6 +193,16 @@ export function buildDistrict(
   }
 
   if (player.gold < effectiveCost) return null;
+
+  // SunFanatic: only blue districts allowed (blue hero)
+  if (
+    player.companion === CompanionId.SunFanatic
+    && !player.companionDisabled
+    && heroColor === "blue"
+    && !card.colors.includes("blue")
+  ) {
+    return null;
+  }
 
   // Duplicate check — Official (red hero) allows duplicates
   const allowDuplicates =
@@ -287,6 +321,28 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
 
     nextIdx++;
   }
+
+  // Flame spreading: for each player, duplicate flame cards in hand at end of turn
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i];
+    const flameCount = p.hand.filter((c) => c.name === FLAME_CARD_NAME).length;
+    if (flameCount > 0) {
+      const newFlames: DistrictCard[] = [];
+      for (let f = 0; f < flameCount; f++) {
+        newFlames.push({
+          id: `flame-${Date.now()}-${i}-${f}-${rng.int(0, 9999)}`,
+          name: FLAME_CARD_NAME,
+          cost: 0,
+          hp: 0,
+          colors: ["red"],
+        });
+      }
+      players = [...players];
+      players[i] = { ...p, hand: [...p.hand, ...newFlames] };
+      log = [...log, { day: state.day, message: `🔥 Пламя множится у ${p.name}! (+${flameCount})` }];
+    }
+  }
+
   state = { ...state, players, log };
 
   if (nextIdx >= turnOrder.length) {

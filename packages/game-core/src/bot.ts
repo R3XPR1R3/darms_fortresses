@@ -165,6 +165,21 @@ function pickBestCompanion(
       case CompanionId.Marauder: score += player.hero === HeroId.Assassin ? 6 : 1; break;
       case CompanionId.Bard: score += 3; break;
       case CompanionId.Alchemist: score += player.builtDistricts.length >= 3 ? 4 : 1; break;
+      // Wave 2
+      case CompanionId.Cannoneer: score += player.hand.length >= 3 ? 4 : 1; break;
+      case CompanionId.Reconstructor: score += state.discardPile.length > 0 ? 4 : 2; break;
+      case CompanionId.DubiousDealer: score += 1; break; // debuff-ish, low priority
+      case CompanionId.SorcererApprentice: score += state.discardPile.length > 0 ? 3 : 1; break;
+      case CompanionId.StrangeMerchant: score += player.hand.length >= 3 ? 3 : 1; break;
+      case CompanionId.Gravedigger: score += player.hero === HeroId.Assassin ? 5 : 1; break;
+      case CompanionId.Jester: score += 1; break; // debuff
+      case CompanionId.Pyromancer: score += 0; break; // debuff
+      case CompanionId.SunFanatic: score += 2; break;
+      case CompanionId.Sniper: score += 4; break;
+      case CompanionId.Knight: score += 3; break;
+      case CompanionId.Fisherman: score += player.gold >= 2 ? 4 : 2; break;
+      case CompanionId.UnluckyMage: score += 0; break; // debuff
+      case CompanionId.Nobility: score += player.gold >= 4 ? 4 : 1; break;
     }
 
     if (score > bestScore) {
@@ -238,10 +253,59 @@ function pickCompanionAction(
     case CompanionId.Alchemist: {
       const upgradeable = player.builtDistricts.filter((d) => d.cost < 5);
       if (upgradeable.length === 0) return null;
-      // Pick cheapest to upgrade
       const target = [...upgradeable].sort((a, b) => a.cost - b.cost)[0];
       return { type: "use_companion", playerId: player.id, targetCardId: target.id };
     }
+
+    case CompanionId.Cannoneer: {
+      // Burn cheapest non-flame card from hand
+      const burnable = player.hand.filter((c) => c.name !== "🔥 Пламя");
+      if (burnable.length === 0) return null;
+      const cheapest = [...burnable].sort((a, b) => a.cost - b.cost)[0];
+      return { type: "use_companion", playerId: player.id, targetCardId: cheapest.id };
+    }
+
+    case CompanionId.Reconstructor: {
+      if (player.gold < 2 || state.discardPile.length === 0) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.DubiousDealer:
+      return { type: "use_companion", playerId: player.id };
+
+    case CompanionId.SorcererApprentice: {
+      if (player.gold < 2 || state.discardPile.length === 0) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.StrangeMerchant: {
+      // Sell most expensive card
+      if (player.hand.length === 0) return null;
+      const expensive = [...player.hand].sort((a, b) => b.cost - a.cost)[0];
+      return { type: "use_companion", playerId: player.id, targetCardId: expensive.id };
+    }
+
+    case CompanionId.SunFanatic: {
+      if (player.gold < 2) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.Sniper: {
+      const target = opponents.filter((p) => p.companion)
+        .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length)[0];
+      if (!target) return null;
+      return { type: "use_companion", playerId: player.id, targetPlayerId: target.id };
+    }
+
+    case CompanionId.Fisherman: {
+      if (player.gold < 1) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    // Bots avoid debuff companions (Pyromancer, UnluckyMage)
+    case CompanionId.Pyromancer:
+    case CompanionId.UnluckyMage:
+      return null;
 
     default:
       return null;

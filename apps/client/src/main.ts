@@ -1435,6 +1435,102 @@ function showCompanionModal(companionId: CompanionId) {
       break;
     }
 
+    case CompanionId.Cannoneer: {
+      title.textContent = `💥 Канонир — выберите карту для сжигания`;
+      const hand = getMyHand().filter((c) => c.name !== "🔥 Пламя");
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Сжигает карту, стреляет по случайному кварталу противника (HP −2)</p>
+        ${hand.length > 0 ? hand.map((c) =>
+          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет карт</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.StrangeMerchant: {
+      title.textContent = `🧳 Странный торговец — продайте карту`;
+      const hand = getMyHand();
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Сбросьте карту и получите её стоимость в золоте</p>
+        ${hand.length > 0 ? hand.map((c) =>
+          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет карт</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Pyromancer: {
+      title.textContent = `🔥 Пиромант — выберите карту для поджога`;
+      const hand = getMyHand().filter((c) => c.name !== "🔥 Пламя");
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Карта превращается в 🔥Пламя. В конце хода пламя множится!</p>
+        ${hand.length > 0 ? hand.map((c) =>
+          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет карт</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.UnluckyMage: {
+      title.textContent = `💫 Неудачный маг — выберите карту`;
+      const hand = getMyHand();
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Все ваши постройки превратятся в эту карту!</p>
+        ${hand.length > 0 ? hand.map((c) =>
+          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет карт</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Sniper: {
+      title.textContent = `🎯 Снайпер — выберите цель`;
+      const targets = players.filter((_p, i) => i !== myIdx && _p.companion);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Навсегда убирает компаньона противника из пула</p>
+        ${targets.length > 0 ? targets.map((p) => {
+          const cName = companionDef(p.companion)?.name ?? "";
+          return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
+        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
+          close();
+        });
+      });
+      break;
+    }
+
     default:
       // No targeting needed
       dispatch({ type: "use_companion", playerId: getMyId() });

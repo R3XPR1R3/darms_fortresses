@@ -23,6 +23,8 @@ export interface GameState {
   rng: number; // seed for deterministic randomness
   /** Global Bard usage count — each use increases cost by 1 */
   bardUsageCount: number;
+  /** Companions permanently removed from the draft pool (Sniper, leavesPool) */
+  bannedCompanions: CompanionId[];
 }
 
 export interface LogEntry {

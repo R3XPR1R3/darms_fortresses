@@ -55,5 +55,6 @@ export function createMatch(
     log: [],
     rng: rng.getSeed(),
     bardUsageCount: 0,
+    bannedCompanions: [],
   };
 }
