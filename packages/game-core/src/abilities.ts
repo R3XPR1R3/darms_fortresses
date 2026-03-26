@@ -1,5 +1,5 @@
 import type { GameState, AbilityPayload, PlayerState, LogEntry } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 function addLog(state: GameState, message: string): LogEntry[] {
@@ -13,6 +13,7 @@ function findPlayerByHero(players: PlayerState[], heroId: HeroId): number {
 /**
  * Apply passive hero bonuses at the start of a player's turn.
  * Called automatically when a player begins their turn.
+ * Also applies passive companion bonuses (Artist, Royal Guard).
  */
 export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rng): GameState {
   const player = state.players[playerIdx];
@@ -35,7 +36,6 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
       gold: state.players[thiefIdx].gold + stolenGold,
     };
     log = addLog({ ...state, log }, `${state.players[thiefIdx].name} украл ${stolenGold} золота у ${player.name}`);
-    // Re-read player after modification
   }
 
   const p = newPlayers[playerIdx];
@@ -99,6 +99,28 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
       break;
   }
 
+  // --- Passive companion bonuses ---
+  const cp = newPlayers[playerIdx];
+
+  // Artist: all 4 colors on table → +4 gold
+  if (cp.companion === CompanionId.Artist && !cp.companionDisabled) {
+    const colors = new Set(cp.builtDistricts.flatMap((d) => d.colors));
+    if (colors.has("yellow") && colors.has("blue") && colors.has("green") && colors.has("red")) {
+      newPlayers[playerIdx] = { ...cp, gold: cp.gold + 4 };
+      log = addLog({ ...state, log }, `${cp.name} — художник: все 4 цвета → +4💰`);
+    }
+  }
+
+  // Royal Guard: +2 gold if has yellow district
+  if (cp.companion === CompanionId.RoyalGuard && !cp.companionDisabled) {
+    const updated = newPlayers[playerIdx];
+    const hasYellow = updated.builtDistricts.some((d) => d.colors.includes("yellow"));
+    if (hasYellow) {
+      newPlayers[playerIdx] = { ...updated, gold: updated.gold + 2 };
+      log = addLog({ ...state, log }, `${updated.name} — королевский страж: +2💰 за жёлтый квартал`);
+    }
+  }
+
   return {
     ...state,
     players: newPlayers,
@@ -130,9 +152,32 @@ export function useAbility(
   switch (ability.hero) {
     case "assassin": {
       if (player.hero !== HeroId.Assassin) return null;
+      // Can only target unrevealed heroes (those who haven't had their turn yet)
+      if (ability.targetHeroId === HeroId.Assassin) return null;
       const targetIdx = findPlayerByHero(state.players, ability.targetHeroId);
       if (targetIdx !== -1) {
+        // Check if target hero has already been revealed (had their turn)
+        if (state.turnOrder) {
+          const posInOrder = state.turnOrder.indexOf(targetIdx);
+          if (posInOrder !== -1 && posInOrder <= state.currentTurnIndex) return null;
+        }
         newPlayers[targetIdx] = { ...state.players[targetIdx], assassinated: true };
+
+        // Marauder companion: steal victim's cards
+        if (player.companion === CompanionId.Marauder && !player.companionDisabled) {
+          const victim = state.players[targetIdx];
+          if (victim.hand.length > 0) {
+            newPlayers[playerIdx] = {
+              ...newPlayers[playerIdx],
+              hand: [...player.hand, ...victim.hand],
+              abilityUsed: true,
+            };
+            newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: [] };
+            log = addLog({ ...state, log }, `${player.name} совершил убийство и забрал ${victim.hand.length} карт (мародёр)!`);
+            break;
+          }
+        }
+
         log = addLog({ ...state, log }, `${player.name} совершил убийство...`);
       }
       newPlayers[playerIdx] = { ...newPlayers[playerIdx], abilityUsed: true };
@@ -193,7 +238,6 @@ export function useAbility(
       if (target.hero === HeroId.Cleric) return null;
 
       // General spends gold to deal damage to district HP
-      // Must have at least 1 gold and can spend up to card's current HP
       if (player.gold < 1) return null;
       const damage = Math.min(player.gold, card.hp);
 
@@ -245,7 +289,8 @@ export function checkWinCondition(state: GameState): GameState {
   return state;
 }
 
-/** Calculate final scores and determine winner. Called at end of last day. */
+/** Calculate final scores and determine winner. Called at end of last day.
+ *  Scoring: sum of district HP (not cost). */
 export function calculateScores(state: GameState): GameState {
   let maxScore = -1;
   let winnerIdx = -1;
@@ -256,7 +301,7 @@ export function calculateScores(state: GameState): GameState {
     const p = state.players[i];
     let score = 0;
 
-    // Sum of district HP (table value)
+    // Sum of district HP (current HP on the table)
     for (const d of p.builtDistricts) {
       score += d.hp;
     }

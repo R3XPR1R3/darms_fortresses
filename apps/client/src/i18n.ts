@@ -54,11 +54,13 @@ const dict: Record<string, { en: string; ru: string }> = {
   "banner.game_over": { en: "Game over", ru: "Игра окончена" },
 
   // Opponent board
+  "opp.label": { en: "Opponent", ru: "Противник" },
   "opp.role_hidden": { en: "Role hidden", ru: "Роль скрыта" },
   "opp.no_districts": { en: "No districts built", ru: "Нет построек" },
   "opp.killed_today": { en: "Killed today", ru: "Убит в этот день" },
 
   // My board
+  "my.label": { en: "You", ru: "Вы" },
   "my.hand": { en: "Hand", ru: "Рука" },
   "my.first": { en: "First!", ru: "Первый!" },
   "my.killed_skip": { en: "You are killed today. Your turn is skipped.", ru: "Вы убиты в этот день. Ваш ход пропущен." },

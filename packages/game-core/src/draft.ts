@@ -9,32 +9,56 @@ const ALL_HEROES: HeroId[] = Object.values(HeroId);
  *
  * Flow (4 players):
  *   1. Shuffle all 8 heroes
- *   2. Auto-ban: 1 face-up + 1 face-down (random, no player choice)
- *   3. P1 (crown holder) picks 1 of 6
- *   4. P2 picks 1 of 5
- *   5. P3 picks 1 of 4
- *   6. P4 picks 1 of 3, then remaining 2 auto-ban (1 up + 1 down)
- *   7. All players simultaneously pick 1 companion from 3 offered
+ *   2. Auto-ban: 1 face-up + 1 face-down (unless Royal Guard overrides)
+ *   3. Sequential picks based on crown order
+ *   4. All players sequentially pick 1 companion from a pool of 3
+ *
+ * Royal Guard modifier: if a player has royalGuardDraft flag,
+ *   no initial auto-ban — first drafter picks from all 8,
+ *   then 2 are auto-banned (1 up + 1 down).
  */
 export function initDraft(state: GameState, rng: Rng): GameState {
   const heroes = [...ALL_HEROES];
   rng.shuffle(heroes);
 
-  // Auto-ban before draft: first card face-up, second face-down
-  const faceUpBan = heroes.pop()!;
-  const faceDownBan = heroes.pop()!;
+  // Check if any player has Royal Guard draft modifier
+  const hasRoyalGuard = state.players.some((p) => p.royalGuardDraft);
+
+  let faceUpBans: HeroId[] = [];
+  let faceDownBans: HeroId[] = [];
+
+  if (!hasRoyalGuard) {
+    // Normal: auto-ban before draft: first card face-up, second face-down
+    const faceUpBan = heroes.pop()!;
+    const faceDownBan = heroes.pop()!;
+    faceUpBans = [faceUpBan];
+    faceDownBans = [faceDownBan];
+  }
+  // If Royal Guard: no initial bans, all 8 heroes available
 
   // Draft order: starting from crown holder, clockwise
+  // If Royal Guard player exists, they go first
   const playerCount = state.players.length;
   const draftOrder: number[] = [];
-  for (let i = 0; i < playerCount; i++) {
-    draftOrder.push((state.crownHolder + i) % playerCount);
+
+  if (hasRoyalGuard) {
+    // Royal Guard player(s) draft first, then normal order
+    const rgIdx = state.players.findIndex((p) => p.royalGuardDraft);
+    draftOrder.push(rgIdx);
+    for (let i = 0; i < playerCount; i++) {
+      const idx = (state.crownHolder + i) % playerCount;
+      if (idx !== rgIdx) draftOrder.push(idx);
+    }
+  } else {
+    for (let i = 0; i < playerCount; i++) {
+      draftOrder.push((state.crownHolder + i) % playerCount);
+    }
   }
 
   const draft: DraftState = {
-    availableHeroes: heroes, // 6 remaining
-    faceUpBans: [faceUpBan],
-    faceDownBans: [faceDownBan],
+    availableHeroes: heroes,
+    faceUpBans,
+    faceDownBans,
     draftOrder,
     currentStep: 0,
     companionChoices: null,
@@ -46,7 +70,7 @@ export function initDraft(state: GameState, rng: Rng): GameState {
     phase: "draft",
     draft,
     rng: rng.getSeed(),
-    // Reset hero assignments
+    // Reset hero assignments and companion state
     players: state.players.map((p) => ({
       ...p,
       hero: null,
@@ -57,25 +81,21 @@ export function initDraft(state: GameState, rng: Rng): GameState {
       abilityUsed: false,
       companion: null,
       companionUsed: false,
+      companionDisabled: false,
+      royalGuardDraft: false, // consumed
     })),
   };
 }
 
 /**
- * Generate companion choices for all players (3 per player).
- * For now there's only 1 companion, so all get [Farmer, Farmer, Farmer].
- * When more companions are added, this will randomly offer 3 distinct ones.
+ * Generate a shared pool of 3 companion choices for the sequential draft.
+ * With 16 companions, randomly pick 3.
  */
-function generateCompanionChoices(playerCount: number, _rng: Rng): CompanionId[][] {
+function generateCompanionPool(rng: Rng): CompanionId[] {
   const allCompanions = COMPANIONS.map((c) => c.id);
-  const choices: CompanionId[][] = [];
-  for (let i = 0; i < playerCount; i++) {
-    // Offer 3 choices — pad with duplicates if not enough companions yet
-    const pool = [...allCompanions];
-    while (pool.length < 3) pool.push(allCompanions[0]);
-    choices.push(pool.slice(0, 3));
-  }
-  return choices;
+  const pool = [...allCompanions];
+  rng.shuffle(pool);
+  return pool.slice(0, 3);
 }
 
 /**
@@ -112,13 +132,31 @@ export function draftPick(
   const isLastPick = nextStep >= draft.draftOrder.length;
 
   if (isLastPick) {
-    // Last player picked — auto-ban remaining 2 cards (1 up, 1 down)
+    // Last player picked — auto-ban remaining cards
     rng.shuffle(remaining);
-    const finalFaceUp = remaining[0];
-    const finalFaceDown = remaining[1];
+
+    // Royal Guard mode: after first pick, ban 2 (1 up, 1 down)
+    // Normal mode: ban remaining 2
+    const hasRoyalGuard = remaining.length > 2;
+
+    let finalFaceUp: HeroId[] = [];
+    let finalFaceDown: HeroId[] = [];
+
+    if (hasRoyalGuard && remaining.length >= 2) {
+      // Royal Guard: ban 1 up + 1 down from remaining, rest stay banned
+      finalFaceUp = remaining.slice(0, 1);
+      finalFaceDown = remaining.slice(1, 2);
+      // Any extras also go to face-down bans
+      if (remaining.length > 2) {
+        finalFaceDown = [...finalFaceDown, ...remaining.slice(2)];
+      }
+    } else {
+      finalFaceUp = remaining[0] ? [remaining[0]] : [];
+      finalFaceDown = remaining[1] ? [remaining[1]] : [];
+    }
 
     // Move to companion draft phase
-    const companionChoices = generateCompanionChoices(state.players.length, rng);
+    const companionPool = generateCompanionPool(rng);
 
     return {
       ...state,
@@ -126,10 +164,10 @@ export function draftPick(
       draft: {
         ...draft,
         availableHeroes: [],
-        faceUpBans: [...draft.faceUpBans, ...(finalFaceUp ? [finalFaceUp] : [])],
-        faceDownBans: [...draft.faceDownBans, ...(finalFaceDown ? [finalFaceDown] : [])],
+        faceUpBans: [...draft.faceUpBans, ...finalFaceUp],
+        faceDownBans: [...draft.faceDownBans, ...finalFaceDown],
         currentStep: 0, // reset step for companion draft
-        companionChoices,
+        companionChoices: [companionPool],
         draftPhase: "companion",
       },
       rng: rng.getSeed(),
@@ -149,8 +187,8 @@ export function draftPick(
 }
 
 /**
- * Process a companion pick during draft.
- * All players pick simultaneously — state transitions to turns when all have picked.
+ * Process a companion pick during draft (sequential, same order as hero draft).
+ * Each player picks from the shared pool. Duplicates allowed (pool doesn't shrink).
  */
 export function companionPick(
   state: GameState,
@@ -162,27 +200,27 @@ export function companionPick(
   if (!draft || state.phase !== "draft") return null;
   if (draft.draftPhase !== "companion") return null;
 
-  const playerIdx = state.players.findIndex((p) => p.id === playerId);
-  if (playerIdx === -1) return null;
+  // Check it's this player's turn (sequential)
+  const expectedPlayerIdx = draft.draftOrder[draft.currentStep];
+  if (expectedPlayerIdx === undefined) return null;
+  const player = state.players[expectedPlayerIdx];
+  if (player.id !== playerId) return null;
 
-  // Already picked?
-  if (state.players[playerIdx].companion !== null) return null;
-
-  // Check offered
-  const offered = draft.companionChoices?.[playerIdx];
-  if (!offered || !offered.includes(companionId)) return null;
+  // Check companion is in the offered pool
+  const pool = draft.companionChoices?.[0];
+  if (!pool || !pool.includes(companionId)) return null;
 
   const newPlayers = [...state.players];
-  newPlayers[playerIdx] = { ...newPlayers[playerIdx], companion: companionId };
+  newPlayers[expectedPlayerIdx] = { ...newPlayers[expectedPlayerIdx], companion: companionId };
 
-  // Check if all players have picked
-  const allPicked = newPlayers.every((p) => p.companion !== null);
+  const nextStep = draft.currentStep + 1;
+  const allPicked = nextStep >= draft.draftOrder.length;
 
   if (allPicked) {
     return {
       ...state,
       players: newPlayers,
-      draft: { ...draft, companionChoices: null },
+      draft: { ...draft, companionChoices: null, currentStep: nextStep },
       phase: "turns",
       rng: state.rng,
     };
@@ -191,13 +229,13 @@ export function companionPick(
   return {
     ...state,
     players: newPlayers,
+    draft: { ...draft, currentStep: nextStep },
   };
 }
 
 /** Get the player index whose turn it is to draft, or null if draft is done */
 export function currentDrafter(state: GameState): number | null {
   if (state.phase !== "draft" || !state.draft) return null;
-  if (state.draft.draftPhase === "companion") return null; // simultaneous
   const step = state.draft.currentStep;
   if (step >= state.draft.draftOrder.length) return null;
   return state.draft.draftOrder[step];

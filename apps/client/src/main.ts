@@ -1,9 +1,27 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompanion } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
 import { t, tHero, tDistrict, tLog, tName, getLang, setLang } from "./i18n.js";
+
+/** Get companion emoji for indicator circles */
+function companionEmoji(id: CompanionId | null): string {
+  if (!id) return "";
+  const def = COMPANIONS.find((c) => c.id === id);
+  return def?.emoji ?? "?";
+}
+/** Get companion definition */
+function companionDef(id: CompanionId | null) {
+  if (!id) return null;
+  return COMPANIONS.find((c) => c.id === id) ?? null;
+}
+/** Build companion indicator HTML with optional custom color */
+function companionIndicatorHtml(id: CompanionId, cssClass: string): string {
+  const def = companionDef(id);
+  const customStyle = def?.indicatorColor ? `background:${def.indicatorColor};` : "";
+  return `<span class="companion-indicator ${cssClass}" style="${customStyle}">${companionEmoji(id)}</span>`;
+}
 
 // ---- Types for online mode ----
 interface PlayerView {
@@ -36,6 +54,7 @@ interface PlayerViewEntry {
   finishedFirst: boolean;
   companion: PlayerState["companion"];
   companionUsed: boolean;
+  companionDisabled: boolean;
 }
 
 interface DraftView {
@@ -45,7 +64,7 @@ interface DraftView {
   draftOrder: number[];
   currentStep: number;
   draftPhase: "hero" | "companion";
-  companionChoices: CompanionId[] | null; // my choices only
+  companionPool: CompanionId[] | null; // shared pool for sequential draft
 }
 
 interface LobbyPlayer {
@@ -238,16 +257,10 @@ function runLocalBots() {
   // Determine if it's a bot's turn
   let botId: string | null = null;
   if (localState.phase === "draft") {
-    const draft = localState.draft;
-    if (draft?.draftPhase === "companion") {
-      // Companion draft is simultaneous — find any bot that hasn't picked yet
-      const bot = localState.players.find((p) => p.id !== HUMAN_ID && p.companion === null);
-      if (bot) botId = bot.id;
-    } else {
-      const dIdx = currentDrafter(localState);
-      if (dIdx !== null && localState.players[dIdx].id !== HUMAN_ID) {
-        botId = localState.players[dIdx].id;
-      }
+    // Both hero and companion drafts are sequential now
+    const dIdx = currentDrafter(localState);
+    if (dIdx !== null && localState.players[dIdx].id !== HUMAN_ID) {
+      botId = localState.players[dIdx].id;
     }
   } else if (localState.phase === "turns") {
     const pIdx = currentPlayer(localState);
@@ -312,11 +325,7 @@ function checkLocalHumanTurn(): boolean {
   if (!localState) return false;
   if (localState.phase === "draft") {
     const draft = localState.draft;
-    if (draft?.draftPhase === "companion") {
-      // Human needs to pick companion
-      const human = localState.players.find((p) => p.id === HUMAN_ID);
-      return human !== undefined && human.companion === null;
-    }
+    // Both hero and companion drafts are sequential
     const dIdx = currentDrafter(localState);
     return dIdx !== null && localState.players[dIdx].id === HUMAN_ID;
   }
@@ -359,6 +368,7 @@ function getPlayers(): PlayerViewEntry[] {
       finishedFirst: p.finishedFirst,
       companion: p.companion,
       companionUsed: p.companionUsed,
+      companionDisabled: p.companionDisabled,
     }));
   }
   return [];
@@ -392,7 +402,7 @@ function getDraft(): DraftView | null {
       draftOrder: localState.draft.draftOrder,
       currentStep: localState.draft.currentStep,
       draftPhase: localState.draft.draftPhase,
-      companionChoices: localState.draft.companionChoices?.[humanIdx] ?? null,
+      companionPool: localState.draft.companionChoices?.[0] ?? null,
     };
   }
   return null;
@@ -686,7 +696,6 @@ function renderTurnBanner() {
     el.className = "turn-banner" + (myTurn ? " my-turn" : "");
     el.id = "turn-banner";
 
-    // Manage turn timer for human player
     if (myTurn) {
       startTurnTimer(activeIdx);
       const timerCls = turnTimerRemaining <= 10 ? "turn-timer timer-urgent" : "turn-timer";
@@ -727,7 +736,6 @@ function renderOpponentTabs() {
   const activeIdx = getActiveIndex();
   const phase = getPhase();
 
-  // Show tabs during draft, turns, and end phases
   if (phase !== "draft" && phase !== "turns" && phase !== "end") {
     el.innerHTML = "";
     return;
@@ -737,7 +745,6 @@ function renderOpponentTabs() {
     .map((p, i) => ({ player: p, index: i }))
     .filter((x) => x.index !== myIdx);
 
-  // Auto-select first opponent if none selected
   if (selectedOpponentIndex === null || selectedOpponentIndex === myIdx) {
     selectedOpponentIndex = opponents[0]?.index ?? null;
   }
@@ -761,7 +768,8 @@ function renderOpponentTabs() {
       heroLine = `<span class="tab-sleep">💤</span>`;
     }
 
-    const stats = `<span class="tab-stats">💰${p.gold} 🏠${p.builtDistricts.length}/${WIN_DISTRICTS}</span>`;
+    const handCount = p.hand ? p.hand.length : p.handSize;
+    const stats = `<span class="tab-stats">💰${p.gold} 🃏${handCount} 🏠${p.builtDistricts.length}/${WIN_DISTRICTS}</span>`;
     const arrow = isActive ? `<span class="active-arrow">▼</span>` : "";
     const tabStyle = hColor ? `style="--hero-clr:${hColor}"` : "";
 
@@ -782,7 +790,6 @@ function renderOpponentTabs() {
       renderOpponentBoard();
     });
   });
-
 }
 
 function renderOpponentBoard() {
@@ -801,16 +808,22 @@ function renderOpponentBoard() {
 
   const revealed = isHeroRevealed(selectedOpponentIndex);
 
-  // Hero display
+  // Hero display with tooltip
   let heroSection: string;
   if (revealed && p.hero) {
     const heroDef = HEROES.find((h) => h.id === p.hero);
     const hClr = heroColor(p.hero);
     heroSection = `
-      <div class="opp-hero-display" style="--hero-clr:${hClr}">
-        <div class="hero-icon-large">${heroPortrait(p.hero, 64)}</div>
+      <div class="opp-hero-display tooltip-host tooltip-below" style="--hero-clr:${hClr}">
+        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(p.hero, 64)}${p.companion ? companionIndicatorHtml(p.companion, "companion-indicator-opp") : ""}</div>
         <div class="hero-name">${heroName(p.hero)}</div>
         <div class="hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
+        <div class="tooltip-content" style="--hero-clr:${hClr}">
+          <div class="tt-name">${heroName(p.hero)}</div>
+          <div class="tt-class">${t("class." + p.hero)} — ⚡${heroDef?.speed ?? "?"}</div>
+          <div class="tt-ability">${getAbilityDescription(p.hero)}</div>
+          <div class="tt-desc">${t("ability_desc." + p.hero)}</div>
+        </div>
       </div>
     `;
   } else {
@@ -829,24 +842,207 @@ function renderOpponentBoard() {
       <span>💰 ${p.gold}</span>
       <span>🃏 ${p.hand ? p.hand.length : p.handSize}</span>
       <span>🏠 ${p.builtDistricts.length}/${WIN_DISTRICTS}</span>
-      ${p.finishedFirst ? "<span>⭐</span>" : ""}
+      ${p.finishedFirst ? `<span>⭐ ${t("my.first")}</span>` : ""}
     </div>
   `;
 
+  // Companion
+  const companionHtml = p.companion ? `
+    <div class="opp-companion">${companionEmoji(p.companion)} ${companionDef(p.companion)?.name ?? p.companion}${p.companionDisabled ? " ❌" : ""}</div>
+  ` : "";
+
   // Districts
-  const districts = p.builtDistricts.map(
-    (d) => districtCardHtml(d),
-  ).join("");
+  const districts = p.builtDistricts.map((d) => districtCardHtml(d)).join("");
   const districtsSection = districts
     ? `<div class="opp-districts">${districts}</div>`
     : `<div class="opp-districts" style="color:#666;font-size:12px;">${t("opp.no_districts")}</div>`;
 
-  // Assassination status
   const assassinated = p.assassinated
     ? `<div class="opp-assassinated">💀 ${t("opp.killed_today")}</div>`
     : "";
 
-  el.innerHTML = heroSection + statsBar + districtsSection + assassinated;
+  el.innerHTML = heroSection + statsBar + companionHtml + districtsSection + assassinated;
+}
+
+function renderMyBoard() {
+  const el = document.getElementById("my-board")!;
+  if (!el) return;
+  const phase = getPhase();
+  const players = getPlayers();
+  const me = players[getMyIndex()];
+  if (!me) { el.innerHTML = ""; return; }
+
+  if (phase === "setup") {
+    el.innerHTML = "";
+    return;
+  }
+
+  // During draft — show simplified board (stats + districts only, no hand/actions)
+  if (phase === "draft") {
+    const draftStats = `
+      <div class="my-stats-bar">
+        <span>💰 ${me.gold}</span>
+        <span>🃏 ${me.hand ? me.hand.length : me.handSize}</span>
+        <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      </div>
+    `;
+    const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
+    const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
+    el.innerHTML = draftStats + districtsSection;
+    return;
+  }
+
+  const myTurnNow = isMyTurn();
+  const hand = getMyHand();
+
+  // My hero row with tooltip
+  let heroRow = "";
+  if (me.hero) {
+    const heroDef = HEROES.find((h) => h.id === me.hero);
+    const abilityTag = heroDef
+      ? `<span class="my-hero-ability-tag">${getAbilityDescription(me.hero)}</span>`
+      : "";
+    const myHClr = heroColor(me.hero);
+    heroRow = `
+      <div class="my-hero-row tooltip-host tooltip-above" style="--hero-clr:${myHClr}">
+        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(me.hero, 48)}${me.companion ? companionIndicatorHtml(me.companion, "companion-indicator-me") : ""}</div>
+        <div class="my-hero-info">
+          <div class="my-hero-name">${heroName(me.hero)}</div>
+          <div class="my-hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
+          ${abilityTag}
+        </div>
+        <div class="tooltip-content" style="--hero-clr:${myHClr}">
+          <div class="tt-name">${heroName(me.hero)}</div>
+          <div class="tt-class">${t("class." + me.hero)} — ⚡${heroDef?.speed ?? "?"}</div>
+          <div class="tt-ability">${getAbilityDescription(me.hero)}</div>
+          <div class="tt-desc">${t("ability_desc." + me.hero)}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Stats bar
+  const statsBar = `
+    <div class="my-stats-bar">
+      <span>💰 ${me.gold}</span>
+      <span>🃏 ${hand.length}</span>
+      <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
+      ${me.finishedFirst ? `<span>⭐ ${t("my.first")}</span>` : ""}
+    </div>
+  `;
+
+  // Companion section
+  let companionHtml = "";
+  if (me.companion) {
+    const cDef = companionDef(me.companion);
+    companionHtml = `
+      <div class="my-companion">
+        <span class="companion-name">${companionEmoji(me.companion)} ${cDef?.name ?? me.companion}${me.companionDisabled ? " ❌" : ""}</span>
+        <span style="font-size:9px;color:#888">${cDef?.description ?? ""}</span>
+      </div>
+    `;
+  }
+
+  // My districts
+  const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
+  const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
+
+  // Hand
+  const canBuild = myTurnNow && me.buildsRemaining > 0 && me.incomeTaken;
+  let handSection = "";
+  if (hand.length > 0 && phase !== "end") {
+    const cards = hand.map((c) => {
+      const affordable = me.gold >= c.cost;
+      const duplicate = me.builtDistricts.some((d) => d.name === c.name);
+      const buildable = canBuild && affordable && !duplicate;
+      const cs = colorStyle(c.colors);
+      const texUrl = buildingTextureUrl(c);
+      return `
+        <div class="hand-card ${cs.cls}" style="${cs.style}">
+          <img class="card-texture" src="${texUrl}" alt="" />
+          <div class="card-cost">${c.cost}</div>
+          <div class="card-name-text">${tDistrict(c.name)}</div>
+          ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : ""}
+        </div>
+      `;
+    }).join("");
+    handSection = `
+      <div id="my-hand">
+        <h3>${t("my.hand")}</h3>
+        <div class="hand-cards">${cards}</div>
+      </div>
+    `;
+  }
+
+  // Actions
+  let actionsSection = "";
+  if (phase === "turns") {
+    if (me.assassinated) {
+      actionsSection = `<div id="my-actions"><p class="hint">💀 ${t("my.killed_skip")}</p></div>`;
+    } else if (!myTurnNow) {
+      actionsSection = `<div id="my-actions"><p class="hint">${t("my.waiting")}</p></div>`;
+    } else {
+      const buttons: string[] = [];
+
+      if (!me.abilityUsed && me.hero) {
+        const hasActiveAbility = [HeroId.Assassin, HeroId.Thief, HeroId.Sorcerer, HeroId.General].includes(me.hero);
+        if (hasActiveAbility) {
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroPortraitSmall(me.hero)} ${t("my.ability")}</button>`);
+        } else {
+          buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ ${t("my.passive")}</button>`);
+        }
+      }
+
+      if (!me.companionUsed && me.companion && !me.companionDisabled && !isPassiveCompanion(me.companion)) {
+        const cDef = companionDef(me.companion);
+        const costInfo = cDef?.useCost ? ` (${cDef.useCost}💰)` : "";
+        buttons.push(`<button class="btn btn-secondary" id="btn-companion">${companionEmoji(me.companion)} ${cDef?.name ?? me.companion}${costInfo}</button>`);
+      }
+
+      if (!me.incomeTaken) {
+        buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
+        buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
+      }
+
+      buttons.push(`<button class="btn btn-primary" id="btn-end">${t("my.end_turn")} ➡</button>`);
+      actionsSection = `<div id="my-actions">${buttons.join("")}</div>`;
+    }
+  }
+
+  el.innerHTML = heroRow + statsBar + companionHtml + districtsSection + handSection + actionsSection;
+
+  // Wire up events
+  el.querySelectorAll("[data-build]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const cardId = (btn as HTMLElement).dataset.build!;
+      dispatch({ type: "build", playerId: getMyId(), cardId });
+    });
+  });
+  document.getElementById("btn-gold")?.addEventListener("click", () => {
+    dispatch({ type: "income", playerId: getMyId(), choice: "gold" });
+  });
+  document.getElementById("btn-draw")?.addEventListener("click", () => {
+    dispatch({ type: "income", playerId: getMyId(), choice: "card" });
+  });
+  document.getElementById("btn-end")?.addEventListener("click", () => {
+    dispatch({ type: "end_turn", playerId: getMyId() });
+  });
+  document.getElementById("btn-ability")?.addEventListener("click", () => {
+    showAbilityModal(me.hero!);
+  });
+  document.getElementById("btn-ability-passive")?.addEventListener("click", () => {
+    dispatch({ type: "ability", playerId: getMyId(), ability: { hero: me.hero! } as AbilityPayload });
+  });
+  document.getElementById("btn-companion")?.addEventListener("click", () => {
+    const myCompanion = getPlayers()[getMyIndex()].companion;
+    const cDef = companionDef(myCompanion);
+    if (cDef?.targetType) {
+      showCompanionModal(myCompanion!);
+    } else {
+      dispatch({ type: "use_companion", playerId: getMyId() });
+    }
+  });
 }
 
 function startDraftTimer(draft: DraftView) {
@@ -936,7 +1132,7 @@ function renderDraft() {
     return;
   }
 
-  // During turns phase, bans are rendered in #ban-list (above journal)
+  // During turns phase, bans are rendered in #ban-list
   if (phase === "turns") {
     stopDraftTimer();
     el.innerHTML = "";
@@ -949,38 +1145,61 @@ function renderDraft() {
     return;
   }
 
-  // --- Companion draft phase ---
+  // --- Companion draft phase (sequential) ---
   if (draft.draftPhase === "companion") {
-    stopDraftTimer();
-    const me = getPlayers()[getMyIndex()];
-    const alreadyPicked = me?.companion !== null;
-    const choices = draft.companionChoices;
+    const myTurnComp = isMyTurn();
+    const pool = draft.companionPool;
 
-    if (alreadyPicked || !choices) {
+    if (myTurnComp) {
+      startDraftTimer(draft);
+    } else {
+      stopDraftTimer();
+    }
+
+    if (!myTurnComp || !pool) {
+      const timerHtml = myTurnComp
+        ? `<span id="draft-timer" class="draft-timer ${draftTimerRemaining <= 10 ? 'timer-urgent' : ''}">${draftTimerRemaining}s</span>`
+        : "";
       el.innerHTML = `
-        <h2>${t("draft.companion_title")}</h2>
+        <h2 style="font-size:13px">${t("draft.companion_title")} ${timerHtml}</h2>
         <p class="hint">${t("draft.others_choosing")}</p>
       `;
       return;
     }
 
-    // Deduplicate choices for display
-    const unique = [...new Set(choices)];
-    const companionButtons = unique.map((cId) => {
-      const def = COMPANIONS.find((c) => c.id === cId);
-      return `<button class="btn btn-secondary companion-btn" data-companion="${cId}">
-        🧑‍🌾 ${def?.name ?? cId} — ${def?.description ?? ""}
-      </button>`;
+    const timerHtml = `<span id="draft-timer" class="draft-timer ${draftTimerRemaining <= 10 ? 'timer-urgent' : ''}">${draftTimerRemaining}s</span>`;
+
+    // Deduplicate for display
+    const unique = [...new Set(pool)];
+    const companionCards = unique.map((cId) => {
+      const def = companionDef(cId);
+      const passiveTag = def?.passive ? `<span style="font-size:8px;color:#aaa">авто</span>` : "";
+      return `
+        <button class="companion-card" data-companion="${cId}">
+          <div class="companion-card-portrait">${def?.emoji ?? "?"}</div>
+          <div class="companion-card-body">
+            <div class="companion-card-name">${def?.name ?? cId} ${passiveTag}</div>
+            <div class="companion-card-desc">${def?.description ?? ""}</div>
+          </div>
+        </button>`;
     }).join("");
 
+    // Pad to 4 slots with empty placeholders
+    const emptySlots = Math.max(0, 4 - unique.length);
+    let emptyHtml = "";
+    for (let i = 0; i < emptySlots; i++) {
+      emptyHtml += `<div class="companion-card companion-card-empty"></div>`;
+    }
+
     el.innerHTML = `
-      <h2>${t("draft.companion_title")}</h2>
+      <h2 style="font-size:13px">${t("draft.companion_title")} ${timerHtml}</h2>
       <p class="hint">${t("draft.choose_companion")}</p>
-      <div class="companion-choices">${companionButtons}</div>
+      <div class="companion-draft-grid">${companionCards}${emptyHtml}</div>
     `;
 
-    el.querySelectorAll(".companion-btn").forEach((btn) => {
+    el.querySelectorAll(".companion-card[data-companion]").forEach((btn) => {
       btn.addEventListener("click", () => {
+        stopDraftTimer();
         const companionId = (btn as HTMLElement).dataset.companion as CompanionId;
         dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
       });
@@ -1046,163 +1265,6 @@ function renderDraft() {
   }
 }
 
-function renderMyBoard() {
-  const el = document.getElementById("my-board")!;
-  if (!el) return;
-  const phase = getPhase();
-  const players = getPlayers();
-  const me = players[getMyIndex()];
-  if (!me) { el.innerHTML = ""; return; }
-
-  if (phase === "setup") {
-    el.innerHTML = "";
-    return;
-  }
-
-  // During draft — show simplified board (stats + districts only, no hand/actions)
-  if (phase === "draft") {
-    const draftStats = `
-      <div class="my-stats-bar">
-        <span>💰 ${me.gold}</span>
-        <span>🃏 ${me.hand ? me.hand.length : me.handSize}</span>
-        <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
-      </div>
-    `;
-    const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
-    const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
-    el.innerHTML = draftStats + districtsSection;
-    return;
-  }
-
-  const myTurnNow = isMyTurn();
-  const hand = getMyHand();
-
-  // My hero row
-  let heroRow = "";
-  if (me.hero) {
-    const heroDef = HEROES.find((h) => h.id === me.hero);
-    const abilityTag = heroDef
-      ? `<span class="my-hero-ability-tag">${getAbilityDescription(me.hero)}</span>`
-      : "";
-    const myHClr = heroColor(me.hero);
-    heroRow = `
-      <div class="my-hero-row" style="--hero-clr:${myHClr}">
-        <div class="hero-icon-large">${heroPortrait(me.hero, 48)}</div>
-        <div class="my-hero-info">
-          <div class="my-hero-name">${heroName(me.hero)}</div>
-          <div class="my-hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
-          ${abilityTag}
-        </div>
-      </div>
-    `;
-  }
-
-  // Stats bar
-  const statsBar = `
-    <div class="my-stats-bar">
-      <span>💰 ${me.gold}</span>
-      <span>🃏 ${hand.length}</span>
-      <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
-      ${me.finishedFirst ? `<span>⭐ ${t("my.first")}</span>` : ""}
-    </div>
-  `;
-
-  // My districts
-  const districts = me.builtDistricts.map(
-    (d) => districtCardHtml(d),
-  ).join("");
-  const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
-
-  // Hand
-  const canBuild = myTurnNow && me.buildsRemaining > 0 && me.incomeTaken;
-  let handSection = "";
-  if (hand.length > 0 && phase !== "end") {
-    const cards = hand.map((c) => {
-      const affordable = me.gold >= c.cost;
-      const duplicate = me.builtDistricts.some((d) => d.name === c.name);
-      const buildable = canBuild && affordable && !duplicate;
-      const cs = colorStyle(c.colors);
-      const texUrl = buildingTextureUrl(c);
-      return `
-        <div class="hand-card ${cs.cls}" style="${cs.style}">
-          <img class="card-texture" src="${texUrl}" alt="" />
-          <div class="card-cost">${c.cost}</div>
-          <div class="card-name-text">${tDistrict(c.name)}</div>
-          ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : ""}
-        </div>
-      `;
-    }).join("");
-    handSection = `
-      <div id="my-hand">
-        <h3>${t("my.hand")}</h3>
-        <div class="hand-cards">${cards}</div>
-      </div>
-    `;
-  }
-
-  // Actions
-  let actionsSection = "";
-  if (phase === "turns") {
-    if (me.assassinated) {
-      actionsSection = `<div id="my-actions"><p class="hint">💀 ${t("my.killed_skip")}</p></div>`;
-    } else if (!myTurnNow) {
-      actionsSection = `<div id="my-actions"><p class="hint">${t("my.waiting")}</p></div>`;
-    } else {
-      const buttons: string[] = [];
-
-      if (!me.abilityUsed && me.hero) {
-        const hasActiveAbility = [HeroId.Assassin, HeroId.Thief, HeroId.Sorcerer, HeroId.General].includes(me.hero);
-        if (hasActiveAbility) {
-          buttons.push(`<button class="btn btn-secondary" id="btn-ability">${heroPortraitSmall(me.hero)} ${t("my.ability")}</button>`);
-        } else {
-          buttons.push(`<button class="btn btn-secondary" id="btn-ability-passive">✓ ${t("my.passive")}</button>`);
-        }
-      }
-
-      if (!me.companionUsed && me.companion) {
-        const cDef = COMPANIONS.find((c) => c.id === me.companion);
-        buttons.push(`<button class="btn btn-secondary" id="btn-companion">🧑‍🌾 ${cDef?.name ?? me.companion}</button>`);
-      }
-
-      if (!me.incomeTaken) {
-        buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
-        buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
-      }
-
-      buttons.push(`<button class="btn btn-primary" id="btn-end">${t("my.end_turn")} ➡</button>`);
-      actionsSection = `<div id="my-actions">${buttons.join("")}</div>`;
-    }
-  }
-
-  el.innerHTML = heroRow + statsBar + districtsSection + handSection + actionsSection;
-
-  // Wire up events
-  el.querySelectorAll("[data-build]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const cardId = (btn as HTMLElement).dataset.build!;
-      dispatch({ type: "build", playerId: getMyId(), cardId });
-    });
-  });
-  document.getElementById("btn-gold")?.addEventListener("click", () => {
-    dispatch({ type: "income", playerId: getMyId(), choice: "gold" });
-  });
-  document.getElementById("btn-draw")?.addEventListener("click", () => {
-    dispatch({ type: "income", playerId: getMyId(), choice: "card" });
-  });
-  document.getElementById("btn-end")?.addEventListener("click", () => {
-    dispatch({ type: "end_turn", playerId: getMyId() });
-  });
-  document.getElementById("btn-ability")?.addEventListener("click", () => {
-    showAbilityModal(me.hero!);
-  });
-  document.getElementById("btn-ability-passive")?.addEventListener("click", () => {
-    dispatch({ type: "ability", playerId: getMyId(), ability: { hero: me.hero! } as AbilityPayload });
-  });
-  document.getElementById("btn-companion")?.addEventListener("click", () => {
-    dispatch({ type: "use_companion", playerId: getMyId() });
-  });
-}
 
 function getAbilityDescription(heroId: HeroId): string {
   switch (heroId) {
@@ -1215,6 +1277,132 @@ function getAbilityDescription(heroId: HeroId): string {
     case HeroId.Architect: return t("ability.architect");
     case HeroId.General: return t("ability.general");
     default: return "";
+  }
+}
+
+function showCompanionModal(companionId: CompanionId) {
+  const modal = document.getElementById("ability-modal")!;
+  const title = document.getElementById("modal-title")!;
+  const options = document.getElementById("modal-options")!;
+  modal.classList.add("show");
+
+  const close = () => modal.classList.remove("show");
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+
+  const cDef = companionDef(companionId);
+  const players = getPlayers();
+  const myIdx = getMyIndex();
+  const me = players[myIdx];
+
+  switch (companionId) {
+    case CompanionId.Hunter: {
+      title.textContent = `🏹 Охотник — выберите цель`;
+      const targets = players.filter((_p, i) => i !== myIdx && !_p.assassinated);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">За 2💰 противник сбрасывает 2 случайные карты</p>
+        ${targets.map((p) => {
+          const revealed = isHeroRevealed(players.indexOf(p));
+          const heroTag = revealed && p.hero ? ` ${heroPortraitSmall(p.hero)}` : "";
+          return `<button class="modal-option" data-target="${p.id}">${heroTag} ${tName(p.name)} (🃏${p.hand ? p.hand.length : p.handSize})</button>`;
+        }).join("")}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Saboteur: {
+      title.textContent = `💣 Диверсант — выберите цель`;
+      const targets = players.filter((_p, i) => i !== myIdx && _p.companion && !_p.companionDisabled);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Отключает компаньона выбранного игрока на день</p>
+        ${targets.length > 0 ? targets.map((p) => {
+          const cName = companionDef(p.companion)?.name ?? "";
+          return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
+        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Bard: {
+      title.textContent = `🎵 Бард — выберите цель`;
+      const targets = players.filter((_p, i) => i !== myIdx && _p.companion);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Убирает компаньона выбранного игрока</p>
+        ${targets.length > 0 ? targets.map((p) => {
+          const cName = companionDef(p.companion)?.name ?? "";
+          return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
+        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Blacksmith: {
+      title.textContent = `⚒️ Кузнец — выберите квартал`;
+      const allDistricts = players.flatMap((p, i) =>
+        p.builtDistricts.map((d) => ({ card: d, player: p, playerIdx: i }))
+      );
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Заменяет квартал на другой за ту же цену, другого цвета</p>
+        ${allDistricts.map((item) =>
+          `<button class="modal-option" data-target-player="${item.player.id}" data-target-card="${item.card.id}">
+            ${item.card.name} (${item.card.cost}💰) — ${tName(item.player.name)}
+          </button>`
+        ).join("")}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetPlayerId = (btn as HTMLElement).dataset.targetPlayer!;
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId, targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Alchemist: {
+      title.textContent = `⚗️ Алхимик — выберите квартал`;
+      const upgradeable = me.builtDistricts.filter((d) => d.cost < 5);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Превращает квартал в случайный на 1 дороже (макс 5)</p>
+        ${upgradeable.length > 0 ? upgradeable.map((d) =>
+          `<button class="modal-option" data-target-card="${d.id}">${d.name} (${d.cost}💰 → ${d.cost + 1}💰)</button>`
+        ).join("") : `<p class="hint">Нет кварталов для улучшения</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    default:
+      // No targeting needed
+      dispatch({ type: "use_companion", playerId: getMyId() });
+      close();
   }
 }
 

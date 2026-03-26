@@ -302,6 +302,9 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
       assassinated: revealed ? p.assassinated : false,
       robbedHeroId: p.robbedHeroId,
       finishedFirst: p.finishedFirst,
+      companion: p.companion,
+      companionUsed: p.companionUsed,
+      companionDisabled: p.companionDisabled,
     };
   });
 
@@ -313,6 +316,8 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
       hiddenBanCount: state.draft.faceDownBans.length,
       draftOrder: state.draft.draftOrder,
       currentStep: state.draft.currentStep,
+      draftPhase: state.draft.draftPhase,
+      companionPool: state.draft.companionChoices?.[0] ?? null,
     };
   }
 
