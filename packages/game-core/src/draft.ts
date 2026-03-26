@@ -62,20 +62,15 @@ export function initDraft(state: GameState, rng: Rng): GameState {
 }
 
 /**
- * Generate companion choices for all players (3 per player).
- * For now there's only 1 companion, so all get [Farmer, Farmer, Farmer].
- * When more companions are added, this will randomly offer 3 distinct ones.
+ * Generate a shared pool of 3 companion choices for the sequential draft.
+ * When more companions are added, this will randomly pick 3.
  */
-function generateCompanionChoices(playerCount: number, _rng: Rng): CompanionId[][] {
+function generateCompanionPool(rng: Rng): CompanionId[] {
   const allCompanions = COMPANIONS.map((c) => c.id);
-  const choices: CompanionId[][] = [];
-  for (let i = 0; i < playerCount; i++) {
-    // Offer 3 choices — pad with duplicates if not enough companions yet
-    const pool = [...allCompanions];
-    while (pool.length < 3) pool.push(allCompanions[0]);
-    choices.push(pool.slice(0, 3));
-  }
-  return choices;
+  const pool = [...allCompanions];
+  while (pool.length < 3) pool.push(allCompanions[pool.length % allCompanions.length]);
+  rng.shuffle(pool);
+  return pool.slice(0, 3);
 }
 
 /**
@@ -117,8 +112,8 @@ export function draftPick(
     const finalFaceUp = remaining[0];
     const finalFaceDown = remaining[1];
 
-    // Move to companion draft phase
-    const companionChoices = generateCompanionChoices(state.players.length, rng);
+    // Move to companion draft phase (sequential, same order as hero draft)
+    const companionPool = generateCompanionPool(rng);
 
     return {
       ...state,
@@ -129,7 +124,7 @@ export function draftPick(
         faceUpBans: [...draft.faceUpBans, ...(finalFaceUp ? [finalFaceUp] : [])],
         faceDownBans: [...draft.faceDownBans, ...(finalFaceDown ? [finalFaceDown] : [])],
         currentStep: 0, // reset step for companion draft
-        companionChoices,
+        companionChoices: [companionPool], // shared pool stored as single array
         draftPhase: "companion",
       },
       rng: rng.getSeed(),
@@ -149,8 +144,8 @@ export function draftPick(
 }
 
 /**
- * Process a companion pick during draft.
- * All players pick simultaneously — state transitions to turns when all have picked.
+ * Process a companion pick during draft (sequential, same order as hero draft).
+ * Each player picks from the shared pool. Duplicates allowed (pool doesn't shrink).
  */
 export function companionPick(
   state: GameState,
@@ -162,27 +157,27 @@ export function companionPick(
   if (!draft || state.phase !== "draft") return null;
   if (draft.draftPhase !== "companion") return null;
 
-  const playerIdx = state.players.findIndex((p) => p.id === playerId);
-  if (playerIdx === -1) return null;
+  // Check it's this player's turn (sequential)
+  const expectedPlayerIdx = draft.draftOrder[draft.currentStep];
+  if (expectedPlayerIdx === undefined) return null;
+  const player = state.players[expectedPlayerIdx];
+  if (player.id !== playerId) return null;
 
-  // Already picked?
-  if (state.players[playerIdx].companion !== null) return null;
-
-  // Check offered
-  const offered = draft.companionChoices?.[playerIdx];
-  if (!offered || !offered.includes(companionId)) return null;
+  // Check companion is in the offered pool
+  const pool = draft.companionChoices?.[0];
+  if (!pool || !pool.includes(companionId)) return null;
 
   const newPlayers = [...state.players];
-  newPlayers[playerIdx] = { ...newPlayers[playerIdx], companion: companionId };
+  newPlayers[expectedPlayerIdx] = { ...newPlayers[expectedPlayerIdx], companion: companionId };
 
-  // Check if all players have picked
-  const allPicked = newPlayers.every((p) => p.companion !== null);
+  const nextStep = draft.currentStep + 1;
+  const allPicked = nextStep >= draft.draftOrder.length;
 
   if (allPicked) {
     return {
       ...state,
       players: newPlayers,
-      draft: { ...draft, companionChoices: null },
+      draft: { ...draft, companionChoices: null, currentStep: nextStep },
       phase: "turns",
       rng: state.rng,
     };
@@ -191,13 +186,13 @@ export function companionPick(
   return {
     ...state,
     players: newPlayers,
+    draft: { ...draft, currentStep: nextStep },
   };
 }
 
 /** Get the player index whose turn it is to draft, or null if draft is done */
 export function currentDrafter(state: GameState): number | null {
   if (state.phase !== "draft" || !state.draft) return null;
-  if (state.draft.draftPhase === "companion") return null; // simultaneous
   const step = state.draft.currentStep;
   if (step >= state.draft.draftOrder.length) return null;
   return state.draft.draftOrder[step];

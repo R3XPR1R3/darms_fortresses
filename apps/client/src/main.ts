@@ -45,7 +45,7 @@ interface DraftView {
   draftOrder: number[];
   currentStep: number;
   draftPhase: "hero" | "companion";
-  companionChoices: CompanionId[] | null; // my choices only
+  companionPool: CompanionId[] | null; // shared pool for sequential draft
 }
 
 interface LobbyPlayer {
@@ -238,16 +238,10 @@ function runLocalBots() {
   // Determine if it's a bot's turn
   let botId: string | null = null;
   if (localState.phase === "draft") {
-    const draft = localState.draft;
-    if (draft?.draftPhase === "companion") {
-      // Companion draft is simultaneous — find any bot that hasn't picked yet
-      const bot = localState.players.find((p) => p.id !== HUMAN_ID && p.companion === null);
-      if (bot) botId = bot.id;
-    } else {
-      const dIdx = currentDrafter(localState);
-      if (dIdx !== null && localState.players[dIdx].id !== HUMAN_ID) {
-        botId = localState.players[dIdx].id;
-      }
+    // Both hero and companion drafts are sequential now
+    const dIdx = currentDrafter(localState);
+    if (dIdx !== null && localState.players[dIdx].id !== HUMAN_ID) {
+      botId = localState.players[dIdx].id;
     }
   } else if (localState.phase === "turns") {
     const pIdx = currentPlayer(localState);
@@ -312,11 +306,7 @@ function checkLocalHumanTurn(): boolean {
   if (!localState) return false;
   if (localState.phase === "draft") {
     const draft = localState.draft;
-    if (draft?.draftPhase === "companion") {
-      // Human needs to pick companion
-      const human = localState.players.find((p) => p.id === HUMAN_ID);
-      return human !== undefined && human.companion === null;
-    }
+    // Both hero and companion drafts are sequential
     const dIdx = currentDrafter(localState);
     return dIdx !== null && localState.players[dIdx].id === HUMAN_ID;
   }
@@ -392,7 +382,7 @@ function getDraft(): DraftView | null {
       draftOrder: localState.draft.draftOrder,
       currentStep: localState.draft.currentStep,
       draftPhase: localState.draft.draftPhase,
-      companionChoices: localState.draft.companionChoices?.[humanIdx] ?? null,
+      companionPool: localState.draft.companionChoices?.[0] ?? null,
     };
   }
   return null;
@@ -758,7 +748,8 @@ function renderOpponentTabs() {
       heroLine = `<span class="tab-sleep">💤</span>`;
     }
 
-    const stats = `<span class="tab-stats">💰${p.gold} 🏠${p.builtDistricts.length}/${WIN_DISTRICTS}</span>`;
+    const handCount = p.hand ? p.hand.length : p.handSize;
+    const stats = `<span class="tab-stats">💰${p.gold} 🃏${handCount} 🏠${p.builtDistricts.length}/${WIN_DISTRICTS}</span>`;
     const arrow = isActive ? `<span class="active-arrow">▼</span>` : "";
     const tabStyle = hColor ? `style="--hero-clr:${hColor}"` : "";
 
@@ -804,7 +795,7 @@ function renderOpponentBoard() {
     const hClr = heroColor(p.hero);
     heroSection = `
       <div class="opp-hero-display tooltip-host tooltip-below" style="--hero-clr:${hClr}">
-        <div class="hero-icon-large">${heroPortrait(p.hero, 64)}</div>
+        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(p.hero, 64)}${p.companion ? `<span class="companion-indicator companion-indicator-opp">🧑‍🌾</span>` : ""}</div>
         <div class="hero-name">${heroName(p.hero)}</div>
         <div class="hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
         <div class="tooltip-content" style="--hero-clr:${hClr}">
@@ -894,7 +885,7 @@ function renderMyBoard() {
     const myHClr = heroColor(me.hero);
     heroRow = `
       <div class="my-hero-row tooltip-host tooltip-above" style="--hero-clr:${myHClr}">
-        <div class="hero-icon-large">${heroPortrait(me.hero, 48)}</div>
+        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(me.hero, 48)}${me.companion ? `<span class="companion-indicator companion-indicator-me">🧑‍🌾</span>` : ""}</div>
         <div class="my-hero-info">
           <div class="my-hero-name">${heroName(me.hero)}</div>
           <div class="my-hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
@@ -1127,38 +1118,60 @@ function renderDraft() {
     return;
   }
 
-  // --- Companion draft phase ---
+  // --- Companion draft phase (sequential) ---
   if (draft.draftPhase === "companion") {
-    stopDraftTimer();
-    const me = getPlayers()[getMyIndex()];
-    const alreadyPicked = me?.companion !== null;
-    const choices = draft.companionChoices;
+    const myTurnComp = isMyTurn();
+    const pool = draft.companionPool;
 
-    if (alreadyPicked || !choices) {
+    if (myTurnComp) {
+      startDraftTimer(draft);
+    } else {
+      stopDraftTimer();
+    }
+
+    if (!myTurnComp || !pool) {
+      const timerHtml = myTurnComp
+        ? `<span id="draft-timer" class="draft-timer ${draftTimerRemaining <= 10 ? 'timer-urgent' : ''}">${draftTimerRemaining}s</span>`
+        : "";
       el.innerHTML = `
-        <h2>${t("draft.companion_title")}</h2>
+        <h2 style="font-size:13px">${t("draft.companion_title")} ${timerHtml}</h2>
         <p class="hint">${t("draft.others_choosing")}</p>
       `;
       return;
     }
 
-    // Deduplicate choices for display
-    const unique = [...new Set(choices)];
-    const companionButtons = unique.map((cId) => {
+    const timerHtml = `<span id="draft-timer" class="draft-timer ${draftTimerRemaining <= 10 ? 'timer-urgent' : ''}">${draftTimerRemaining}s</span>`;
+
+    // Deduplicate for display
+    const unique = [...new Set(pool)];
+    const companionCards = unique.map((cId) => {
       const def = COMPANIONS.find((c) => c.id === cId);
-      return `<button class="btn btn-secondary companion-btn" data-companion="${cId}">
-        🧑‍🌾 ${def?.name ?? cId} — ${def?.description ?? ""}
-      </button>`;
+      return `
+        <button class="companion-card" data-companion="${cId}">
+          <div class="companion-card-portrait"></div>
+          <div class="companion-card-body">
+            <div class="companion-card-name">${def?.name ?? cId}</div>
+            <div class="companion-card-desc">${def?.description ?? ""}</div>
+          </div>
+        </button>`;
     }).join("");
 
+    // Pad to 4 slots with empty placeholders
+    const emptySlots = Math.max(0, 4 - unique.length);
+    let emptyHtml = "";
+    for (let i = 0; i < emptySlots; i++) {
+      emptyHtml += `<div class="companion-card companion-card-empty"></div>`;
+    }
+
     el.innerHTML = `
-      <h2>${t("draft.companion_title")}</h2>
+      <h2 style="font-size:13px">${t("draft.companion_title")} ${timerHtml}</h2>
       <p class="hint">${t("draft.choose_companion")}</p>
-      <div class="companion-choices">${companionButtons}</div>
+      <div class="companion-draft-grid">${companionCards}${emptyHtml}</div>
     `;
 
-    el.querySelectorAll(".companion-btn").forEach((btn) => {
+    el.querySelectorAll(".companion-card[data-companion]").forEach((btn) => {
       btn.addEventListener("click", () => {
+        stopDraftTimer();
         const companionId = (btn as HTMLElement).dataset.companion as CompanionId;
         dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
       });

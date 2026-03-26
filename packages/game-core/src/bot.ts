@@ -14,14 +14,15 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
   if (state.phase === "draft") {
     const draft = state.draft!;
 
-    // Companion draft phase — simultaneous, bot picks first offered
+    // Companion draft phase — sequential, same order as hero draft
     if (draft.draftPhase === "companion") {
-      const botIdx = state.players.findIndex((p) => p.id === botPlayerId);
-      if (botIdx === -1) return null;
-      if (state.players[botIdx].companion !== null) return null; // already picked
-      const choices = draft.companionChoices?.[botIdx];
-      if (!choices || choices.length === 0) return null;
-      return { type: "companion_pick", playerId: botPlayerId, companionId: choices[0] };
+      const drafterIdx = currentDrafter(state);
+      if (drafterIdx === null) return null;
+      if (state.players[drafterIdx].id !== botPlayerId) return null;
+      const pool = draft.companionChoices?.[0];
+      if (!pool || pool.length === 0) return null;
+      // Pick first available companion
+      return { type: "companion_pick", playerId: botPlayerId, companionId: pool[0] };
     }
 
     // Hero draft phase — sequential

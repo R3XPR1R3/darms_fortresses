@@ -316,7 +316,7 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
       draftOrder: state.draft.draftOrder,
       currentStep: state.draft.currentStep,
       draftPhase: state.draft.draftPhase,
-      companionChoices: state.draft.companionChoices?.[myIndex] ?? null,
+      companionPool: state.draft.companionChoices?.[0] ?? null,
     };
   }
 

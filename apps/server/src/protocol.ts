@@ -68,5 +68,5 @@ export interface DraftView {
   draftOrder: DraftState["draftOrder"];
   currentStep: DraftState["currentStep"];
   draftPhase: DraftState["draftPhase"];
-  companionChoices: CompanionId[] | null; // only this player's choices
+  companionPool: CompanionId[] | null; // shared pool for sequential draft
 }

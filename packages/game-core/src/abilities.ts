@@ -256,9 +256,9 @@ export function calculateScores(state: GameState): GameState {
     const p = state.players[i];
     let score = 0;
 
-    // Sum of district HP (table value)
+    // Sum of district costs (table value)
     for (const d of p.builtDistricts) {
-      score += d.hp;
+      score += d.cost;
     }
 
     // Bonus for finishing first

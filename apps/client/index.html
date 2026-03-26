@@ -413,9 +413,91 @@
     }
     .turn-timer.timer-urgent { color: #fff; background: #e94560; animation: pulse-banner 0.8s ease-in-out infinite; }
 
-    /* Companion choices */
-    .companion-choices { display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 8px 0; }
-    .companion-btn { width: 100%; max-width: 400px; text-align: left; font-size: 12px !important; }
+    /* Companion draft grid (4-slot, smaller than hero cards) */
+    .companion-draft-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      padding: 4px 0;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .companion-card {
+      border-radius: 8px;
+      border: 2px solid #0f3460;
+      background: linear-gradient(180deg, #1a2a3e 0%, #16213e 100%);
+      color: #eee;
+      cursor: pointer;
+      font-size: 10px;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      overflow: hidden;
+    }
+    .companion-card:hover {
+      border-color: #4090f0;
+      transform: translateY(-3px);
+      box-shadow: 0 4px 12px rgba(64,144,240,0.3);
+    }
+    .companion-card-portrait {
+      width: 100%;
+      height: 48px;
+      background: #0d1117;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: #555;
+    }
+    .companion-card-portrait::after { content: "🧑‍🌾"; }
+    .companion-card-body {
+      padding: 4px 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .companion-card-name {
+      font-size: 10px;
+      font-weight: 700;
+      color: #eee;
+      line-height: 1.2;
+    }
+    .companion-card-desc {
+      font-size: 8px;
+      color: #888;
+      line-height: 1.3;
+    }
+    .companion-card-empty {
+      border: 2px dashed #1a2a3e;
+      background: transparent;
+      cursor: default;
+      min-height: 90px;
+    }
+    .companion-card-empty:hover {
+      border-color: #1a2a3e;
+      transform: none;
+      box-shadow: none;
+    }
+    .companion-card-empty .companion-card-portrait { display: none; }
+
+    /* Companion indicator circle on hero portrait */
+    .companion-indicator {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      border: 2px solid #16213e;
+      z-index: 2;
+    }
+    .companion-indicator-me { background: #4090f0; }
+    .companion-indicator-opp { background: #e04050; }
 
     /* Bans */
     .bans { font-size: 11px; color: #888; margin-top: 4px; text-align: center; }
