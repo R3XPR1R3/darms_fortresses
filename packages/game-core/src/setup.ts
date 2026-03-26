@@ -34,6 +34,8 @@ export function createMatch(
       finishedFirst: false,
       companion: null,
       companionUsed: false,
+      companionDisabled: false,
+      royalGuardDraft: false,
     };
   });
 
@@ -52,5 +54,6 @@ export function createMatch(
     winner: null,
     log: [],
     rng: rng.getSeed(),
+    bardUsageCount: 0,
   };
 }

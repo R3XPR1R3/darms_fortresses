@@ -1,9 +1,21 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompanion } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
 import { t, tHero, tDistrict, tLog, tName, getLang, setLang } from "./i18n.js";
+
+/** Get companion emoji for indicator circles */
+function companionEmoji(id: CompanionId | null): string {
+  if (!id) return "";
+  const def = COMPANIONS.find((c) => c.id === id);
+  return def?.emoji ?? "?";
+}
+/** Get companion definition */
+function companionDef(id: CompanionId | null) {
+  if (!id) return null;
+  return COMPANIONS.find((c) => c.id === id) ?? null;
+}
 
 // ---- Types for online mode ----
 interface PlayerView {
@@ -36,6 +48,7 @@ interface PlayerViewEntry {
   finishedFirst: boolean;
   companion: PlayerState["companion"];
   companionUsed: boolean;
+  companionDisabled: boolean;
 }
 
 interface DraftView {
@@ -349,6 +362,7 @@ function getPlayers(): PlayerViewEntry[] {
       finishedFirst: p.finishedFirst,
       companion: p.companion,
       companionUsed: p.companionUsed,
+      companionDisabled: p.companionDisabled,
     }));
   }
   return [];
@@ -795,7 +809,7 @@ function renderOpponentBoard() {
     const hClr = heroColor(p.hero);
     heroSection = `
       <div class="opp-hero-display tooltip-host tooltip-below" style="--hero-clr:${hClr}">
-        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(p.hero, 64)}${p.companion ? `<span class="companion-indicator companion-indicator-opp">🧑‍🌾</span>` : ""}</div>
+        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(p.hero, 64)}${p.companion ? `<span class="companion-indicator companion-indicator-opp">${companionEmoji(p.companion)}</span>` : ""}</div>
         <div class="hero-name">${heroName(p.hero)}</div>
         <div class="hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
         <div class="tooltip-content" style="--hero-clr:${hClr}">
@@ -828,7 +842,7 @@ function renderOpponentBoard() {
 
   // Companion
   const companionHtml = p.companion ? `
-    <div class="opp-companion">🧑‍🌾 ${COMPANIONS.find((c) => c.id === p.companion)?.name ?? p.companion}</div>
+    <div class="opp-companion">${companionEmoji(p.companion)} ${companionDef(p.companion)?.name ?? p.companion}${p.companionDisabled ? " ❌" : ""}</div>
   ` : "";
 
   // Districts
@@ -885,7 +899,7 @@ function renderMyBoard() {
     const myHClr = heroColor(me.hero);
     heroRow = `
       <div class="my-hero-row tooltip-host tooltip-above" style="--hero-clr:${myHClr}">
-        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(me.hero, 48)}${me.companion ? `<span class="companion-indicator companion-indicator-me">🧑‍🌾</span>` : ""}</div>
+        <div class="hero-icon-large" style="position:relative;display:inline-block">${heroPortrait(me.hero, 48)}${me.companion ? `<span class="companion-indicator companion-indicator-me">${companionEmoji(me.companion)}</span>` : ""}</div>
         <div class="my-hero-info">
           <div class="my-hero-name">${heroName(me.hero)}</div>
           <div class="my-hero-speed">${t("draft.speed")} ${heroDef?.speed ?? "?"}</div>
@@ -914,10 +928,10 @@ function renderMyBoard() {
   // Companion section
   let companionHtml = "";
   if (me.companion) {
-    const cDef = COMPANIONS.find((c) => c.id === me.companion);
+    const cDef = companionDef(me.companion);
     companionHtml = `
       <div class="my-companion">
-        <span class="companion-name">🧑‍🌾 ${cDef?.name ?? me.companion}</span>
+        <span class="companion-name">${companionEmoji(me.companion)} ${cDef?.name ?? me.companion}${me.companionDisabled ? " ❌" : ""}</span>
         <span style="font-size:9px;color:#888">${cDef?.description ?? ""}</span>
       </div>
     `;
@@ -973,9 +987,10 @@ function renderMyBoard() {
         }
       }
 
-      if (!me.companionUsed && me.companion) {
-        const cDef = COMPANIONS.find((c) => c.id === me.companion);
-        buttons.push(`<button class="btn btn-secondary" id="btn-companion">🧑‍🌾 ${cDef?.name ?? me.companion}</button>`);
+      if (!me.companionUsed && me.companion && !me.companionDisabled && !isPassiveCompanion(me.companion)) {
+        const cDef = companionDef(me.companion);
+        const costInfo = cDef?.useCost ? ` (${cDef.useCost}💰)` : "";
+        buttons.push(`<button class="btn btn-secondary" id="btn-companion">${companionEmoji(me.companion)} ${cDef?.name ?? me.companion}${costInfo}</button>`);
       }
 
       if (!me.incomeTaken) {
@@ -1014,7 +1029,13 @@ function renderMyBoard() {
     dispatch({ type: "ability", playerId: getMyId(), ability: { hero: me.hero! } as AbilityPayload });
   });
   document.getElementById("btn-companion")?.addEventListener("click", () => {
-    dispatch({ type: "use_companion", playerId: getMyId() });
+    const myCompanion = getPlayers()[getMyIndex()].companion;
+    const cDef = companionDef(myCompanion);
+    if (cDef?.targetType) {
+      showCompanionModal(myCompanion!);
+    } else {
+      dispatch({ type: "use_companion", playerId: getMyId() });
+    }
   });
 }
 
@@ -1145,12 +1166,13 @@ function renderDraft() {
     // Deduplicate for display
     const unique = [...new Set(pool)];
     const companionCards = unique.map((cId) => {
-      const def = COMPANIONS.find((c) => c.id === cId);
+      const def = companionDef(cId);
+      const passiveTag = def?.passive ? `<span style="font-size:8px;color:#aaa">авто</span>` : "";
       return `
         <button class="companion-card" data-companion="${cId}">
-          <div class="companion-card-portrait"></div>
+          <div class="companion-card-portrait">${def?.emoji ?? "?"}</div>
           <div class="companion-card-body">
-            <div class="companion-card-name">${def?.name ?? cId}</div>
+            <div class="companion-card-name">${def?.name ?? cId} ${passiveTag}</div>
             <div class="companion-card-desc">${def?.description ?? ""}</div>
           </div>
         </button>`;
@@ -1249,6 +1271,132 @@ function getAbilityDescription(heroId: HeroId): string {
     case HeroId.Architect: return t("ability.architect");
     case HeroId.General: return t("ability.general");
     default: return "";
+  }
+}
+
+function showCompanionModal(companionId: CompanionId) {
+  const modal = document.getElementById("ability-modal")!;
+  const title = document.getElementById("modal-title")!;
+  const options = document.getElementById("modal-options")!;
+  modal.classList.add("show");
+
+  const close = () => modal.classList.remove("show");
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+
+  const cDef = companionDef(companionId);
+  const players = getPlayers();
+  const myIdx = getMyIndex();
+  const me = players[myIdx];
+
+  switch (companionId) {
+    case CompanionId.Hunter: {
+      title.textContent = `🏹 Охотник — выберите цель`;
+      const targets = players.filter((_p, i) => i !== myIdx && !_p.assassinated);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">За 2💰 противник сбрасывает 2 случайные карты</p>
+        ${targets.map((p) => {
+          const revealed = isHeroRevealed(players.indexOf(p));
+          const heroTag = revealed && p.hero ? ` ${heroPortraitSmall(p.hero)}` : "";
+          return `<button class="modal-option" data-target="${p.id}">${heroTag} ${tName(p.name)} (🃏${p.hand ? p.hand.length : p.handSize})</button>`;
+        }).join("")}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Saboteur: {
+      title.textContent = `💣 Диверсант — выберите цель`;
+      const targets = players.filter((_p, i) => i !== myIdx && _p.companion && !_p.companionDisabled);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Отключает компаньона выбранного игрока на день</p>
+        ${targets.length > 0 ? targets.map((p) => {
+          const cName = companionDef(p.companion)?.name ?? "";
+          return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
+        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Bard: {
+      title.textContent = `🎵 Бард — выберите цель`;
+      const targets = players.filter((_p, i) => i !== myIdx && _p.companion);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Убирает компаньона выбранного игрока</p>
+        ${targets.length > 0 ? targets.map((p) => {
+          const cName = companionDef(p.companion)?.name ?? "";
+          return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
+        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Blacksmith: {
+      title.textContent = `⚒️ Кузнец — выберите квартал`;
+      const allDistricts = players.flatMap((p, i) =>
+        p.builtDistricts.map((d) => ({ card: d, player: p, playerIdx: i }))
+      );
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Заменяет квартал на другой за ту же цену, другого цвета</p>
+        ${allDistricts.map((item) =>
+          `<button class="modal-option" data-target-player="${item.player.id}" data-target-card="${item.card.id}">
+            ${item.card.name} (${item.card.cost}💰) — ${tName(item.player.name)}
+          </button>`
+        ).join("")}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetPlayerId = (btn as HTMLElement).dataset.targetPlayer!;
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId, targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Alchemist: {
+      title.textContent = `⚗️ Алхимик — выберите квартал`;
+      const upgradeable = me.builtDistricts.filter((d) => d.cost < 5);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Превращает квартал в случайный на 1 дороже (макс 5)</p>
+        ${upgradeable.length > 0 ? upgradeable.map((d) =>
+          `<button class="modal-option" data-target-card="${d.id}">${d.name} (${d.cost}💰 → ${d.cost + 1}💰)</button>`
+        ).join("") : `<p class="hint">Нет кварталов для улучшения</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    default:
+      // No targeting needed
+      dispatch({ type: "use_companion", playerId: getMyId() });
+      close();
   }
 }
 

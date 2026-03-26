@@ -304,6 +304,7 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
       finishedFirst: p.finishedFirst,
       companion: p.companion,
       companionUsed: p.companionUsed,
+      companionDisabled: p.companionDisabled,
     };
   });
 

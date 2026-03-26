@@ -74,3 +74,58 @@ export function createBaseDeck(): DistrictCard[] {
 export function isPurpleCard(card: DistrictCard): boolean {
   return card.colors.includes("purple");
 }
+
+const BASE_COLORS: CardColor[] = ["yellow", "blue", "green", "red"];
+
+/** Map of cost → card names for generating random cards */
+const COST_NAME_MAP: Record<number, string[]> = {};
+for (const t of TEMPLATES) {
+  if (t.colors.includes("purple")) continue; // skip purple for random generation
+  if (!COST_NAME_MAP[t.cost]) COST_NAME_MAP[t.cost] = [];
+  COST_NAME_MAP[t.cost].push(t.name);
+}
+
+let _genId = 1000;
+
+/** Generate a random district card of a given cost and color */
+export function generateCard(cost: number, colors: CardColor[]): DistrictCard {
+  const names = COST_NAME_MAP[cost];
+  const name = names ? names[Math.floor(Math.random() * names.length)] : `Квартал (${cost})`;
+  return {
+    id: `gen-${_genId++}`,
+    name,
+    cost,
+    hp: cost,
+    colors,
+  };
+}
+
+/** Generate a random card of the given cost with a random base color */
+export function generateRandomCard(cost: number, rng: { int: (a: number, b: number) => number }): DistrictCard {
+  const color = BASE_COLORS[rng.int(0, BASE_COLORS.length - 1)];
+  return generateCard(cost, [color]);
+}
+
+/** Add a random second color to a card (for Druid) */
+export function addRandomColor(card: DistrictCard, rng: { int: (a: number, b: number) => number }): DistrictCard {
+  if (card.colors.length >= 2) return card; // already multi-color
+  const available = BASE_COLORS.filter((c) => !card.colors.includes(c));
+  if (available.length === 0) return card;
+  const extra = available[rng.int(0, available.length - 1)];
+  return { ...card, colors: [...card.colors, extra] };
+}
+
+/** Generate a card of the same cost but a different color */
+export function generateDifferentColorCard(
+  cost: number,
+  excludeColors: CardColor[],
+  rng: { int: (a: number, b: number) => number },
+): DistrictCard {
+  const available = BASE_COLORS.filter((c) => !excludeColors.includes(c));
+  if (available.length === 0) {
+    // Fallback: use any color
+    return generateRandomCard(cost, rng);
+  }
+  const color = available[rng.int(0, available.length - 1)];
+  return generateCard(cost, [color]);
+}

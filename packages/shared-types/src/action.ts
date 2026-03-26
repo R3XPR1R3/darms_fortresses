@@ -61,6 +61,10 @@ export interface CompanionPickAction {
 export interface UseCompanionAction {
   type: "use_companion";
   playerId: string;
+  /** Target player for Hunter, Saboteur, Bard, Blacksmith */
+  targetPlayerId?: string;
+  /** Target card for Blacksmith, Alchemist */
+  targetCardId?: string;
 }
 
 /** Player explicitly ends their turn */

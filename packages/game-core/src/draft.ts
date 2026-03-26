@@ -9,32 +9,56 @@ const ALL_HEROES: HeroId[] = Object.values(HeroId);
  *
  * Flow (4 players):
  *   1. Shuffle all 8 heroes
- *   2. Auto-ban: 1 face-up + 1 face-down (random, no player choice)
- *   3. P1 (crown holder) picks 1 of 6
- *   4. P2 picks 1 of 5
- *   5. P3 picks 1 of 4
- *   6. P4 picks 1 of 3, then remaining 2 auto-ban (1 up + 1 down)
- *   7. All players simultaneously pick 1 companion from 3 offered
+ *   2. Auto-ban: 1 face-up + 1 face-down (unless Royal Guard overrides)
+ *   3. Sequential picks based on crown order
+ *   4. All players sequentially pick 1 companion from a pool of 3
+ *
+ * Royal Guard modifier: if a player has royalGuardDraft flag,
+ *   no initial auto-ban — first drafter picks from all 8,
+ *   then 2 are auto-banned (1 up + 1 down).
  */
 export function initDraft(state: GameState, rng: Rng): GameState {
   const heroes = [...ALL_HEROES];
   rng.shuffle(heroes);
 
-  // Auto-ban before draft: first card face-up, second face-down
-  const faceUpBan = heroes.pop()!;
-  const faceDownBan = heroes.pop()!;
+  // Check if any player has Royal Guard draft modifier
+  const hasRoyalGuard = state.players.some((p) => p.royalGuardDraft);
+
+  let faceUpBans: HeroId[] = [];
+  let faceDownBans: HeroId[] = [];
+
+  if (!hasRoyalGuard) {
+    // Normal: auto-ban before draft: first card face-up, second face-down
+    const faceUpBan = heroes.pop()!;
+    const faceDownBan = heroes.pop()!;
+    faceUpBans = [faceUpBan];
+    faceDownBans = [faceDownBan];
+  }
+  // If Royal Guard: no initial bans, all 8 heroes available
 
   // Draft order: starting from crown holder, clockwise
+  // If Royal Guard player exists, they go first
   const playerCount = state.players.length;
   const draftOrder: number[] = [];
-  for (let i = 0; i < playerCount; i++) {
-    draftOrder.push((state.crownHolder + i) % playerCount);
+
+  if (hasRoyalGuard) {
+    // Royal Guard player(s) draft first, then normal order
+    const rgIdx = state.players.findIndex((p) => p.royalGuardDraft);
+    draftOrder.push(rgIdx);
+    for (let i = 0; i < playerCount; i++) {
+      const idx = (state.crownHolder + i) % playerCount;
+      if (idx !== rgIdx) draftOrder.push(idx);
+    }
+  } else {
+    for (let i = 0; i < playerCount; i++) {
+      draftOrder.push((state.crownHolder + i) % playerCount);
+    }
   }
 
   const draft: DraftState = {
-    availableHeroes: heroes, // 6 remaining
-    faceUpBans: [faceUpBan],
-    faceDownBans: [faceDownBan],
+    availableHeroes: heroes,
+    faceUpBans,
+    faceDownBans,
     draftOrder,
     currentStep: 0,
     companionChoices: null,
@@ -46,7 +70,7 @@ export function initDraft(state: GameState, rng: Rng): GameState {
     phase: "draft",
     draft,
     rng: rng.getSeed(),
-    // Reset hero assignments
+    // Reset hero assignments and companion state
     players: state.players.map((p) => ({
       ...p,
       hero: null,
@@ -57,18 +81,19 @@ export function initDraft(state: GameState, rng: Rng): GameState {
       abilityUsed: false,
       companion: null,
       companionUsed: false,
+      companionDisabled: false,
+      royalGuardDraft: false, // consumed
     })),
   };
 }
 
 /**
  * Generate a shared pool of 3 companion choices for the sequential draft.
- * When more companions are added, this will randomly pick 3.
+ * With 16 companions, randomly pick 3.
  */
 function generateCompanionPool(rng: Rng): CompanionId[] {
   const allCompanions = COMPANIONS.map((c) => c.id);
   const pool = [...allCompanions];
-  while (pool.length < 3) pool.push(allCompanions[pool.length % allCompanions.length]);
   rng.shuffle(pool);
   return pool.slice(0, 3);
 }
@@ -107,12 +132,30 @@ export function draftPick(
   const isLastPick = nextStep >= draft.draftOrder.length;
 
   if (isLastPick) {
-    // Last player picked — auto-ban remaining 2 cards (1 up, 1 down)
+    // Last player picked — auto-ban remaining cards
     rng.shuffle(remaining);
-    const finalFaceUp = remaining[0];
-    const finalFaceDown = remaining[1];
 
-    // Move to companion draft phase (sequential, same order as hero draft)
+    // Royal Guard mode: after first pick, ban 2 (1 up, 1 down)
+    // Normal mode: ban remaining 2
+    const hasRoyalGuard = remaining.length > 2;
+
+    let finalFaceUp: HeroId[] = [];
+    let finalFaceDown: HeroId[] = [];
+
+    if (hasRoyalGuard && remaining.length >= 2) {
+      // Royal Guard: ban 1 up + 1 down from remaining, rest stay banned
+      finalFaceUp = remaining.slice(0, 1);
+      finalFaceDown = remaining.slice(1, 2);
+      // Any extras also go to face-down bans
+      if (remaining.length > 2) {
+        finalFaceDown = [...finalFaceDown, ...remaining.slice(2)];
+      }
+    } else {
+      finalFaceUp = remaining[0] ? [remaining[0]] : [];
+      finalFaceDown = remaining[1] ? [remaining[1]] : [];
+    }
+
+    // Move to companion draft phase
     const companionPool = generateCompanionPool(rng);
 
     return {
@@ -121,10 +164,10 @@ export function draftPick(
       draft: {
         ...draft,
         availableHeroes: [],
-        faceUpBans: [...draft.faceUpBans, ...(finalFaceUp ? [finalFaceUp] : [])],
-        faceDownBans: [...draft.faceDownBans, ...(finalFaceDown ? [finalFaceDown] : [])],
+        faceUpBans: [...draft.faceUpBans, ...finalFaceUp],
+        faceDownBans: [...draft.faceDownBans, ...finalFaceDown],
         currentStep: 0, // reset step for companion draft
-        companionChoices: [companionPool], // shared pool stored as single array
+        companionChoices: [companionPool],
         draftPhase: "companion",
       },
       rng: rng.getSeed(),

@@ -1,11 +1,13 @@
 import type { GameState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
+import { addRandomColor } from "./deck.js";
 
 /**
  * Build the turn order for the current day based on hero speeds.
  * Lower speed = goes first. Ties broken randomly.
+ * Courier companion: hero speed -2.
  * Also resets per-turn state and applies passive abilities for first player.
  */
 export function buildTurnOrder(state: GameState, rng: Rng): GameState {
@@ -14,8 +16,19 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
     .filter((p) => p.hero !== null && !state.players[p.idx].assassinated);
 
   indexed.sort((a, b) => {
-    const speedA = HEROES.find((h) => h.id === a.hero)!.speed;
-    const speedB = HEROES.find((h) => h.id === b.hero)!.speed;
+    let speedA = HEROES.find((h) => h.id === a.hero)!.speed;
+    let speedB = HEROES.find((h) => h.id === b.hero)!.speed;
+
+    // Courier companion: speed -2
+    const pA = state.players[a.idx];
+    if (pA.companion === CompanionId.Courier && !pA.companionDisabled) {
+      speedA -= 2;
+    }
+    const pB = state.players[b.idx];
+    if (pB.companion === CompanionId.Courier && !pB.companionDisabled) {
+      speedB -= 2;
+    }
+
     if (speedA !== speedB) return speedA - speedB;
     return rng.next() - 0.5;
   });
@@ -47,6 +60,8 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
 
 /**
  * Process income action: take 1 gold OR draw 1 card from deck.
+ * Swindler companion: first income gives BOTH (gold + card), then can take one more.
+ * Druid companion: drawn cards become dual-colored.
  */
 export function takeIncome(
   state: GameState,
@@ -59,6 +74,36 @@ export function takeIncome(
   const player = state.players[playerIdx];
   if (player.assassinated) return null;
   if (player.incomeTaken) return null;
+
+  const hasSwindler = player.companion === CompanionId.Swindler
+    && !player.companionDisabled && !player.companionUsed;
+
+  const rng = { int: (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1)) };
+  const hasDruid = player.companion === CompanionId.Druid && !player.companionDisabled;
+
+  if (hasSwindler) {
+    // Swindler: give BOTH gold + card, mark companion used, don't mark income taken
+    let newDeck = [...state.deck];
+    let newHand = [...player.hand];
+    if (newDeck.length > 0) {
+      let drawn = newDeck.shift()!;
+      if (hasDruid) drawn = addRandomColor(drawn, rng);
+      newHand = [...newHand, drawn];
+    }
+    const newPlayers = [...state.players];
+    newPlayers[playerIdx] = {
+      ...player,
+      gold: player.gold + 1,
+      hand: newHand,
+      companionUsed: true, // swindler bonus used, but income NOT taken — can take once more
+    };
+    return {
+      ...state,
+      players: newPlayers,
+      deck: newDeck,
+      log: [...state.log, { day: state.day, message: `${player.name} — шулер: +1💰 и +1🃏` }],
+    };
+  }
 
   if (choice === "gold") {
     const newPlayers = [...state.players];
@@ -73,7 +118,9 @@ export function takeIncome(
   if (state.deck.length === 0) return null;
 
   const newDeck = [...state.deck];
-  const drawn = newDeck.shift()!;
+  let drawn = newDeck.shift()!;
+  if (hasDruid) drawn = addRandomColor(drawn, rng);
+
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
     ...player,
@@ -87,6 +134,8 @@ export function takeIncome(
 /**
  * Build a district from hand. Costs gold equal to card cost.
  * Architect can build up to 3 per turn, others 1.
+ * Official companion (red hero): allows building duplicates.
+ * Sun Priestess companion (blue hero): blue districts cost -1.
  */
 export function buildDistrict(
   state: GameState,
@@ -104,9 +153,30 @@ export function buildDistrict(
   if (cardIdx === -1) return null;
 
   const card = player.hand[cardIdx];
-  if (player.gold < card.cost) return null;
 
-  if (player.builtDistricts.some((d) => d.name === card.name)) return null;
+  // Calculate effective cost
+  let effectiveCost = card.cost;
+  const heroColor = HEROES.find((h) => h.id === player.hero)?.color ?? null;
+
+  // Sun Priestess: blue districts cost -1 (only for blue hero)
+  if (
+    player.companion === CompanionId.SunPriestess
+    && !player.companionDisabled
+    && heroColor === "blue"
+    && card.colors.includes("blue")
+  ) {
+    effectiveCost = Math.max(0, effectiveCost - 1);
+  }
+
+  if (player.gold < effectiveCost) return null;
+
+  // Duplicate check — Official (red hero) allows duplicates
+  const allowDuplicates =
+    player.companion === CompanionId.Official
+    && !player.companionDisabled
+    && heroColor === "red";
+
+  if (!allowDuplicates && player.builtDistricts.some((d) => d.name === card.name)) return null;
 
   const newHand = [...player.hand];
   newHand.splice(cardIdx, 1);
@@ -114,7 +184,7 @@ export function buildDistrict(
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
     ...player,
-    gold: player.gold - card.cost,
+    gold: player.gold - effectiveCost,
     hand: newHand,
     builtDistricts: [...player.builtDistricts, card],
     buildsRemaining: player.buildsRemaining - 1,
@@ -123,6 +193,66 @@ export function buildDistrict(
   let newState = { ...state, players: newPlayers };
   newState = checkWinCondition(newState);
   return newState;
+}
+
+/**
+ * Apply Treasurer end-of-day effect: richest player gives 1 gold + 1 card to Treasurer's owner.
+ */
+function applyTreasurerEndOfDay(state: GameState, rng: Rng): GameState {
+  let newPlayers = [...state.players];
+  let log = state.log;
+
+  for (let i = 0; i < newPlayers.length; i++) {
+    const p = newPlayers[i];
+    if (p.companion !== CompanionId.Treasurer || p.companionDisabled) continue;
+
+    // Find richest other player
+    let richestIdx = -1;
+    let maxGold = -1;
+    for (let j = 0; j < newPlayers.length; j++) {
+      if (j === i) continue;
+      if (newPlayers[j].gold > maxGold) {
+        maxGold = newPlayers[j].gold;
+        richestIdx = j;
+      }
+    }
+    if (richestIdx === -1 || maxGold <= 0) continue;
+
+    const richest = newPlayers[richestIdx];
+    // Transfer 1 gold
+    const goldTransfer = Math.min(1, richest.gold);
+    // Transfer 1 random card
+    let cardTransfer = null;
+    let newRichHand = [...richest.hand];
+    if (newRichHand.length > 0) {
+      const cardIdx = rng.int(0, newRichHand.length - 1);
+      cardTransfer = newRichHand[cardIdx];
+      newRichHand.splice(cardIdx, 1);
+    }
+
+    newPlayers = [...newPlayers];
+    newPlayers[richestIdx] = { ...richest, gold: richest.gold - goldTransfer, hand: newRichHand };
+    newPlayers[i] = {
+      ...newPlayers[i],
+      gold: newPlayers[i].gold + goldTransfer,
+      hand: cardTransfer ? [...newPlayers[i].hand, cardTransfer] : newPlayers[i].hand,
+    };
+    log = [...log, { day: state.day, message: `${p.name} — казначей: ${richest.name} отдал ${goldTransfer}💰${cardTransfer ? " и карту" : ""}` }];
+  }
+  return { ...state, players: newPlayers, log };
+}
+
+/**
+ * Set Royal Guard flag for next draft on players who have Royal Guard companion.
+ */
+function applyRoyalGuardEndOfDay(state: GameState): GameState {
+  const newPlayers = state.players.map((p) => {
+    if (p.companion === CompanionId.RoyalGuard && !p.companionDisabled) {
+      return { ...p, royalGuardDraft: true };
+    }
+    return p;
+  });
+  return { ...state, players: newPlayers };
 }
 
 /**
@@ -160,6 +290,10 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   state = { ...state, players, log };
 
   if (nextIdx >= turnOrder.length) {
+    // End of day — apply end-of-day companion effects
+    state = applyTreasurerEndOfDay(state, rng);
+    state = applyRoyalGuardEndOfDay(state);
+
     // Re-check: if a player was marked finishedFirst but districts were destroyed
     // below the threshold, clear the flag — the game continues
     let playersCheck = [...state.players];
@@ -176,13 +310,13 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
 
     const someoneFinished = state.players.some((p) => p.finishedFirst && p.builtDistricts.length >= WIN_DISTRICTS);
     if (someoneFinished) {
-      return calculateScores({ ...state, log });
+      return calculateScores({ ...state, log: state.log });
     }
 
     // Day is over — go back to draft for next day
     return {
       ...state,
-      log,
+      log: state.log,
       phase: "draft",
       draft: null,
       currentTurnIndex: 0,
@@ -193,7 +327,7 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
 
   // Apply passive for next player
   const nextPlayerIdx = turnOrder[nextIdx];
-  let newState: GameState = { ...state, log, currentTurnIndex: nextIdx };
+  let newState: GameState = { ...state, log: state.log, currentTurnIndex: nextIdx };
   newState = applyPassiveAbility(newState, nextPlayerIdx, rng);
 
   return newState;

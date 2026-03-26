@@ -59,6 +59,7 @@ export interface PlayerViewEntry {
   finishedFirst: boolean;
   companion: PlayerState["companion"];
   companionUsed: boolean;
+  companionDisabled: boolean;
 }
 
 export interface DraftView {

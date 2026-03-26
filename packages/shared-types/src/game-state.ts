@@ -21,6 +21,8 @@ export interface GameState {
   /** Log of events for UI display */
   log: LogEntry[];
   rng: number; // seed for deterministic randomness
+  /** Global Bard usage count — each use increases cost by 1 */
+  bardUsageCount: number;
 }
 
 export interface LogEntry {
@@ -57,6 +59,10 @@ export interface PlayerState {
   companion: CompanionId | null;
   /** Has the companion ability been used this turn? */
   companionUsed: boolean;
+  /** Companion disabled by Saboteur for this day */
+  companionDisabled: boolean;
+  /** Royal Guard: player gets expanded draft next day */
+  royalGuardDraft: boolean;
 }
 
 /** State tracking the hero draft within a day */
