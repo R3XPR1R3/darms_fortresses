@@ -36,6 +36,7 @@ export function createMatch(
       companionUsed: false,
       companionDisabled: false,
       royalGuardDraft: false,
+      designerMarkedCardId: null,
     };
   });
 

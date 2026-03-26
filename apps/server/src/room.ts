@@ -305,6 +305,7 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
       companion: (i === myIndex || revealed) ? p.companion : null,
       companionUsed: p.companionUsed,
       companionDisabled: p.companionDisabled,
+      designerMarkedCardId: p.designerMarkedCardId,
     };
   });
 

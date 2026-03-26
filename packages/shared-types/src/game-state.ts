@@ -100,6 +100,8 @@ export interface PlayerState {
   companionDisabled: boolean;
   /** Royal Guard: player gets expanded draft next day */
   royalGuardDraft: boolean;
+  /** Designer: marked district ID to transform into purple card at next purple draft */
+  designerMarkedCardId: string | null;
 }
 
 /** State tracking the hero draft within a day */

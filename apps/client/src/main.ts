@@ -55,6 +55,7 @@ interface PlayerViewEntry {
   companion: PlayerState["companion"];
   companionUsed: boolean;
   companionDisabled: boolean;
+  designerMarkedCardId: string | null;
 }
 
 interface DraftView {
@@ -403,10 +404,17 @@ function getPlayers(): PlayerViewEntry[] {
         companion: (isMe || revealed) ? p.companion : null,
         companionUsed: p.companionUsed,
         companionDisabled: p.companionDisabled,
+        designerMarkedCardId: p.designerMarkedCardId,
       };
     });
   }
   return [];
+}
+
+function getCrownHolder(): number {
+  if (mode === "online" && onlineState) return onlineState.crownHolder;
+  if (localState) return localState.crownHolder;
+  return 0;
 }
 
 function getMyId(): string {
@@ -885,8 +893,10 @@ function renderOpponentBoard() {
   }
 
   // Stats bar
+  const isCrown = getCrownHolder() === selectedOpponentIndex;
   const statsBar = `
     <div class="opp-stats-bar">
+      ${isCrown ? `<span>👑</span>` : ""}
       <span>💰 ${p.gold}</span>
       <span>🃏 ${p.hand ? p.hand.length : p.handSize}</span>
       <span>🏠 ${p.builtDistricts.length}/${WIN_DISTRICTS}</span>
@@ -927,8 +937,10 @@ function renderMyBoard() {
 
   // During draft — show simplified board (stats + districts only, no hand/actions)
   if (phase === "draft") {
+    const draftCrown = getCrownHolder() === getMyIndex();
     const draftStats = `
       <div class="my-stats-bar">
+        ${draftCrown ? `<span>👑</span>` : ""}
         <span>💰 ${me.gold}</span>
         <span>🃏 ${me.hand ? me.hand.length : me.handSize}</span>
         <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
@@ -970,8 +982,10 @@ function renderMyBoard() {
   }
 
   // Stats bar
+  const myIsCrown = getCrownHolder() === getMyIndex();
   const statsBar = `
     <div class="my-stats-bar">
+      ${myIsCrown ? `<span>👑</span>` : ""}
       <span>💰 ${me.gold}</span>
       <span>🃏 ${hand.length}</span>
       <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
@@ -1629,8 +1643,52 @@ function showCompanionModal(companionId: CompanionId) {
       break;
     }
 
+    case CompanionId.Designer: {
+      title.textContent = `📐 Дизайнер — выберите квартал`;
+      const ownDistricts = me.builtDistricts;
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Выбранный квартал превратится в фиолетовую карту при следующем фиолетовом драфте</p>
+        ${ownDistricts.length > 0 ? ownDistricts.map((d) =>
+          `<button class="modal-option" data-target-card="${d.id}">${d.name} (${d.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет кварталов</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.NightShadow: {
+      title.textContent = `🌑 Ночная тень — выберите героя для убийства`;
+      const draft = getDraft();
+      const faceUpBans = draft?.faceUpBans ?? [];
+      const myHero = me.hero;
+      // Exclude self hero and face-up banned heroes
+      const targets = Object.values(HeroId).filter((h) =>
+        h !== myHero && !faceUpBans.includes(h),
+      );
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">За 2💰: убейте неназванного персонажа</p>
+        ${targets.map((h) =>
+          `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
+        ).join("")}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = (btn as HTMLElement).dataset.target as HeroId;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetHeroId: target });
+          close();
+        });
+      });
+      break;
+    }
+
     default:
-      // No targeting needed
+      // No targeting needed (Farmer, Innkeeper, Peacemaker, etc.)
       dispatch({ type: "use_companion", playerId: getMyId() });
       close();
   }

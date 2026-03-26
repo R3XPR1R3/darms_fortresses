@@ -204,6 +204,18 @@ function pickBestCompanion(
       case CompanionId.Fisherman: score += player.gold >= 2 ? 4 : 2; break;
       case CompanionId.UnluckyMage: score += 0; break; // debuff
       case CompanionId.Nobility: score += player.gold >= 4 ? 4 : 1; break;
+      // Wave 3
+      case CompanionId.TreasureTrader: score += 4; break; // strong in purple draft
+      case CompanionId.Designer: score += player.builtDistricts.length >= 3 ? 3 : 1; break;
+      case CompanionId.Innkeeper: score += 2; break; // info only
+      case CompanionId.Peacemaker: {
+        const dangerousCount = state.players.reduce((acc, p) =>
+          acc + p.builtDistricts.filter((d) => d.purpleAbility === "cannon" || d.purpleAbility === "tnt_storage" || d.purpleAbility === "cult").length, 0);
+        score += dangerousCount >= 2 ? 5 : 1;
+        break;
+      }
+      case CompanionId.Contractor: score += player.hero === HeroId.Assassin ? 5 : 1; break;
+      case CompanionId.NightShadow: score += player.gold >= 3 ? 4 : 2; break;
     }
 
     if (score > bestScore) {
@@ -324,6 +336,40 @@ function pickCompanionAction(
     case CompanionId.Fisherman: {
       if (player.gold < 1) return null;
       return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.Designer: {
+      // Mark cheapest built district
+      if (player.builtDistricts.length === 0) return null;
+      const cheapest = [...player.builtDistricts].sort((a, b) => a.cost - b.cost)[0];
+      return { type: "use_companion", playerId: player.id, targetCardId: cheapest.id };
+    }
+
+    case CompanionId.Innkeeper:
+      return { type: "use_companion", playerId: player.id };
+
+    case CompanionId.Peacemaker: {
+      // Only use if there are dangerous buildings on the table
+      const dangerousCount = state.players.reduce((acc, p) =>
+        acc + p.builtDistricts.filter((d) => d.purpleAbility === "cannon" || d.purpleAbility === "tnt_storage" || d.purpleAbility === "cult").length, 0);
+      if (dangerousCount === 0) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.NightShadow: {
+      // Pay 2g to assassinate strongest unrevealed hero
+      if (player.gold < 2) return null;
+      if (!state.turnOrder) return null;
+      // Find unrevealed heroes (those after current turn)
+      const unrevealed = state.players
+        .filter((p, i) => {
+          if (i === playerIdx || !p.hero || p.assassinated) return false;
+          const posInOrder = state.turnOrder!.indexOf(i);
+          return posInOrder === -1 || posInOrder > state.currentTurnIndex;
+        })
+        .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length);
+      if (unrevealed.length === 0) return null;
+      return { type: "use_companion", playerId: player.id, targetHeroId: unrevealed[0].hero! };
     }
 
     // Bots avoid debuff companions (Pyromancer, UnluckyMage)

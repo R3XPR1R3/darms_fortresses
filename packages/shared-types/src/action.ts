@@ -63,10 +63,12 @@ export interface CompanionPickAction {
 export interface UseCompanionAction {
   type: "use_companion";
   playerId: string;
-  /** Target player for Hunter, Saboteur, Bard, Blacksmith */
+  /** Target player for Hunter, Saboteur, Bard, Blacksmith, NightShadow */
   targetPlayerId?: string;
   /** Target card for Blacksmith, Alchemist */
   targetCardId?: string;
+  /** Target hero for NightShadow */
+  targetHeroId?: HeroId;
 }
 
 /** Player picks a purple card during purple draft */

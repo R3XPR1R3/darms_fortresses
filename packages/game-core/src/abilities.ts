@@ -220,6 +220,23 @@ export function useAbility(
           }
         }
 
+        // Contractor companion: steal victim's purple cards from hand
+        if (player.companion === CompanionId.Contractor && !player.companionDisabled) {
+          const victim = state.players[targetIdx];
+          const purpleCards = victim.hand.filter((c) => c.colors.includes("purple"));
+          if (purpleCards.length > 0) {
+            const remainingHand = victim.hand.filter((c) => !c.colors.includes("purple"));
+            newPlayers[playerIdx] = {
+              ...newPlayers[playerIdx],
+              hand: [...player.hand, ...purpleCards],
+              abilityUsed: true,
+            };
+            newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: remainingHand };
+            log = addLog({ ...state, log }, `${player.name} — заказчик: украл ${purpleCards.length} фиолетовых карт у жертвы!`);
+            break;
+          }
+        }
+
         // Gravedigger companion: gain victim's passive color income
         if (player.companion === CompanionId.Gravedigger && !player.companionDisabled) {
           const victim = state.players[targetIdx];

@@ -251,6 +251,49 @@ export function buildDistrict(
 }
 
 /**
+ * Apply Cult end-of-day effect: each cult on the table replaces a random blue/purple district of a random opponent.
+ */
+function applyCultEndOfDay(state: GameState, rng: Rng): GameState {
+  let players = [...state.players];
+  let log = state.log;
+
+  for (let ownerIdx = 0; ownerIdx < players.length; ownerIdx++) {
+    const cultCount = players[ownerIdx].builtDistricts.filter((d) => d.purpleAbility === "cult").length;
+    if (cultCount === 0) continue;
+    const cultCard = players[ownerIdx].builtDistricts.find((d) => d.purpleAbility === "cult")!;
+
+    for (let c = 0; c < cultCount; c++) {
+      // Find all blue/purple districts of opponents
+      const candidates: { pIdx: number; dIdx: number }[] = [];
+      for (let i = 0; i < players.length; i++) {
+        if (i === ownerIdx) continue;
+        for (let d = 0; d < players[i].builtDistricts.length; d++) {
+          const dist = players[i].builtDistricts[d];
+          if (dist.colors.includes("blue") || dist.colors.includes("purple")) {
+            candidates.push({ pIdx: i, dIdx: d });
+          }
+        }
+      }
+      if (candidates.length === 0) break;
+
+      const pick = candidates[rng.int(0, candidates.length - 1)];
+      const target = players[pick.pIdx];
+      const targetDist = target.builtDistricts[pick.dIdx];
+      const newDistricts = [...target.builtDistricts];
+      newDistricts[pick.dIdx] = {
+        ...cultCard,
+        id: `cult-copy-${Date.now()}-${rng.int(0, 9999)}`,
+      };
+      players = [...players];
+      players[pick.pIdx] = { ...target, builtDistricts: newDistricts };
+      log = [...log, { day: state.day, message: `🕯️ Секта ${players[ownerIdx].name} заменила ${targetDist.name} у ${target.name}!` }];
+    }
+  }
+
+  return { ...state, players, log };
+}
+
+/**
  * Apply Treasurer end-of-day effect: richest player gives 1 gold + 1 card to Treasurer's owner.
  */
 function applyTreasurerEndOfDay(state: GameState, rng: Rng): GameState {
@@ -405,7 +448,8 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   state = { ...state, players, log };
 
   if (nextIdx >= turnOrder.length) {
-    // End of day — apply end-of-day companion effects
+    // End of day — apply end-of-day effects
+    state = applyCultEndOfDay(state, rng);
     state = applyTreasurerEndOfDay(state, rng);
     state = applyRoyalGuardEndOfDay(state);
 

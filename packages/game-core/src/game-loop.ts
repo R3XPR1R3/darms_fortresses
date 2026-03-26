@@ -1,5 +1,5 @@
 import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
-import { CompanionId, COMPANIONS, HEROES, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
+import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, purpleCardPick } from "./draft.js";
 import { buildTurnOrder, takeIncome, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
@@ -32,6 +32,7 @@ function useCompanion(
   playerId: string,
   targetPlayerId?: string,
   targetCardId?: string,
+  targetHeroId?: HeroId,
 ): GameState | null {
   const rng = createRng(state.rng);
   const playerIdx = state.players.findIndex((p) => p.id === playerId);
@@ -387,6 +388,77 @@ function useCompanion(
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: все постройки стали ${template.name}!`), rng: rng.getSeed() };
     }
 
+    case CompanionId.Designer: {
+      // Mark a built district to transform into a purple card at next purple draft
+      if (!targetCardId) return null;
+      const cardIdx = player.builtDistricts.findIndex((c) => c.id === targetCardId);
+      if (cardIdx === -1) return null;
+      const markedCard = player.builtDistricts[cardIdx];
+      newPlayers[playerIdx] = { ...player, designerMarkedCardId: targetCardId, companionUsed: true };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — дизайнер: пометил ${markedCard.name} для превращения`), rng: rng.getSeed() };
+    }
+
+    case CompanionId.Innkeeper: {
+      // Reveals opponents' purple cards — effect is purely visual (log reveals them)
+      const reveals: string[] = [];
+      for (let i = 0; i < state.players.length; i++) {
+        if (i === playerIdx) continue;
+        const p = state.players[i];
+        const purples = p.hand.filter((c) => c.colors.includes("purple"));
+        if (purples.length > 0) {
+          reveals.push(`${p.name}: ${purples.map((c) => c.name).join(", ")}`);
+        }
+      }
+      newPlayers[playerIdx] = { ...player, companionUsed: true };
+      const revealMsg = reveals.length > 0 ? reveals.join("; ") : "ни у кого нет фиолетовых карт";
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — трактирщик: ${revealMsg}`), rng: rng.getSeed() };
+    }
+
+    case CompanionId.Peacemaker: {
+      // Destroy all cannons, TNT storages, and cults on the table (no card effects trigger!)
+      let discardPile = [...state.discardPile];
+      let log = state.log;
+      const destroyed: string[] = [];
+      for (let i = 0; i < state.players.length; i++) {
+        const p = state.players[i];
+        const toRemove = p.builtDistricts.filter((d) =>
+          d.purpleAbility === "cannon" || d.purpleAbility === "tnt_storage" || d.purpleAbility === "cult"
+        );
+        if (toRemove.length > 0) {
+          const remaining = p.builtDistricts.filter((d) =>
+            d.purpleAbility !== "cannon" && d.purpleAbility !== "tnt_storage" && d.purpleAbility !== "cult"
+          );
+          discardPile = [...discardPile, ...toRemove];
+          newPlayers[i] = { ...newPlayers[i] ?? p, builtDistricts: remaining };
+          for (const d of toRemove) destroyed.push(`${d.name} (${p.name})`);
+        }
+      }
+      newPlayers[playerIdx] = { ...newPlayers[playerIdx] ?? player, companionUsed: true };
+      const msg = destroyed.length > 0 ? `разрушил: ${destroyed.join(", ")}` : "ничего не разрушено";
+      let s = addLog({ ...state, players: newPlayers, discardPile }, `${player.name} — миротворец: ${msg}`);
+      s = { ...s, bannedCompanions: [...s.bannedCompanions, CompanionId.Peacemaker], rng: rng.getSeed() };
+      return s;
+    }
+
+    case CompanionId.NightShadow: {
+      // Pay 2g, assassinate an unrevealed hero
+      if (player.gold < 2) return null;
+      if (!targetHeroId) return null;
+      // Can't target self
+      if (targetHeroId === player.hero) return null;
+      const targetIdx = state.players.findIndex((p) => p.hero === targetHeroId);
+      if (targetIdx !== -1) {
+        // Check hero hasn't been revealed yet (not had turn)
+        if (state.turnOrder) {
+          const posInOrder = state.turnOrder.indexOf(targetIdx);
+          if (posInOrder !== -1 && posInOrder <= state.currentTurnIndex) return null;
+        }
+        newPlayers[targetIdx] = { ...state.players[targetIdx], assassinated: true };
+      }
+      newPlayers[playerIdx] = { ...player, gold: player.gold - 2, companionUsed: true };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — ночная тень: убийство за 2💰...`), rng: rng.getSeed() };
+    }
+
     // Passive companions — should not be used via action
     case CompanionId.Treasurer:
     case CompanionId.Official:
@@ -401,6 +473,8 @@ function useCompanion(
     case CompanionId.Jester:
     case CompanionId.Knight:
     case CompanionId.Nobility:
+    case CompanionId.TreasureTrader:
+    case CompanionId.Contractor:
       return null;
 
     default:
@@ -446,17 +520,14 @@ export function processAction(state: GameState, action: GameAction): GameState |
       return takeIncome(state, action.playerId, action.choice);
 
     case "build": {
-      const buildResult = buildDistrict(state, action.playerId, action.cardId);
-      if (!buildResult) return null;
-      // Apply cult effect on build
-      return applyCultOnBuild(buildResult, action.playerId, action.cardId, rng);
+      return buildDistrict(state, action.playerId, action.cardId);
     }
 
     case "ability":
       return useAbility(state, action.playerId, action.ability, rng);
 
     case "use_companion":
-      return useCompanion(state, action.playerId, action.targetPlayerId, action.targetCardId);
+      return useCompanion(state, action.playerId, action.targetPlayerId, action.targetCardId, action.targetHeroId);
 
     case "activate_building":
       return activateBuilding(state, action.playerId, action.cardId, rng);
@@ -582,46 +653,6 @@ function activateBuilding(
     default:
       return null;
   }
-}
-
-/**
- * Apply Cult effect when a cult card is built: replaces random blue/purple district of random player.
- */
-function applyCultOnBuild(state: GameState, playerId: string, cardId: string, rng: Rng): GameState {
-  const playerIdx = state.players.findIndex((p) => p.id === playerId);
-  if (playerIdx === -1) return state;
-  const built = state.players[playerIdx].builtDistricts.find((c) => c.id === cardId);
-  if (!built?.purpleAbility || built.purpleAbility !== "cult") return state;
-
-  // Find random player with blue or purple district
-  const candidates: { pIdx: number; dIdx: number }[] = [];
-  for (let i = 0; i < state.players.length; i++) {
-    if (i === playerIdx) continue;
-    for (let d = 0; d < state.players[i].builtDistricts.length; d++) {
-      const dist = state.players[i].builtDistricts[d];
-      if (dist.colors.includes("blue") || dist.colors.includes("purple")) {
-        candidates.push({ pIdx: i, dIdx: d });
-      }
-    }
-  }
-  if (candidates.length === 0) return state;
-
-  const pick = candidates[rng.int(0, candidates.length - 1)];
-  const target = state.players[pick.pIdx];
-  const targetDist = target.builtDistricts[pick.dIdx];
-  const newDistricts = [...target.builtDistricts];
-  // Replace with a cult copy
-  newDistricts[pick.dIdx] = {
-    ...built,
-    id: `cult-copy-${Date.now()}-${rng.int(0, 9999)}`,
-  };
-  const newPlayers = [...state.players];
-  newPlayers[pick.pIdx] = { ...target, builtDistricts: newDistricts };
-
-  return {
-    ...addLog({ ...state, players: newPlayers }, `🕯️ Секта заменила ${targetDist.name} у ${target.name}!`),
-    rng: rng.getSeed(),
-  };
 }
 
 export { currentPlayer };

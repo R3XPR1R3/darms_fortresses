@@ -31,6 +31,13 @@ export enum CompanionId {
   Fisherman = "fisherman",
   UnluckyMage = "unlucky_mage",
   Nobility = "nobility",
+  // --- Wave 3 (purple-themed) ---
+  TreasureTrader = "treasure_trader",
+  Designer = "designer",
+  Innkeeper = "innkeeper",
+  Peacemaker = "peacemaker",
+  Contractor = "contractor",
+  NightShadow = "night_shadow",
 }
 
 export interface CompanionDefinition {
@@ -41,7 +48,7 @@ export interface CompanionDefinition {
   /** If true, effect applies automatically — no use_companion action needed */
   passive: boolean;
   /** What kind of target is needed for active companions */
-  targetType?: "player" | "own_card" | "any_card" | "own_hand_card";
+  targetType?: "player" | "own_card" | "any_card" | "own_hand_card" | "hero";
   /** Gold cost to activate (0 = free) */
   useCost?: number;
   /** Hero color restriction — companion only works if hero has this color */
@@ -85,6 +92,13 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Fisherman, name: "Рыбак", description: "За 1💰 строит случайную постройку за 2 (дубликаты)", emoji: "🐟", passive: false, useCost: 1 },
   { id: CompanionId.UnluckyMage, name: "Неудачный маг", description: "Сбрасывает карту — все постройки превращаются в неё. Дебафф!", emoji: "💫", passive: false, targetType: "own_hand_card" },
   { id: CompanionId.Nobility, name: "Знать", description: "Самый богатый → +1🃏. Не самый богатый → −1🃏 и −1💰", emoji: "👑", passive: true },
+  // --- Wave 3 (purple-themed) ---
+  { id: CompanionId.TreasureTrader, name: "Торговец сокровищами", description: "Можно выбрать вторую фиолетовую карту. Уходит из пула", emoji: "💎", passive: true, leavesPool: true },
+  { id: CompanionId.Designer, name: "Дизайнер", description: "Выбранный район превращается в случайную фиолетовую карту в следующем фиолетовом драфте", emoji: "📐", passive: false, targetType: "own_card" },
+  { id: CompanionId.Innkeeper, name: "Трактирщик", description: "Покажет все фиолетовые карты противников в руке", emoji: "🍺", passive: false },
+  { id: CompanionId.Peacemaker, name: "Миротворец", description: "Разрушает все пушки, склады тротила и секты (без эффектов). Уходит из пула", emoji: "🕊️", passive: false, leavesPool: true },
+  { id: CompanionId.Contractor, name: "Заказчик", description: "При убийстве цели — крадёте все фиолетовые карты жертвы", emoji: "📋", passive: true },
+  { id: CompanionId.NightShadow, name: "Ночная тень", description: "За 2💰: убейте неназванного персонажа", emoji: "🌑", passive: false, useCost: 2, targetType: "hero" },
 ] as const;
 
 /** Name constant for flame cards (Pyromancer) */

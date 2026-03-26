@@ -1,5 +1,5 @@
 import type { DraftState, GameState, DistrictCard, PurpleDraftState } from "@darms/shared-types";
-import { HeroId, HEROES, CompanionId, COMPANIONS, PURPLE_DRAFT_DAYS, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
+import { HeroId, HEROES, CompanionId, COMPANIONS, PURPLE_DRAFT_DAYS, PURPLE_CARD_TEMPLATES, WIN_DISTRICTS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 const ALL_HEROES: HeroId[] = Object.values(HeroId);
@@ -83,6 +83,7 @@ export function initDraft(state: GameState, rng: Rng): GameState {
       companionUsed: false,
       companionDisabled: false,
       royalGuardDraft: false, // consumed
+      // preserve designerMarkedCardId across days
     })),
   };
 }
@@ -343,12 +344,36 @@ export function isPurpleDraftDay(day: number): boolean {
 
 /** Start the purple card draft — each player gets offered 3 random cards (individual) */
 export function initPurpleDraft(state: GameState, rng: Rng): GameState {
-  const offers = state.players.map(() => {
+  let newPlayers = [...state.players];
+  let log = state.log;
+
+  // Designer effect: marked district transforms into a random purple card
+  for (let i = 0; i < newPlayers.length; i++) {
+    const p = newPlayers[i];
+    if (p.designerMarkedCardId) {
+      const cardIdx = p.builtDistricts.findIndex((c) => c.id === p.designerMarkedCardId);
+      if (cardIdx !== -1) {
+        const oldCard = p.builtDistricts[cardIdx];
+        const newCard = generatePurpleCard(rng);
+        newCard.hp = newCard.cost; // fresh HP
+        const newDistricts = [...p.builtDistricts];
+        newDistricts[cardIdx] = newCard;
+        newPlayers[i] = { ...p, builtDistricts: newDistricts, designerMarkedCardId: null };
+        log = [...log, { day: state.day, message: `📐 Дизайнер: ${oldCard.name} у ${p.name} → ${newCard.name}` }];
+      } else {
+        newPlayers[i] = { ...p, designerMarkedCardId: null };
+      }
+    }
+  }
+
+  const offers = newPlayers.map(() => {
     return [generatePurpleCard(rng), generatePurpleCard(rng), generatePurpleCard(rng)];
   });
-  const picked = state.players.map(() => false);
+  const picked = newPlayers.map(() => false);
   return {
     ...state,
+    players: newPlayers,
+    log,
     purpleDraft: { offers, picked },
     rng: rng.getSeed(),
   };
@@ -364,18 +389,41 @@ export function purpleCardPick(state: GameState, playerId: string, cardIndex: nu
   const newPicked = [...state.purpleDraft.picked];
   newPicked[playerIdx] = true;
   const newPlayers = [...state.players];
+  let log = state.log;
 
   const cards = state.purpleDraft.offers[playerIdx];
   if (cardIndex >= 0 && cards && cardIndex < cards.length) {
     const card = cards[cardIndex];
+    let newHand = [...newPlayers[playerIdx].hand, card];
+
+    // TreasureTrader: pick a second card too
+    const hasTreasureTrader = newPlayers[playerIdx].companion === CompanionId.TreasureTrader
+      && !newPlayers[playerIdx].companionDisabled;
+    if (hasTreasureTrader) {
+      // Pick next available card (first one that's not the picked index)
+      const secondIdx = cards.findIndex((_, i) => i !== cardIndex);
+      if (secondIdx !== -1) {
+        newHand = [...newHand, cards[secondIdx]];
+        log = [...log, { day: state.day, message: `💎 ${newPlayers[playerIdx].name} — торговец сокровищами: взял вторую фиолетовую карту!` }];
+      }
+    }
+
     newPlayers[playerIdx] = {
       ...newPlayers[playerIdx],
-      hand: [...newPlayers[playerIdx].hand, card],
+      hand: newHand,
     };
   }
 
   const newOffers = [...state.purpleDraft.offers];
   newOffers[playerIdx] = null; // clear offer
+
+  // Ban TreasureTrader after use during purple draft
+  let bannedCompanions = state.bannedCompanions;
+  const hasTT = newPlayers[playerIdx].companion === CompanionId.TreasureTrader
+    && !newPlayers[playerIdx].companionDisabled;
+  if (hasTT && cardIndex >= 0) {
+    bannedCompanions = [...bannedCompanions, CompanionId.TreasureTrader];
+  }
 
   const allPicked = newPicked.every(Boolean);
 
@@ -386,6 +434,8 @@ export function purpleCardPick(state: GameState, playerId: string, cardIndex: nu
       players: newPlayers,
       purpleDraft: null,
       phase: "turns",
+      log,
+      bannedCompanions,
     };
   }
 
@@ -393,5 +443,7 @@ export function purpleCardPick(state: GameState, playerId: string, cardIndex: nu
     ...state,
     players: newPlayers,
     purpleDraft: { offers: newOffers, picked: newPicked },
+    log,
+    bannedCompanions,
   };
 }

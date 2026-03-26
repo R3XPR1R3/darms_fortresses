@@ -61,6 +61,7 @@ export interface PlayerViewEntry {
   companion: PlayerState["companion"];
   companionUsed: boolean;
   companionDisabled: boolean;
+  designerMarkedCardId: string | null;
 }
 
 export interface DraftView {
