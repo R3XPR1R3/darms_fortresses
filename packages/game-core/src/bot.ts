@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload } from "@darms/shared-types";
-import { HeroId, CompanionId, COMPANIONS, isPassiveCompanion, WIN_DISTRICTS } from "@darms/shared-types";
+import { HeroId, HEROES, CompanionId, COMPANIONS, isPassiveCompanion, WIN_DISTRICTS } from "@darms/shared-types";
 import { currentDrafter } from "./draft.js";
 import { currentPlayer } from "./turns.js";
 import { createRng } from "./rng.js";
@@ -113,10 +113,22 @@ function pickBestCompanion(
   rng: ReturnType<typeof createRng>,
 ): CompanionId {
   const player = state.players[playerIdx];
-  let bestId = pool[0];
+  const heroColor = player.hero ? (HEROES.find((h) => h.id === player.hero)?.color ?? null) : null;
+
+  // Filter to companions the bot can actually pick (hero color restriction)
+  const eligible = pool.filter((cId) => {
+    const def = COMPANIONS.find((c) => c.id === cId);
+    if (def?.heroColor && def.heroColor !== heroColor) return false;
+    return true;
+  });
+
+  // Fallback: if nothing eligible, pick first available (will be rejected by server, but safe)
+  const candidates = eligible.length > 0 ? eligible : pool;
+
+  let bestId = candidates[0];
   let bestScore = -Infinity;
 
-  for (const cId of pool) {
+  for (const cId of candidates) {
     let score = rng.next() * 2; // small random noise
 
     switch (cId) {

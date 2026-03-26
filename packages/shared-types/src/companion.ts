@@ -46,9 +46,10 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   {
     id: CompanionId.Treasurer,
     name: "Казначей",
-    description: "В конце дня богатейший даёт вам 1💰 и 1🃏",
+    description: "В конце дня богатейший даёт вам 1💰 и 1🃏 (только 🟢)",
     emoji: "💰",
     passive: true,
+    heroColor: "green",
     indicatorColor: "#2ecc71",
   },
   {
@@ -110,9 +111,10 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   {
     id: CompanionId.RoyalGuard,
     name: "Королевский страж",
-    description: "+2💰 за жёлтый квартал. Следующий драфт: выбор из 8",
+    description: "+2💰 за жёлтый квартал. Следующий драфт: выбор из 8 (только 🟡)",
     emoji: "🛡️",
     passive: true,
+    heroColor: "yellow",
     indicatorColor: "#f1c40f",
   },
   {

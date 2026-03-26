@@ -1,5 +1,5 @@
 import type { DraftState, GameState } from "@darms/shared-types";
-import { HeroId, CompanionId, COMPANIONS } from "@darms/shared-types";
+import { HeroId, HEROES, CompanionId, COMPANIONS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 const ALL_HEROES: HeroId[] = Object.values(HeroId);
@@ -87,15 +87,47 @@ export function initDraft(state: GameState, rng: Rng): GameState {
   };
 }
 
+/** Get the hero color for a player */
+function getPlayerHeroColor(state: GameState, playerIdx: number): string | null {
+  const hero = state.players[playerIdx].hero;
+  if (!hero) return null;
+  return HEROES.find((h) => h.id === hero)?.color ?? null;
+}
+
+/**
+ * Check if a companion can be picked by a player (hero color restriction).
+ * Color-restricted companions can only be picked by heroes of matching color.
+ */
+function canPickCompanion(companionId: CompanionId, heroColor: string | null): boolean {
+  const def = COMPANIONS.find((c) => c.id === companionId);
+  if (!def?.heroColor) return true; // no restriction
+  return def.heroColor === heroColor;
+}
+
 /**
  * Generate a shared pool of 3 companion choices for the sequential draft.
- * With 16 companions, randomly pick 3.
+ * Shuffles all 16 companions and picks 3 unique ones.
  */
 function generateCompanionPool(rng: Rng): CompanionId[] {
   const allCompanions = COMPANIONS.map((c) => c.id);
-  const pool = [...allCompanions];
-  rng.shuffle(pool);
-  return pool.slice(0, 3);
+  const shuffled = [...allCompanions];
+  rng.shuffle(shuffled);
+  return shuffled.slice(0, 3);
+}
+
+/**
+ * Pick a replacement companion for the pool, avoiding already-in-pool and already-picked companions.
+ */
+function pickReplacementCompanion(
+  currentPool: CompanionId[],
+  alreadyPicked: CompanionId[],
+  rng: Rng,
+): CompanionId | null {
+  const excluded = new Set([...currentPool, ...alreadyPicked]);
+  const available = COMPANIONS.map((c) => c.id).filter((id) => !excluded.has(id));
+  if (available.length === 0) return null;
+  rng.shuffle(available);
+  return available[0];
 }
 
 /**
@@ -188,13 +220,14 @@ export function draftPick(
 
 /**
  * Process a companion pick during draft (sequential, same order as hero draft).
- * Each player picks from the shared pool. Duplicates allowed (pool doesn't shrink).
+ * After a companion is picked, it's removed from the pool and replaced with a new one.
+ * Color-restricted companions can only be picked by heroes of matching color.
  */
 export function companionPick(
   state: GameState,
   playerId: string,
   companionId: CompanionId,
-  _rng: Rng,
+  rng: Rng,
 ): GameState | null {
   const draft = state.draft;
   if (!draft || state.phase !== "draft") return null;
@@ -210,8 +243,23 @@ export function companionPick(
   const pool = draft.companionChoices?.[0];
   if (!pool || !pool.includes(companionId)) return null;
 
+  // Check hero color restriction
+  const heroColor = getPlayerHeroColor(state, expectedPlayerIdx);
+  if (!canPickCompanion(companionId, heroColor)) return null;
+
+  // Collect already-picked companions (for replacement exclusion)
+  const alreadyPicked = state.players
+    .filter((p) => p.companion !== null)
+    .map((p) => p.companion!);
+  alreadyPicked.push(companionId);
+
   const newPlayers = [...state.players];
   newPlayers[expectedPlayerIdx] = { ...newPlayers[expectedPlayerIdx], companion: companionId };
+
+  // Remove picked companion from pool and add a replacement
+  let newPool = pool.filter((c) => c !== companionId);
+  const replacement = pickReplacementCompanion(newPool, alreadyPicked, rng);
+  if (replacement) newPool.push(replacement);
 
   const nextStep = draft.currentStep + 1;
   const allPicked = nextStep >= draft.draftOrder.length;
@@ -222,14 +270,15 @@ export function companionPick(
       players: newPlayers,
       draft: { ...draft, companionChoices: null, currentStep: nextStep },
       phase: "turns",
-      rng: state.rng,
+      rng: rng.getSeed(),
     };
   }
 
   return {
     ...state,
     players: newPlayers,
-    draft: { ...draft, currentStep: nextStep },
+    draft: { ...draft, companionChoices: [newPool], currentStep: nextStep },
+    rng: rng.getSeed(),
   };
 }
 

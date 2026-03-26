@@ -450,7 +450,16 @@
       font-size: 24px;
       color: #555;
     }
-    .companion-card-portrait::after { content: "🧑‍🌾"; }
+    .companion-card-disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .companion-card-disabled:hover {
+      border-color: #0f3460;
+      transform: none;
+      box-shadow: none;
+    }
     .companion-card-body {
       padding: 4px 6px;
       display: flex;

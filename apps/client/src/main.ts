@@ -352,24 +352,35 @@ function getDay(): number {
 function getPlayers(): PlayerViewEntry[] {
   if (mode === "online" && onlineState) return onlineState.players;
   if (localState) {
-    return localState.players.map((p, i) => ({
-      id: p.id,
-      name: p.name,
-      gold: p.gold,
-      handSize: p.hand.length,
-      hand: p.id === HUMAN_ID ? p.hand : null,
-      builtDistricts: p.builtDistricts,
-      hero: p.hero,
-      incomeTaken: p.incomeTaken,
-      buildsRemaining: p.buildsRemaining,
-      abilityUsed: p.abilityUsed,
-      assassinated: p.assassinated,
-      robbedHeroId: p.robbedHeroId,
-      finishedFirst: p.finishedFirst,
-      companion: p.companion,
-      companionUsed: p.companionUsed,
-      companionDisabled: p.companionDisabled,
-    }));
+    const humanIdx = localState.players.findIndex((pp) => pp.id === HUMAN_ID);
+    return localState.players.map((p, i) => {
+      const isMe = i === humanIdx;
+      // Determine if hero is revealed using same logic as isHeroRevealed
+      let revealed = isMe;
+      if (localState!.phase === "end") revealed = true;
+      else if (localState!.phase === "turns" && localState!.turnOrder) {
+        const pos = localState!.turnOrder.indexOf(i);
+        if (pos !== -1 && pos <= localState!.currentTurnIndex) revealed = true;
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        gold: p.gold,
+        handSize: p.hand.length,
+        hand: isMe ? p.hand : null,
+        builtDistricts: p.builtDistricts,
+        hero: revealed ? p.hero : null,
+        incomeTaken: p.incomeTaken,
+        buildsRemaining: p.buildsRemaining,
+        abilityUsed: p.abilityUsed,
+        assassinated: revealed ? p.assassinated : false,
+        robbedHeroId: p.robbedHeroId,
+        finishedFirst: p.finishedFirst,
+        companion: (isMe || revealed) ? p.companion : null,
+        companionUsed: p.companionUsed,
+        companionDisabled: p.companionDisabled,
+      };
+    });
   }
   return [];
 }
@@ -1062,12 +1073,27 @@ function startDraftTimer(draft: DraftView) {
 
     if (draftTimerRemaining <= 0) {
       stopDraftTimer();
-      // Auto-pick a random hero
       const currentDraft = getDraft();
-      if (currentDraft && currentDraft.availableHeroes.length > 0 && isMyTurn()) {
-        const randomIdx = Math.floor(Math.random() * currentDraft.availableHeroes.length);
-        const heroId = currentDraft.availableHeroes[randomIdx];
-        dispatch({ type: "draft_pick", playerId: getMyId(), heroId });
+      if (currentDraft && isMyTurn()) {
+        if (currentDraft.draftPhase === "companion" && currentDraft.companionPool) {
+          // Auto-pick eligible companion
+          const me = getPlayers()[getMyIndex()];
+          const myHeroClr = me?.hero ? (HEROES.find((h) => h.id === me.hero)?.color ?? null) : null;
+          const eligible = currentDraft.companionPool.filter((cId) => {
+            const def = companionDef(cId);
+            return !def?.heroColor || def.heroColor === myHeroClr;
+          });
+          const pick = eligible.length > 0 ? eligible : currentDraft.companionPool;
+          if (pick.length > 0) {
+            const companionId = pick[Math.floor(Math.random() * pick.length)];
+            dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
+          }
+        } else if (currentDraft.availableHeroes.length > 0) {
+          // Auto-pick a random hero
+          const randomIdx = Math.floor(Math.random() * currentDraft.availableHeroes.length);
+          const heroId = currentDraft.availableHeroes[randomIdx];
+          dispatch({ type: "draft_pick", playerId: getMyId(), heroId });
+        }
       }
     }
   }, 1000);
@@ -1171,15 +1197,25 @@ function renderDraft() {
 
     // Deduplicate for display
     const unique = [...new Set(pool)];
+    // Get my hero color for restriction check
+    const me = getPlayers()[getMyIndex()];
+    const myHero = me?.hero;
+    const myHeroColor = myHero ? (HEROES.find((h) => h.id === myHero)?.color ?? null) : null;
+
     const companionCards = unique.map((cId) => {
       const def = companionDef(cId);
       const passiveTag = def?.passive ? `<span style="font-size:8px;color:#aaa">авто</span>` : "";
+      // Check hero color restriction
+      const restricted = def?.heroColor && def.heroColor !== myHeroColor;
+      const disabledClass = restricted ? "companion-card-disabled" : "";
+      const disabledAttr = restricted ? "disabled" : "";
       return `
-        <button class="companion-card" data-companion="${cId}">
+        <button class="companion-card ${disabledClass}" data-companion="${restricted ? "" : cId}" ${disabledAttr}>
           <div class="companion-card-portrait">${def?.emoji ?? "?"}</div>
           <div class="companion-card-body">
             <div class="companion-card-name">${def?.name ?? cId} ${passiveTag}</div>
             <div class="companion-card-desc">${def?.description ?? ""}</div>
+            ${restricted ? `<div style="font-size:8px;color:#e04050">⛔ только ${def.heroColor === "yellow" ? "🟡" : def.heroColor === "blue" ? "🔵" : def.heroColor === "green" ? "🟢" : "🔴"}</div>` : ""}
           </div>
         </button>`;
     }).join("");

@@ -302,7 +302,7 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
       assassinated: revealed ? p.assassinated : false,
       robbedHeroId: p.robbedHeroId,
       finishedFirst: p.finishedFirst,
-      companion: p.companion,
+      companion: (i === myIndex || revealed) ? p.companion : null,
       companionUsed: p.companionUsed,
       companionDisabled: p.companionDisabled,
     };
