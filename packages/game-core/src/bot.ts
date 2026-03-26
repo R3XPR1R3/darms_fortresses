@@ -49,11 +49,6 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
       if (abilityAction) return abilityAction;
     }
 
-    // Step 1.5: Use companion if available
-    if (!player.companionUsed && player.companion) {
-      return { type: "use_companion", playerId: botPlayerId };
-    }
-
     // Step 2: Take income if not taken
     if (!player.incomeTaken) {
       // Prefer gold if we have buildable cards, else draw
@@ -65,6 +60,11 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
         playerId: botPlayerId,
         choice: canBuild ? "gold" : "card",
       };
+    }
+
+    // Step 2.5: Use companion after income, before building (e.g. Farmer gives +1 gold)
+    if (!player.companionUsed && player.companion) {
+      return { type: "use_companion", playerId: botPlayerId };
     }
 
     // Step 3: Build if possible
