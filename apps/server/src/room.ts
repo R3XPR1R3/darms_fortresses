@@ -179,9 +179,7 @@ function scheduleBotStep(room: Room) {
     return;
   }
 
-  const delay = action.type === "draft_pick" ? 1200
-    : action.type === "end_turn" ? 5000
-    : 1000;
+  const delay = 7000; // unified 7-second timeout for all bot actions
 
   room.botTimer = setTimeout(() => {
     room.botTimer = null;
