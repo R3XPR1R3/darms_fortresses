@@ -11,12 +11,17 @@ import { createRng } from "./rng.js";
 export function botAction(state: GameState, botPlayerId: string): GameAction | null {
   const rng = createRng(state.rng + botPlayerId.charCodeAt(0));
 
-  // Purple card draft — bots always accept
+  // Purple card draft — evaluate offered cards and pick the best one
   if (state.purpleDraft) {
     const botIdx = state.players.findIndex((p) => p.id === botPlayerId);
     if (botIdx === -1) return null;
     if (state.purpleDraft.picked[botIdx]) return null;
-    return { type: "purple_card_pick", playerId: botPlayerId, cardIndex: 0 }; // accept
+    const offers = state.purpleDraft.offers[botIdx];
+    if (!offers || offers.length === 0) {
+      return { type: "purple_card_pick", playerId: botPlayerId, cardIndex: -1 }; // decline
+    }
+    const bestIdx = pickBestPurpleCard(state, botIdx, offers, rng);
+    return { type: "purple_card_pick", playerId: botPlayerId, cardIndex: bestIdx };
   }
 
   if (state.phase === "draft") {
@@ -192,7 +197,7 @@ function pickBestCompanion(
       // Wave 2
       case CompanionId.Cannoneer: score += player.hand.length >= 3 ? 4 : 1; break;
       case CompanionId.Reconstructor: score += state.discardPile.length > 0 ? 4 : 2; break;
-      case CompanionId.DubiousDealer: score += 1; break; // debuff-ish, low priority
+      case CompanionId.DubiousDealer: score += 0; break; // debuff — recolors everything randomly
       case CompanionId.SorcererApprentice: score += state.discardPile.length > 0 ? 3 : 1; break;
       case CompanionId.StrangeMerchant: score += player.hand.length >= 3 ? 3 : 1; break;
       case CompanionId.Gravedigger: score += player.hero === HeroId.Assassin ? 5 : 1; break;
@@ -224,6 +229,96 @@ function pickBestCompanion(
     }
   }
   return bestId;
+}
+
+/** Evaluate purple card offers and return the best card index (0-2), or -1 to decline */
+function pickBestPurpleCard(
+  state: GameState,
+  playerIdx: number,
+  offers: GameState["players"][0]["hand"],
+  rng: ReturnType<typeof createRng>,
+): number {
+  const player = state.players[playerIdx];
+  const builtAbilities = new Set(player.builtDistricts.map((d) => d.purpleAbility).filter(Boolean));
+  const builtNames = new Set(player.builtDistricts.map((d) => d.name));
+
+  let bestIdx = -1;
+  let bestScore = 2; // minimum threshold — decline if nothing scores above this
+
+  for (let i = 0; i < offers.length; i++) {
+    const card = offers[i];
+    let score = rng.next() * 1.5; // small random noise
+
+    // Skip duplicates of already-built districts
+    if (builtNames.has(card.name)) {
+      score -= 10;
+    }
+
+    // Base scoring by purple ability
+    switch (card.purpleAbility) {
+      case "mine":
+        // +1 gold per turn — excellent
+        score += 8;
+        break;
+      case "cannon":
+        // Cheap removal tool
+        score += 6;
+        break;
+      case "fort":
+        // Cheap defensive building
+        score += 5;
+        break;
+      case "crypt":
+        // Gives purple cards on destroy — decent
+        score += 5;
+        break;
+      case "monument":
+        // Cost depends on hand size, always 3 HP — good if hand is small
+        score += player.hand.length <= 3 ? 6 : 3;
+        break;
+      case "tnt_storage": {
+        // Risky — only good when opponent is ahead
+        const maxOpp = Math.max(...state.players.filter((_, i) => i !== playerIdx).map((p) => p.builtDistricts.length));
+        score += maxOpp >= 5 ? 6 : 2;
+        break;
+      }
+      case "highway":
+        // Speed -1, expensive (4g) — situational
+        score += 3;
+        break;
+      case "city_gates":
+        // Very expensive (8g), decays — usually bad
+        score += player.gold >= 6 ? 3 : 1;
+        break;
+      case "cult":
+        // Replaces random blue/purple — can backfire on own buildings
+        score += player.builtDistricts.filter((d) => d.colors.includes("blue") || d.colors.includes("purple")).length > 0 ? 1 : 5;
+        break;
+      default:
+        score += 3;
+    }
+
+    // Already have this ability — lower value of duplicates
+    if (card.purpleAbility && builtAbilities.has(card.purpleAbility)) {
+      score -= 3;
+    }
+
+    // Prefer cards we can afford to build soon
+    if (card.cost <= player.gold) score += 2;
+    else if (card.cost <= player.gold + 3) score += 1;
+
+    // Bonus for color synergy with hand/built
+    for (const color of card.colors) {
+      if (player.builtDistricts.some((d) => d.colors.includes(color))) score += 0.5;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+
+  return bestIdx;
 }
 
 /** Pick an active companion action for the bot */
@@ -307,7 +402,8 @@ function pickCompanionAction(
     }
 
     case CompanionId.DubiousDealer:
-      return { type: "use_companion", playerId: player.id };
+      // Debuff — recolors everything randomly, bot should avoid using it
+      return null;
 
     case CompanionId.SorcererApprentice: {
       if (player.gold < 2 || state.discardPile.length === 0) return null;
