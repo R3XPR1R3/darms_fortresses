@@ -231,7 +231,7 @@ function pickBestCompanion(
   return bestId;
 }
 
-/** Evaluate purple card offers and return the best card index (0-2), or -1 to decline */
+/** Evaluate purple card offers and return the best card index (0-2) — always picks a card */
 function pickBestPurpleCard(
   state: GameState,
   playerIdx: number,
@@ -242,8 +242,9 @@ function pickBestPurpleCard(
   const builtAbilities = new Set(player.builtDistricts.map((d) => d.purpleAbility).filter(Boolean));
   const builtNames = new Set(player.builtDistricts.map((d) => d.name));
 
-  let bestIdx = -1;
-  let bestScore = 2; // minimum threshold — decline if nothing scores above this
+  // Always pick at least a random card — fallback to index 0
+  let bestIdx = Math.floor(rng.next() * offers.length);
+  let bestScore = -Infinity;
 
   for (let i = 0; i < offers.length; i++) {
     const card = offers[i];
