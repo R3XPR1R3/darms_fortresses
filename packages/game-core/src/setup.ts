@@ -36,6 +36,7 @@ export function createMatch(
       companionUsed: false,
       companionDisabled: false,
       royalGuardDraft: false,
+      designerMarkedCardId: null,
     };
   });
 
@@ -55,5 +56,7 @@ export function createMatch(
     log: [],
     rng: rng.getSeed(),
     bardUsageCount: 0,
+    bannedCompanions: [],
+    purpleDraft: null,
   };
 }

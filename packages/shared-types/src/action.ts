@@ -5,10 +5,12 @@ import type { CompanionId } from "./companion.js";
 export type GameAction =
   | DraftPickAction
   | CompanionPickAction
+  | PurpleCardPickAction
   | IncomeAction
   | BuildAction
   | AbilityAction
   | UseCompanionAction
+  | ActivateBuildingAction
   | EndTurnAction;
 
 /** Player picks a hero during draft */
@@ -61,10 +63,26 @@ export interface CompanionPickAction {
 export interface UseCompanionAction {
   type: "use_companion";
   playerId: string;
-  /** Target player for Hunter, Saboteur, Bard, Blacksmith */
+  /** Target player for Hunter, Saboteur, Bard, Blacksmith, NightShadow */
   targetPlayerId?: string;
   /** Target card for Blacksmith, Alchemist */
   targetCardId?: string;
+  /** Target hero for NightShadow */
+  targetHeroId?: HeroId;
+}
+
+/** Player picks a purple card during purple draft */
+export interface PurpleCardPickAction {
+  type: "purple_card_pick";
+  playerId: string;
+  cardIndex: number; // index in offered choices
+}
+
+/** Player activates a built purple building */
+export interface ActivateBuildingAction {
+  type: "activate_building";
+  playerId: string;
+  cardId: string; // id of the built purple district to activate
 }
 
 /** Player explicitly ends their turn */

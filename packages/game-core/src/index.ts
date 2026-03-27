@@ -1,7 +1,7 @@
 export { createRng, type Rng } from "./rng.js";
 export { createMatch } from "./setup.js";
 export { createBaseDeck, isPurpleCard, generateRandomCard, generateDifferentColorCard, addRandomColor } from "./deck.js";
-export { initDraft, draftPick, companionPick, currentDrafter } from "./draft.js";
+export { initDraft, draftPick, companionPick, purpleCardPick, currentDrafter, isPurpleDraftDay, initPurpleDraft } from "./draft.js";
 export {
   buildTurnOrder,
   takeIncome,

@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompanion } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompanion, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
@@ -55,6 +55,7 @@ interface PlayerViewEntry {
   companion: PlayerState["companion"];
   companionUsed: boolean;
   companionDisabled: boolean;
+  designerMarkedCardId: string | null;
 }
 
 interface DraftView {
@@ -247,10 +248,34 @@ function runLocalBots() {
   if (!localState || localState.phase === "end") return;
 
   // Start new draft if needed
-  if (localState.phase === "draft" && !localState.draft) {
+  if (localState.phase === "draft" && !localState.draft && !localState.purpleDraft) {
     localState = startDraft(localState);
     render();
     setTimeout(runLocalBots, 500);
+    return;
+  }
+
+  // Handle purple draft for bots (simultaneous — all bots pick at once)
+  if (localState.purpleDraft) {
+    let anyBotPicked = false;
+    for (const bot of BOT_IDS) {
+      if (!localState.purpleDraft) break;
+      const botIdx = localState.players.findIndex((p) => p.id === bot);
+      if (botIdx === -1) continue;
+      if (localState.purpleDraft.picked[botIdx]) continue;
+      const action = botAction(localState, bot);
+      if (action) {
+        const next = processAction(localState, action);
+        if (next) {
+          localState = next;
+          anyBotPicked = true;
+        }
+      }
+    }
+    if (anyBotPicked) {
+      render();
+      setTimeout(runLocalBots, 500);
+    }
     return;
   }
 
@@ -352,26 +377,44 @@ function getDay(): number {
 function getPlayers(): PlayerViewEntry[] {
   if (mode === "online" && onlineState) return onlineState.players;
   if (localState) {
-    return localState.players.map((p, i) => ({
-      id: p.id,
-      name: p.name,
-      gold: p.gold,
-      handSize: p.hand.length,
-      hand: p.id === HUMAN_ID ? p.hand : null,
-      builtDistricts: p.builtDistricts,
-      hero: p.hero,
-      incomeTaken: p.incomeTaken,
-      buildsRemaining: p.buildsRemaining,
-      abilityUsed: p.abilityUsed,
-      assassinated: p.assassinated,
-      robbedHeroId: p.robbedHeroId,
-      finishedFirst: p.finishedFirst,
-      companion: p.companion,
-      companionUsed: p.companionUsed,
-      companionDisabled: p.companionDisabled,
-    }));
+    const humanIdx = localState.players.findIndex((pp) => pp.id === HUMAN_ID);
+    return localState.players.map((p, i) => {
+      const isMe = i === humanIdx;
+      // Determine if hero is revealed using same logic as isHeroRevealed
+      let revealed = isMe;
+      if (localState!.phase === "end") revealed = true;
+      else if (localState!.phase === "turns" && localState!.turnOrder) {
+        const pos = localState!.turnOrder.indexOf(i);
+        if (pos !== -1 && pos <= localState!.currentTurnIndex) revealed = true;
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        gold: p.gold,
+        handSize: p.hand.length,
+        hand: isMe ? p.hand : null,
+        builtDistricts: p.builtDistricts,
+        hero: revealed ? p.hero : null,
+        incomeTaken: p.incomeTaken,
+        buildsRemaining: p.buildsRemaining,
+        abilityUsed: p.abilityUsed,
+        assassinated: revealed ? p.assassinated : false,
+        robbedHeroId: p.robbedHeroId,
+        finishedFirst: p.finishedFirst,
+        companion: (isMe || revealed) ? p.companion : null,
+        companionUsed: p.companionUsed,
+        companionDisabled: p.companionDisabled,
+        designerMarkedCardId: p.designerMarkedCardId,
+      };
+    });
   }
   return [];
+}
+
+function getCrownHolder(): number {
+  if (mode === "online" && onlineState) return onlineState.crownHolder;
+  if (localState) return localState.crownHolder;
+  return 0;
 }
 
 function getMyId(): string {
@@ -405,6 +448,12 @@ function getDraft(): DraftView | null {
       companionPool: localState.draft.companionChoices?.[0] ?? null,
     };
   }
+  return null;
+}
+
+function getPurpleDraft(): { offers: any[]; picked: boolean[] } | null {
+  if (mode === "online" && onlineState) return (onlineState as any).purpleDraft ?? null;
+  if (localState) return localState.purpleDraft ?? null;
   return null;
 }
 
@@ -676,6 +725,13 @@ function renderTurnBanner() {
   const myTurn = isMyTurn();
 
   if (phase === "draft") {
+    const purpleDraft = getPurpleDraft();
+    if (purpleDraft) {
+      el.className = "turn-banner my-turn";
+      el.id = "turn-banner";
+      el.innerHTML = `🔮 ${t("banner.day")} ${day} — Фиолетовый драфт`;
+      return;
+    }
     const draft = getDraft();
     const isCompanionPhase = draft?.draftPhase === "companion";
     el.className = "turn-banner" + (myTurn || isCompanionPhase ? " my-turn" : "");
@@ -837,8 +893,10 @@ function renderOpponentBoard() {
   }
 
   // Stats bar
+  const isCrown = getCrownHolder() === selectedOpponentIndex;
   const statsBar = `
     <div class="opp-stats-bar">
+      ${isCrown ? `<span>👑</span>` : ""}
       <span>💰 ${p.gold}</span>
       <span>🃏 ${p.hand ? p.hand.length : p.handSize}</span>
       <span>🏠 ${p.builtDistricts.length}/${WIN_DISTRICTS}</span>
@@ -879,8 +937,10 @@ function renderMyBoard() {
 
   // During draft — show simplified board (stats + districts only, no hand/actions)
   if (phase === "draft") {
+    const draftCrown = getCrownHolder() === getMyIndex();
     const draftStats = `
       <div class="my-stats-bar">
+        ${draftCrown ? `<span>👑</span>` : ""}
         <span>💰 ${me.gold}</span>
         <span>🃏 ${me.hand ? me.hand.length : me.handSize}</span>
         <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
@@ -922,8 +982,10 @@ function renderMyBoard() {
   }
 
   // Stats bar
+  const myIsCrown = getCrownHolder() === getMyIndex();
   const statsBar = `
     <div class="my-stats-bar">
+      ${myIsCrown ? `<span>👑</span>` : ""}
       <span>💰 ${me.gold}</span>
       <span>🃏 ${hand.length}</span>
       <span>🏠 ${me.builtDistricts.length}/${WIN_DISTRICTS}</span>
@@ -943,8 +1005,16 @@ function renderMyBoard() {
     `;
   }
 
-  // My districts
-  const districts = me.builtDistricts.map((d) => districtCardHtml(d)).join("");
+  // My districts — purple buildings with active abilities are clickable
+  const activePurple = new Set(["cannon", "crypt", "tnt_storage"]);
+  const districts = me.builtDistricts.map((d) => {
+    const isClickable = myTurnNow && d.purpleAbility && activePurple.has(d.purpleAbility);
+    const tpl = d.purpleAbility ? PURPLE_CARD_TEMPLATES.find((t) => t.ability === d.purpleAbility) : null;
+    const clickClass = isClickable ? "purple-clickable" : "";
+    const clickAttr = isClickable ? `data-activate="${d.id}"` : "";
+    const tooltipHtml = tpl ? `<div class="purple-tooltip">${tpl.emoji} ${tpl.description}</div>` : "";
+    return `<div class="district-wrapper ${clickClass}" ${clickAttr}>${districtCardHtml(d)}${tooltipHtml}</div>`;
+  }).join("");
   const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
 
   // Hand
@@ -1011,7 +1081,13 @@ function renderMyBoard() {
 
   el.innerHTML = heroRow + statsBar + companionHtml + districtsSection + handSection + actionsSection;
 
-  // Wire up events
+  // Wire up events — purple building activation
+  el.querySelectorAll("[data-activate]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cardId = (btn as HTMLElement).dataset.activate!;
+      dispatch({ type: "activate_building", playerId: getMyId(), cardId });
+    });
+  });
   el.querySelectorAll("[data-build]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1062,12 +1138,27 @@ function startDraftTimer(draft: DraftView) {
 
     if (draftTimerRemaining <= 0) {
       stopDraftTimer();
-      // Auto-pick a random hero
       const currentDraft = getDraft();
-      if (currentDraft && currentDraft.availableHeroes.length > 0 && isMyTurn()) {
-        const randomIdx = Math.floor(Math.random() * currentDraft.availableHeroes.length);
-        const heroId = currentDraft.availableHeroes[randomIdx];
-        dispatch({ type: "draft_pick", playerId: getMyId(), heroId });
+      if (currentDraft && isMyTurn()) {
+        if (currentDraft.draftPhase === "companion" && currentDraft.companionPool) {
+          // Auto-pick eligible companion
+          const me = getPlayers()[getMyIndex()];
+          const myHeroClr = me?.hero ? (HEROES.find((h) => h.id === me.hero)?.color ?? null) : null;
+          const eligible = currentDraft.companionPool.filter((cId) => {
+            const def = companionDef(cId);
+            return !def?.heroColor || def.heroColor === myHeroClr;
+          });
+          const pick = eligible.length > 0 ? eligible : currentDraft.companionPool;
+          if (pick.length > 0) {
+            const companionId = pick[Math.floor(Math.random() * pick.length)];
+            dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
+          }
+        } else if (currentDraft.availableHeroes.length > 0) {
+          // Auto-pick a random hero
+          const randomIdx = Math.floor(Math.random() * currentDraft.availableHeroes.length);
+          const heroId = currentDraft.availableHeroes[randomIdx];
+          dispatch({ type: "draft_pick", playerId: getMyId(), heroId });
+        }
       }
     }
   }, 1000);
@@ -1126,6 +1217,53 @@ function renderDraft() {
   const phase = getPhase();
   const draft = getDraft();
 
+  // Purple card draft
+  const purpleDraft = getPurpleDraft();
+  if (purpleDraft) {
+    const myIdx = getMyIndex();
+    if (purpleDraft.picked[myIdx]) {
+      el.innerHTML = `
+        <h2 style="font-size:13px">🔮 Фиолетовый драфт</h2>
+        <p class="hint">Ожидание других игроков...</p>
+      `;
+      return;
+    }
+    const cards = purpleDraft.offers[myIdx];
+    if (!cards || cards.length === 0) {
+      el.innerHTML = "";
+      return;
+    }
+    const cardButtons = cards.map((card: any, idx: number) => {
+      const tpl = PURPLE_CARD_TEMPLATES.find((t) => t.ability === card.purpleAbility);
+      const desc = tpl?.description ?? card.purpleAbility ?? "";
+      const emoji = tpl?.emoji ?? "🔮";
+      return `
+        <button class="purple-card-offer" data-purple-pick="${idx}">
+          <div style="font-size:28px">${emoji}</div>
+          <div style="font-weight:bold;font-size:13px">${card.name} (${card.cost}💰)</div>
+          <div style="font-size:10px;color:#ccc;margin-top:4px">${desc}</div>
+          <div style="margin-top:4px;font-size:10px;color:#888">${card.colors.map((c: string) => districtColorDot(c)).join(" ")}</div>
+        </button>
+      `;
+    }).join("");
+    el.innerHTML = `
+      <h2 style="font-size:13px">🔮 Фиолетовый драфт — День ${getDay()}</h2>
+      <p class="hint">Выберите одну из трёх фиолетовых карт:</p>
+      <div class="purple-draft-grid">${cardButtons}</div>
+      <button class="btn btn-secondary" id="btn-purple-decline" style="margin-top:8px">❌ Пропустить</button>
+    `;
+    el.querySelectorAll("[data-purple-pick]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt((btn as HTMLElement).dataset.purplePick!, 10);
+        dispatch({ type: "purple_card_pick", playerId: getMyId(), cardIndex: idx });
+      });
+    });
+    document.getElementById("btn-purple-decline")?.addEventListener("click", () => {
+      dispatch({ type: "purple_card_pick", playerId: getMyId(), cardIndex: -1 });
+    });
+    return;
+  }
+
   if (phase !== "draft" && phase !== "turns") {
     el.innerHTML = "";
     stopDraftTimer();
@@ -1171,15 +1309,25 @@ function renderDraft() {
 
     // Deduplicate for display
     const unique = [...new Set(pool)];
+    // Get my hero color for restriction check
+    const me = getPlayers()[getMyIndex()];
+    const myHero = me?.hero;
+    const myHeroColor = myHero ? (HEROES.find((h) => h.id === myHero)?.color ?? null) : null;
+
     const companionCards = unique.map((cId) => {
       const def = companionDef(cId);
       const passiveTag = def?.passive ? `<span style="font-size:8px;color:#aaa">авто</span>` : "";
+      // Check hero color restriction
+      const restricted = def?.heroColor && def.heroColor !== myHeroColor;
+      const disabledClass = restricted ? "companion-card-disabled" : "";
+      const disabledAttr = restricted ? "disabled" : "";
       return `
-        <button class="companion-card" data-companion="${cId}">
+        <button class="companion-card ${disabledClass}" data-companion="${restricted ? "" : cId}" ${disabledAttr}>
           <div class="companion-card-portrait">${def?.emoji ?? "?"}</div>
           <div class="companion-card-body">
             <div class="companion-card-name">${def?.name ?? cId} ${passiveTag}</div>
             <div class="companion-card-desc">${def?.description ?? ""}</div>
+            ${restricted ? `<div style="font-size:8px;color:#e04050">⛔ только ${def.heroColor === "yellow" ? "🟡" : def.heroColor === "blue" ? "🔵" : def.heroColor === "green" ? "🟢" : "🔴"}</div>` : ""}
           </div>
         </button>`;
     }).join("");
@@ -1399,8 +1547,148 @@ function showCompanionModal(companionId: CompanionId) {
       break;
     }
 
+    case CompanionId.Cannoneer: {
+      title.textContent = `💥 Канонир — выберите карту для сжигания`;
+      const hand = getMyHand().filter((c) => c.name !== "🔥 Пламя");
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Сжигает карту, стреляет по случайному кварталу противника (HP −2)</p>
+        ${hand.length > 0 ? hand.map((c) =>
+          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет карт</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.StrangeMerchant: {
+      title.textContent = `🧳 Странный торговец — продайте карту`;
+      const hand = getMyHand();
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Сбросьте карту и получите её стоимость в золоте</p>
+        ${hand.length > 0 ? hand.map((c) =>
+          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет карт</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Pyromancer: {
+      title.textContent = `🔥 Пиромант — выберите карту для поджога`;
+      const hand = getMyHand().filter((c) => c.name !== "🔥 Пламя");
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Карта превращается в 🔥Пламя. В конце хода пламя множится!</p>
+        ${hand.length > 0 ? hand.map((c) =>
+          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет карт</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.UnluckyMage: {
+      title.textContent = `💫 Неудачный маг — выберите карту`;
+      const hand = getMyHand();
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Все ваши постройки превратятся в эту карту!</p>
+        ${hand.length > 0 ? hand.map((c) =>
+          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет карт</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Sniper: {
+      title.textContent = `🎯 Снайпер — выберите цель`;
+      const targets = players.filter((_p, i) => i !== myIdx && _p.companion);
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Навсегда убирает компаньона противника из пула</p>
+        ${targets.length > 0 ? targets.map((p) => {
+          const cName = companionDef(p.companion)?.name ?? "";
+          return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
+        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.Designer: {
+      title.textContent = `📐 Дизайнер — выберите квартал`;
+      const ownDistricts = me.builtDistricts;
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">Выбранный квартал превратится в фиолетовую карту при следующем фиолетовом драфте</p>
+        ${ownDistricts.length > 0 ? ownDistricts.map((d) =>
+          `<button class="modal-option" data-target-card="${d.id}">${d.name} (${d.cost}💰)</button>`
+        ).join("") : `<p class="hint">Нет кварталов</p>`}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.NightShadow: {
+      title.textContent = `🌑 Ночная тень — выберите героя для убийства`;
+      const draft = getDraft();
+      const faceUpBans = draft?.faceUpBans ?? [];
+      const myHero = me.hero;
+      // Exclude self hero and face-up banned heroes
+      const targets = Object.values(HeroId).filter((h) =>
+        h !== myHero && !faceUpBans.includes(h),
+      );
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">За 2💰: убейте неназванного персонажа</p>
+        ${targets.map((h) =>
+          `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
+        ).join("")}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = (btn as HTMLElement).dataset.target as HeroId;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetHeroId: target });
+          close();
+        });
+      });
+      break;
+    }
+
     default:
-      // No targeting needed
+      // No targeting needed (Farmer, Innkeeper, Peacemaker, etc.)
       dispatch({ type: "use_companion", playerId: getMyId() });
       close();
   }

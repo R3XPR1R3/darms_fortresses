@@ -121,6 +121,48 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
     }
   }
 
+  // Knight: takes 1 gold from richest, gives to poorest
+  if (cp.companion === CompanionId.Knight && !cp.companionDisabled) {
+    let richestIdx = -1, poorestIdx = -1;
+    let maxGold = -1, minGold = Infinity;
+    for (let j = 0; j < newPlayers.length; j++) {
+      if (newPlayers[j].gold > maxGold) { maxGold = newPlayers[j].gold; richestIdx = j; }
+      if (newPlayers[j].gold < minGold) { minGold = newPlayers[j].gold; poorestIdx = j; }
+    }
+    if (richestIdx !== -1 && poorestIdx !== -1 && richestIdx !== poorestIdx && maxGold > 0) {
+      newPlayers[richestIdx] = { ...newPlayers[richestIdx], gold: newPlayers[richestIdx].gold - 1 };
+      newPlayers[poorestIdx] = { ...newPlayers[poorestIdx], gold: newPlayers[poorestIdx].gold + 1 };
+      log = addLog({ ...state, log }, `${cp.name} — рыцарь: ${newPlayers[richestIdx].name} −1💰 → ${newPlayers[poorestIdx].name} +1💰`);
+    }
+  }
+
+  // Nobility: richest gets +1 card, non-richest get -1 card -1 gold
+  if (cp.companion === CompanionId.Nobility && !cp.companionDisabled) {
+    let maxGold = -1;
+    let richestIdx = -1;
+    for (let j = 0; j < newPlayers.length; j++) {
+      if (newPlayers[j].gold > maxGold) { maxGold = newPlayers[j].gold; richestIdx = j; }
+    }
+    if (richestIdx !== -1) {
+      // Richest gets +1 card
+      if (newDeck.length > 0) {
+        const drawn = newDeck.splice(0, 1);
+        newPlayers[richestIdx] = { ...newPlayers[richestIdx], hand: [...newPlayers[richestIdx].hand, ...drawn] };
+      }
+      // Non-richest lose 1 card and 1 gold
+      for (let j = 0; j < newPlayers.length; j++) {
+        if (j === richestIdx) continue;
+        const p = newPlayers[j];
+        const newHand = [...p.hand];
+        if (newHand.length > 0) {
+          newHand.splice(rng.int(0, newHand.length - 1), 1);
+        }
+        newPlayers[j] = { ...p, hand: newHand, gold: Math.max(0, p.gold - 1) };
+      }
+      log = addLog({ ...state, log }, `${cp.name} — знать: ${newPlayers[richestIdx].name} +1🃏, остальные −1🃏 −1💰`);
+    }
+  }
+
   return {
     ...state,
     players: newPlayers,
@@ -175,6 +217,38 @@ export function useAbility(
             newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: [] };
             log = addLog({ ...state, log }, `${player.name} совершил убийство и забрал ${victim.hand.length} карт (мародёр)!`);
             break;
+          }
+        }
+
+        // Contractor companion: steal victim's purple cards from hand
+        if (player.companion === CompanionId.Contractor && !player.companionDisabled) {
+          const victim = state.players[targetIdx];
+          const purpleCards = victim.hand.filter((c) => c.colors.includes("purple"));
+          if (purpleCards.length > 0) {
+            const remainingHand = victim.hand.filter((c) => !c.colors.includes("purple"));
+            newPlayers[playerIdx] = {
+              ...newPlayers[playerIdx],
+              hand: [...player.hand, ...purpleCards],
+              abilityUsed: true,
+            };
+            newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: remainingHand };
+            log = addLog({ ...state, log }, `${player.name} — заказчик: украл ${purpleCards.length} фиолетовых карт у жертвы!`);
+            break;
+          }
+        }
+
+        // Gravedigger companion: gain victim's passive color income
+        if (player.companion === CompanionId.Gravedigger && !player.companionDisabled) {
+          const victim = state.players[targetIdx];
+          const victimHeroDef = victim.hero ? HEROES.find((h) => h.id === victim.hero) : null;
+          if (victimHeroDef?.color) {
+            const colorCount = player.builtDistricts.filter((d) => d.colors.includes(victimHeroDef.color!)).length;
+            if (colorCount > 0) {
+              newPlayers[playerIdx] = { ...newPlayers[playerIdx], gold: (newPlayers[playerIdx].gold ?? player.gold) + colorCount };
+              log = addLog({ ...state, log }, `${player.name} совершил убийство и получил +${colorCount}💰 (могильщик)!`);
+              newPlayers[playerIdx] = { ...newPlayers[playerIdx], abilityUsed: true };
+              break;
+            }
           }
         }
 
@@ -244,10 +318,57 @@ export function useAbility(
       const newTargetDistricts = [...target.builtDistricts];
       const newHp = card.hp - damage;
 
+      // Fort: defender's other districts have -1 effective HP, but on destroy gets gold back
+      const hasFort = target.builtDistricts.some((d) => d.purpleAbility === "fort" && d.id !== card.id);
+
+      let newDiscardPile = state.discardPile;
+      let fortGoldRefund = 0;
       if (newHp < 1) {
-        // District destroyed
+        // District destroyed — add to discard pile
         newTargetDistricts.splice(cardIdx, 1);
+        newDiscardPile = [...state.discardPile, card];
+        // Fort: defender gets gold spent on destruction
+        if (hasFort && card.purpleAbility !== "fort") {
+          fortGoldRefund = damage;
+        }
         log = addLog({ ...state, log }, `${player.name} (Генерал) разрушил ${card.name} у ${target.name} за ${damage} золота`);
+        // Crypt: on destroy → owner gets 2 random purple cards
+        if (card.purpleAbility === "crypt") {
+          const purpleCards: typeof target.hand = [];
+          for (let i = 0; i < 2; i++) {
+            const tplIdx = rng.int(0, 8); // 9 templates
+            const tpl = (() => {
+              // inline access to templates
+              const templates = [
+                { name: "Пушка", cost: 2, colors: ["purple", "red"] as const, ability: "cannon" as const },
+                { name: "Оборонительный форт", cost: 1, colors: ["purple"] as const, ability: "fort" as const },
+                { name: "Памятник", cost: 2, colors: ["purple"] as const, ability: "monument" as const },
+                { name: "Магистраль", cost: 4, colors: ["purple"] as const, ability: "highway" as const },
+                { name: "Врата в город", cost: 8, colors: ["purple", "yellow"] as const, ability: "city_gates" as const },
+                { name: "Склеп", cost: 4, colors: ["purple"] as const, ability: "crypt" as const },
+                { name: "Склад тротила", cost: 2, colors: ["purple", "red"] as const, ability: "tnt_storage" as const },
+                { name: "Шахта", cost: 3, colors: ["purple", "green"] as const, ability: "mine" as const },
+                { name: "Секта", cost: 2, colors: ["purple", "blue"] as const, ability: "cult" as const },
+              ];
+              return templates[tplIdx];
+            })();
+            purpleCards.push({
+              id: `purple-crypt-${Date.now()}-${rng.int(0, 9999)}`,
+              name: tpl.name,
+              cost: tpl.cost,
+              hp: tpl.cost,
+              colors: [...tpl.colors],
+              purpleAbility: tpl.ability,
+            });
+          }
+          const updatedTarget = newPlayers[targetIdx] ?? { ...target, builtDistricts: newTargetDistricts };
+          newPlayers[targetIdx] = {
+            ...target,
+            builtDistricts: newTargetDistricts,
+            hand: [...updatedTarget.hand ?? target.hand, ...purpleCards],
+          };
+          log = addLog({ ...state, log }, `⚰️ Склеп ${target.name} разрушен — получено 2 фиолетовые карты`);
+        }
       } else {
         // District damaged but survives
         newTargetDistricts[cardIdx] = { ...card, hp: newHp };
@@ -255,8 +376,9 @@ export function useAbility(
       }
 
       newPlayers[playerIdx] = { ...player, gold: player.gold - damage, abilityUsed: true };
-      newPlayers[targetIdx] = { ...target, builtDistricts: newTargetDistricts };
-      break;
+      newPlayers[targetIdx] = { ...newPlayers[targetIdx] ?? target, builtDistricts: newTargetDistricts, gold: (newPlayers[targetIdx]?.gold ?? target.gold) + fortGoldRefund };
+      newDeck = state.deck; // preserve deck
+      return { ...state, players: newPlayers, deck: newDeck, discardPile: newDiscardPile, log };
     }
     // Passive abilities — no active action needed
     case "king":
@@ -302,8 +424,11 @@ export function calculateScores(state: GameState): GameState {
     let score = 0;
 
     // Sum of district HP (current HP on the table)
+    const hasFort = p.builtDistricts.some((d) => d.purpleAbility === "fort");
     for (const d of p.builtDistricts) {
-      score += d.hp;
+      // Fort: other buildings worth -1
+      const fortPenalty = (hasFort && d.purpleAbility !== "fort") ? 1 : 0;
+      score += Math.max(0, d.hp - fortPenalty);
     }
 
     // Bonus for finishing first

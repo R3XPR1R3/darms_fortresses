@@ -1,5 +1,5 @@
-import type { DraftState, GameState } from "@darms/shared-types";
-import { HeroId, CompanionId, COMPANIONS } from "@darms/shared-types";
+import type { DraftState, GameState, DistrictCard, PurpleDraftState } from "@darms/shared-types";
+import { HeroId, HEROES, CompanionId, COMPANIONS, PURPLE_DRAFT_DAYS, PURPLE_CARD_TEMPLATES, WIN_DISTRICTS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 const ALL_HEROES: HeroId[] = Object.values(HeroId);
@@ -83,19 +83,54 @@ export function initDraft(state: GameState, rng: Rng): GameState {
       companionUsed: false,
       companionDisabled: false,
       royalGuardDraft: false, // consumed
+      // preserve designerMarkedCardId across days
     })),
   };
 }
 
+/** Get the hero color for a player */
+function getPlayerHeroColor(state: GameState, playerIdx: number): string | null {
+  const hero = state.players[playerIdx].hero;
+  if (!hero) return null;
+  return HEROES.find((h) => h.id === hero)?.color ?? null;
+}
+
+/**
+ * Check if a companion can be picked by a player (hero color restriction).
+ * Color-restricted companions can only be picked by heroes of matching color.
+ */
+function canPickCompanion(companionId: CompanionId, heroColor: string | null): boolean {
+  const def = COMPANIONS.find((c) => c.id === companionId);
+  if (!def?.heroColor) return true; // no restriction
+  return def.heroColor === heroColor;
+}
+
 /**
  * Generate a shared pool of 3 companion choices for the sequential draft.
- * With 16 companions, randomly pick 3.
+ * Shuffles all 16 companions and picks 3 unique ones.
  */
-function generateCompanionPool(rng: Rng): CompanionId[] {
-  const allCompanions = COMPANIONS.map((c) => c.id);
-  const pool = [...allCompanions];
-  rng.shuffle(pool);
-  return pool.slice(0, 3);
+function generateCompanionPool(rng: Rng, banned: CompanionId[] = []): CompanionId[] {
+  const excluded = new Set(banned);
+  const allCompanions = COMPANIONS.map((c) => c.id).filter((id) => !excluded.has(id));
+  const shuffled = [...allCompanions];
+  rng.shuffle(shuffled);
+  return shuffled.slice(0, 3);
+}
+
+/**
+ * Pick a replacement companion for the pool, avoiding already-in-pool and already-picked companions.
+ */
+function pickReplacementCompanion(
+  currentPool: CompanionId[],
+  alreadyPicked: CompanionId[],
+  rng: Rng,
+  banned: CompanionId[] = [],
+): CompanionId | null {
+  const excluded = new Set([...currentPool, ...alreadyPicked, ...banned]);
+  const available = COMPANIONS.map((c) => c.id).filter((id) => !excluded.has(id));
+  if (available.length === 0) return null;
+  rng.shuffle(available);
+  return available[0];
 }
 
 /**
@@ -155,8 +190,31 @@ export function draftPick(
       finalFaceDown = remaining[1] ? [remaining[1]] : [];
     }
 
-    // Move to companion draft phase
-    const companionPool = generateCompanionPool(rng);
+    // Skip companion draft before day 4
+    if (state.day < 4) {
+      const baseState = {
+        ...state,
+        players: newPlayers,
+        draft: {
+          ...draft,
+          availableHeroes: [],
+          faceUpBans: [...draft.faceUpBans, ...finalFaceUp],
+          faceDownBans: [...draft.faceDownBans, ...finalFaceDown],
+          currentStep: draft.draftOrder.length,
+          companionChoices: null,
+          draftPhase: "hero" as const,
+        },
+        rng: rng.getSeed(),
+      };
+      // Day 3 has purple draft even without companion draft
+      if (isPurpleDraftDay(state.day)) {
+        return initPurpleDraft({ ...baseState, phase: "draft" }, rng);
+      }
+      return { ...baseState, phase: "turns" as const };
+    }
+
+    // Move to companion draft phase (day 4+)
+    const companionPool = generateCompanionPool(rng, state.bannedCompanions);
 
     return {
       ...state,
@@ -188,13 +246,14 @@ export function draftPick(
 
 /**
  * Process a companion pick during draft (sequential, same order as hero draft).
- * Each player picks from the shared pool. Duplicates allowed (pool doesn't shrink).
+ * After a companion is picked, it's removed from the pool and replaced with a new one.
+ * Color-restricted companions can only be picked by heroes of matching color.
  */
 export function companionPick(
   state: GameState,
   playerId: string,
   companionId: CompanionId,
-  _rng: Rng,
+  rng: Rng,
 ): GameState | null {
   const draft = state.draft;
   if (!draft || state.phase !== "draft") return null;
@@ -210,26 +269,46 @@ export function companionPick(
   const pool = draft.companionChoices?.[0];
   if (!pool || !pool.includes(companionId)) return null;
 
+  // Check hero color restriction
+  const heroColor = getPlayerHeroColor(state, expectedPlayerIdx);
+  if (!canPickCompanion(companionId, heroColor)) return null;
+
+  // Collect already-picked companions (for replacement exclusion)
+  const alreadyPicked = state.players
+    .filter((p) => p.companion !== null)
+    .map((p) => p.companion!);
+  alreadyPicked.push(companionId);
+
   const newPlayers = [...state.players];
   newPlayers[expectedPlayerIdx] = { ...newPlayers[expectedPlayerIdx], companion: companionId };
+
+  // Remove picked companion from pool and add a replacement
+  let newPool = pool.filter((c) => c !== companionId);
+  const replacement = pickReplacementCompanion(newPool, alreadyPicked, rng, state.bannedCompanions);
+  if (replacement) newPool.push(replacement);
 
   const nextStep = draft.currentStep + 1;
   const allPicked = nextStep >= draft.draftOrder.length;
 
   if (allPicked) {
-    return {
+    const baseState = {
       ...state,
       players: newPlayers,
       draft: { ...draft, companionChoices: null, currentStep: nextStep },
-      phase: "turns",
-      rng: state.rng,
+      rng: rng.getSeed(),
     };
+    // Check if this day has a purple card draft
+    if (isPurpleDraftDay(state.day)) {
+      return initPurpleDraft({ ...baseState, phase: "draft" }, rng);
+    }
+    return { ...baseState, phase: "turns" };
   }
 
   return {
     ...state,
     players: newPlayers,
-    draft: { ...draft, currentStep: nextStep },
+    draft: { ...draft, companionChoices: [newPool], currentStep: nextStep },
+    rng: rng.getSeed(),
   };
 }
 
@@ -239,4 +318,132 @@ export function currentDrafter(state: GameState): number | null {
   const step = state.draft.currentStep;
   if (step >= state.draft.draftOrder.length) return null;
   return state.draft.draftOrder[step];
+}
+
+// ---- Purple card draft ----
+
+let _purpleGenId = 5000;
+
+/** Generate a random purple card from templates */
+function generatePurpleCard(rng: Rng): DistrictCard {
+  const tpl = PURPLE_CARD_TEMPLATES[rng.int(0, PURPLE_CARD_TEMPLATES.length - 1)];
+  return {
+    id: `purple-${_purpleGenId++}`,
+    name: tpl.name,
+    cost: tpl.cost,
+    hp: tpl.cost,
+    colors: tpl.colors as DistrictCard["colors"],
+    purpleAbility: tpl.ability,
+  };
+}
+
+/** Check if this day should have a purple card draft */
+export function isPurpleDraftDay(day: number): boolean {
+  return PURPLE_DRAFT_DAYS.includes(day);
+}
+
+/** Start the purple card draft — each player gets offered 3 random cards (individual) */
+export function initPurpleDraft(state: GameState, rng: Rng): GameState {
+  let newPlayers = [...state.players];
+  let log = state.log;
+
+  // Designer effect: marked district transforms into a random purple card
+  for (let i = 0; i < newPlayers.length; i++) {
+    const p = newPlayers[i];
+    if (p.designerMarkedCardId) {
+      const cardIdx = p.builtDistricts.findIndex((c) => c.id === p.designerMarkedCardId);
+      if (cardIdx !== -1) {
+        const oldCard = p.builtDistricts[cardIdx];
+        const newCard = generatePurpleCard(rng);
+        newCard.hp = newCard.cost; // fresh HP
+        const newDistricts = [...p.builtDistricts];
+        newDistricts[cardIdx] = newCard;
+        newPlayers[i] = { ...p, builtDistricts: newDistricts, designerMarkedCardId: null };
+        log = [...log, { day: state.day, message: `📐 Дизайнер: ${oldCard.name} у ${p.name} → ${newCard.name}` }];
+      } else {
+        newPlayers[i] = { ...p, designerMarkedCardId: null };
+      }
+    }
+  }
+
+  const offers = newPlayers.map(() => {
+    return [generatePurpleCard(rng), generatePurpleCard(rng), generatePurpleCard(rng)];
+  });
+  const picked = newPlayers.map(() => false);
+  return {
+    ...state,
+    players: newPlayers,
+    log,
+    purpleDraft: { offers, picked },
+    rng: rng.getSeed(),
+  };
+}
+
+/** Player picks a purple card from their 3 offers (cardIndex 0-2), or -1 to decline */
+export function purpleCardPick(state: GameState, playerId: string, cardIndex: number): GameState | null {
+  if (!state.purpleDraft) return null;
+  const playerIdx = state.players.findIndex((p) => p.id === playerId);
+  if (playerIdx === -1) return null;
+  if (state.purpleDraft.picked[playerIdx]) return null;
+
+  const newPicked = [...state.purpleDraft.picked];
+  newPicked[playerIdx] = true;
+  const newPlayers = [...state.players];
+  let log = state.log;
+
+  const cards = state.purpleDraft.offers[playerIdx];
+  if (cardIndex >= 0 && cards && cardIndex < cards.length) {
+    const card = cards[cardIndex];
+    let newHand = [...newPlayers[playerIdx].hand, card];
+
+    // TreasureTrader: pick a second card too
+    const hasTreasureTrader = newPlayers[playerIdx].companion === CompanionId.TreasureTrader
+      && !newPlayers[playerIdx].companionDisabled;
+    if (hasTreasureTrader) {
+      // Pick next available card (first one that's not the picked index)
+      const secondIdx = cards.findIndex((_, i) => i !== cardIndex);
+      if (secondIdx !== -1) {
+        newHand = [...newHand, cards[secondIdx]];
+        log = [...log, { day: state.day, message: `💎 ${newPlayers[playerIdx].name} — торговец сокровищами: взял вторую фиолетовую карту!` }];
+      }
+    }
+
+    newPlayers[playerIdx] = {
+      ...newPlayers[playerIdx],
+      hand: newHand,
+    };
+  }
+
+  const newOffers = [...state.purpleDraft.offers];
+  newOffers[playerIdx] = null; // clear offer
+
+  // Ban TreasureTrader after use during purple draft
+  let bannedCompanions = state.bannedCompanions;
+  const hasTT = newPlayers[playerIdx].companion === CompanionId.TreasureTrader
+    && !newPlayers[playerIdx].companionDisabled;
+  if (hasTT && cardIndex >= 0) {
+    bannedCompanions = [...bannedCompanions, CompanionId.TreasureTrader];
+  }
+
+  const allPicked = newPicked.every(Boolean);
+
+  if (allPicked) {
+    // Purple draft done — proceed to turns
+    return {
+      ...state,
+      players: newPlayers,
+      purpleDraft: null,
+      phase: "turns",
+      log,
+      bannedCompanions,
+    };
+  }
+
+  return {
+    ...state,
+    players: newPlayers,
+    purpleDraft: { offers: newOffers, picked: newPicked },
+    log,
+    bannedCompanions,
+  };
 }

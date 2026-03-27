@@ -450,7 +450,69 @@
       font-size: 24px;
       color: #555;
     }
-    .companion-card-portrait::after { content: "🧑‍🌾"; }
+    .companion-card-disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .companion-card-disabled:hover {
+      border-color: #0f3460;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* Purple draft grid */
+    .purple-draft-grid {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .purple-card-offer {
+      background: linear-gradient(135deg, #2a1445 0%, #1a0a30 100%);
+      border: 2px solid #9060e0;
+      border-radius: 8px;
+      padding: 12px 10px;
+      cursor: pointer;
+      text-align: center;
+      width: 120px;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .purple-card-offer:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(144, 96, 224, 0.4);
+      border-color: #b080ff;
+    }
+
+    /* Clickable purple buildings */
+    .district-wrapper { position: relative; display: inline-block; }
+    .purple-clickable {
+      cursor: pointer;
+      border: 2px solid #9060e0;
+      border-radius: 6px;
+      animation: purple-pulse 2s infinite;
+    }
+    @keyframes purple-pulse {
+      0%, 100% { box-shadow: 0 0 4px rgba(144, 96, 224, 0.3); }
+      50% { box-shadow: 0 0 12px rgba(144, 96, 224, 0.7); }
+    }
+    .purple-tooltip {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a0a30;
+      border: 1px solid #9060e0;
+      color: #ddd;
+      font-size: 9px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .purple-clickable:hover .purple-tooltip { display: block; }
     .companion-card-body {
       padding: 4px 6px;
       display: flex;

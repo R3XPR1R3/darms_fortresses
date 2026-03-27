@@ -1,4 +1,4 @@
-import type { GameAction, GameState, PlayerState, DraftState, CompanionId } from "@darms/shared-types";
+import type { GameAction, GameState, PlayerState, DraftState, CompanionId, DistrictCard } from "@darms/shared-types";
 
 // ---- Client → Server ----
 
@@ -41,6 +41,7 @@ export interface PlayerView {
   winner: number | null;
   log: GameState["log"];
   myIndex: number;
+  purpleDraft: { offers: (DistrictCard[] | null)[]; picked: boolean[] } | null;
 }
 
 export interface PlayerViewEntry {
@@ -60,6 +61,7 @@ export interface PlayerViewEntry {
   companion: PlayerState["companion"];
   companionUsed: boolean;
   companionDisabled: boolean;
+  designerMarkedCardId: string | null;
 }
 
 export interface DraftView {

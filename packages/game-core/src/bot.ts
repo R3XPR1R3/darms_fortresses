@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload } from "@darms/shared-types";
-import { HeroId, CompanionId, COMPANIONS, isPassiveCompanion, WIN_DISTRICTS } from "@darms/shared-types";
+import { HeroId, HEROES, CompanionId, COMPANIONS, isPassiveCompanion, WIN_DISTRICTS } from "@darms/shared-types";
 import { currentDrafter } from "./draft.js";
 import { currentPlayer } from "./turns.js";
 import { createRng } from "./rng.js";
@@ -10,6 +10,14 @@ import { createRng } from "./rng.js";
  */
 export function botAction(state: GameState, botPlayerId: string): GameAction | null {
   const rng = createRng(state.rng + botPlayerId.charCodeAt(0));
+
+  // Purple card draft — bots always accept
+  if (state.purpleDraft) {
+    const botIdx = state.players.findIndex((p) => p.id === botPlayerId);
+    if (botIdx === -1) return null;
+    if (state.purpleDraft.picked[botIdx]) return null;
+    return { type: "purple_card_pick", playerId: botPlayerId, cardIndex: 0 }; // accept
+  }
 
   if (state.phase === "draft") {
     const draft = state.draft!;
@@ -71,6 +79,22 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
       }
     }
 
+    // Step 2.7: Activate purple buildings
+    const activatable = player.builtDistricts.filter((d) => d.purpleAbility);
+    for (const bld of activatable) {
+      if (bld.purpleAbility === "cannon" && player.gold >= 2) {
+        // Use cannon if we have spare gold
+        return { type: "activate_building", playerId: botPlayerId, cardId: bld.id };
+      }
+      if (bld.purpleAbility === "tnt_storage" && player.gold >= 2) {
+        // Use TNT if opponent is winning
+        const maxOppDist = Math.max(...state.players.filter((p, i) => i !== playerIdx).map((p) => p.builtDistricts.length));
+        if (maxOppDist >= 6) {
+          return { type: "activate_building", playerId: botPlayerId, cardId: bld.id };
+        }
+      }
+    }
+
     // Step 3: Build if possible
     if (player.buildsRemaining > 0) {
       const distToWin = WIN_DISTRICTS - player.builtDistricts.length;
@@ -113,10 +137,22 @@ function pickBestCompanion(
   rng: ReturnType<typeof createRng>,
 ): CompanionId {
   const player = state.players[playerIdx];
-  let bestId = pool[0];
+  const heroColor = player.hero ? (HEROES.find((h) => h.id === player.hero)?.color ?? null) : null;
+
+  // Filter to companions the bot can actually pick (hero color restriction)
+  const eligible = pool.filter((cId) => {
+    const def = COMPANIONS.find((c) => c.id === cId);
+    if (def?.heroColor && def.heroColor !== heroColor) return false;
+    return true;
+  });
+
+  // Fallback: if nothing eligible, pick first available (will be rejected by server, but safe)
+  const candidates = eligible.length > 0 ? eligible : pool;
+
+  let bestId = candidates[0];
   let bestScore = -Infinity;
 
-  for (const cId of pool) {
+  for (const cId of candidates) {
     let score = rng.next() * 2; // small random noise
 
     switch (cId) {
@@ -153,6 +189,33 @@ function pickBestCompanion(
       case CompanionId.Marauder: score += player.hero === HeroId.Assassin ? 6 : 1; break;
       case CompanionId.Bard: score += 3; break;
       case CompanionId.Alchemist: score += player.builtDistricts.length >= 3 ? 4 : 1; break;
+      // Wave 2
+      case CompanionId.Cannoneer: score += player.hand.length >= 3 ? 4 : 1; break;
+      case CompanionId.Reconstructor: score += state.discardPile.length > 0 ? 4 : 2; break;
+      case CompanionId.DubiousDealer: score += 1; break; // debuff-ish, low priority
+      case CompanionId.SorcererApprentice: score += state.discardPile.length > 0 ? 3 : 1; break;
+      case CompanionId.StrangeMerchant: score += player.hand.length >= 3 ? 3 : 1; break;
+      case CompanionId.Gravedigger: score += player.hero === HeroId.Assassin ? 5 : 1; break;
+      case CompanionId.Jester: score += 1; break; // debuff
+      case CompanionId.Pyromancer: score += 0; break; // debuff
+      case CompanionId.SunFanatic: score += 2; break;
+      case CompanionId.Sniper: score += 4; break;
+      case CompanionId.Knight: score += 3; break;
+      case CompanionId.Fisherman: score += player.gold >= 2 ? 4 : 2; break;
+      case CompanionId.UnluckyMage: score += 0; break; // debuff
+      case CompanionId.Nobility: score += player.gold >= 4 ? 4 : 1; break;
+      // Wave 3
+      case CompanionId.TreasureTrader: score += 4; break; // strong in purple draft
+      case CompanionId.Designer: score += player.builtDistricts.length >= 3 ? 3 : 1; break;
+      case CompanionId.Innkeeper: score += 2; break; // info only
+      case CompanionId.Peacemaker: {
+        const dangerousCount = state.players.reduce((acc, p) =>
+          acc + p.builtDistricts.filter((d) => d.purpleAbility === "cannon" || d.purpleAbility === "tnt_storage" || d.purpleAbility === "cult").length, 0);
+        score += dangerousCount >= 2 ? 5 : 1;
+        break;
+      }
+      case CompanionId.Contractor: score += player.hero === HeroId.Assassin ? 5 : 1; break;
+      case CompanionId.NightShadow: score += player.gold >= 3 ? 4 : 2; break;
     }
 
     if (score > bestScore) {
@@ -226,10 +289,93 @@ function pickCompanionAction(
     case CompanionId.Alchemist: {
       const upgradeable = player.builtDistricts.filter((d) => d.cost < 5);
       if (upgradeable.length === 0) return null;
-      // Pick cheapest to upgrade
       const target = [...upgradeable].sort((a, b) => a.cost - b.cost)[0];
       return { type: "use_companion", playerId: player.id, targetCardId: target.id };
     }
+
+    case CompanionId.Cannoneer: {
+      // Burn cheapest non-flame card from hand
+      const burnable = player.hand.filter((c) => c.name !== "🔥 Пламя");
+      if (burnable.length === 0) return null;
+      const cheapest = [...burnable].sort((a, b) => a.cost - b.cost)[0];
+      return { type: "use_companion", playerId: player.id, targetCardId: cheapest.id };
+    }
+
+    case CompanionId.Reconstructor: {
+      if (player.gold < 2 || state.discardPile.length === 0) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.DubiousDealer:
+      return { type: "use_companion", playerId: player.id };
+
+    case CompanionId.SorcererApprentice: {
+      if (player.gold < 2 || state.discardPile.length === 0) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.StrangeMerchant: {
+      // Sell most expensive card
+      if (player.hand.length === 0) return null;
+      const expensive = [...player.hand].sort((a, b) => b.cost - a.cost)[0];
+      return { type: "use_companion", playerId: player.id, targetCardId: expensive.id };
+    }
+
+    case CompanionId.SunFanatic: {
+      if (player.gold < 2) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.Sniper: {
+      const target = opponents.filter((p) => p.companion)
+        .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length)[0];
+      if (!target) return null;
+      return { type: "use_companion", playerId: player.id, targetPlayerId: target.id };
+    }
+
+    case CompanionId.Fisherman: {
+      if (player.gold < 1) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.Designer: {
+      // Mark cheapest built district
+      if (player.builtDistricts.length === 0) return null;
+      const cheapest = [...player.builtDistricts].sort((a, b) => a.cost - b.cost)[0];
+      return { type: "use_companion", playerId: player.id, targetCardId: cheapest.id };
+    }
+
+    case CompanionId.Innkeeper:
+      return { type: "use_companion", playerId: player.id };
+
+    case CompanionId.Peacemaker: {
+      // Only use if there are dangerous buildings on the table
+      const dangerousCount = state.players.reduce((acc, p) =>
+        acc + p.builtDistricts.filter((d) => d.purpleAbility === "cannon" || d.purpleAbility === "tnt_storage" || d.purpleAbility === "cult").length, 0);
+      if (dangerousCount === 0) return null;
+      return { type: "use_companion", playerId: player.id };
+    }
+
+    case CompanionId.NightShadow: {
+      // Pay 2g to assassinate strongest unrevealed hero
+      if (player.gold < 2) return null;
+      if (!state.turnOrder) return null;
+      // Find unrevealed heroes (those after current turn)
+      const unrevealed = state.players
+        .filter((p, i) => {
+          if (i === playerIdx || !p.hero || p.assassinated) return false;
+          const posInOrder = state.turnOrder!.indexOf(i);
+          return posInOrder === -1 || posInOrder > state.currentTurnIndex;
+        })
+        .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length);
+      if (unrevealed.length === 0) return null;
+      return { type: "use_companion", playerId: player.id, targetHeroId: unrevealed[0].hero! };
+    }
+
+    // Bots avoid debuff companions (Pyromancer, UnluckyMage)
+    case CompanionId.Pyromancer:
+    case CompanionId.UnluckyMage:
+      return null;
 
     default:
       return null;

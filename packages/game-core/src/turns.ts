@@ -1,5 +1,5 @@
-import type { GameState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId } from "@darms/shared-types";
+import type { GameState, DistrictCard } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
 import { addRandomColor } from "./deck.js";
@@ -24,9 +24,16 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
     if (pA.companion === CompanionId.Courier && !pA.companionDisabled) {
       speedA -= 2;
     }
+    // Highway purple building: speed -1
+    if (pA.builtDistricts.some((d) => d.purpleAbility === "highway")) {
+      speedA -= 1;
+    }
     const pB = state.players[b.idx];
     if (pB.companion === CompanionId.Courier && !pB.companionDisabled) {
       speedB -= 2;
+    }
+    if (pB.builtDistricts.some((d) => d.purpleAbility === "highway")) {
+      speedB -= 1;
     }
 
     if (speedA !== speedB) return speedA - speedB;
@@ -34,7 +41,7 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
   });
 
   // Reset per-turn state
-  const newPlayers = state.players.map((p) => ({
+  let newPlayers = state.players.map((p) => ({
     ...p,
     incomeTaken: false,
     buildsRemaining: p.hero === HeroId.Architect ? 3 : 1,
@@ -42,11 +49,32 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
     companionUsed: false,
   }));
 
+  let log = state.log;
+
+  // Jester (yellow hero): shuffles all players' hands at start of day
+  const jesterPlayer = newPlayers.find(
+    (p) => p.companion === CompanionId.Jester && !p.companionDisabled
+      && HEROES.find((h) => h.id === p.hero)?.color === "yellow",
+  );
+  if (jesterPlayer) {
+    const allCards = newPlayers.flatMap((p) => p.hand);
+    rng.shuffle(allCards);
+    let offset = 0;
+    newPlayers = newPlayers.map((p) => {
+      const handSize = p.hand.length;
+      const newHand = allCards.slice(offset, offset + handSize);
+      offset += handSize;
+      return { ...p, hand: newHand };
+    });
+    log = [...log, { day: state.day, message: `${jesterPlayer.name} — шут: все карты перемешаны!` }];
+  }
+
   let newState: GameState = {
     ...state,
     players: newPlayers,
     turnOrder: indexed.map((p) => p.idx),
     currentTurnIndex: 0,
+    log,
     rng: rng.getSeed(),
   };
 
@@ -154,9 +182,17 @@ export function buildDistrict(
 
   const card = player.hand[cardIdx];
 
+  // Cannot build flame cards
+  if (card.name === FLAME_CARD_NAME) return null;
+
   // Calculate effective cost
   let effectiveCost = card.cost;
   const heroColor = HEROES.find((h) => h.id === player.hero)?.color ?? null;
+
+  // Monument: cost = number of other cards in hand (after removing monument)
+  if (card.purpleAbility === "monument") {
+    effectiveCost = Math.max(0, player.hand.length - 1); // minus the monument itself
+  }
 
   // Sun Priestess: blue districts cost -1 (only for blue hero)
   if (
@@ -170,6 +206,16 @@ export function buildDistrict(
 
   if (player.gold < effectiveCost) return null;
 
+  // SunFanatic: only blue districts allowed (blue hero)
+  if (
+    player.companion === CompanionId.SunFanatic
+    && !player.companionDisabled
+    && heroColor === "blue"
+    && !card.colors.includes("blue")
+  ) {
+    return null;
+  }
+
   // Duplicate check — Official (red hero) allows duplicates
   const allowDuplicates =
     player.companion === CompanionId.Official
@@ -181,18 +227,70 @@ export function buildDistrict(
   const newHand = [...player.hand];
   newHand.splice(cardIdx, 1);
 
+  // Monument always has 3 HP on table
+  let builtCard = { ...card, hp: card.cost };
+  if (card.purpleAbility === "monument") {
+    builtCard = { ...card, hp: 3 };
+  }
+
+  // Fort: reduce other (non-fort) districts HP by 1 when on table
+  // (Fort effect is passive — applied when checking HP, not on build)
+
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
     ...player,
     gold: player.gold - effectiveCost,
     hand: newHand,
-    builtDistricts: [...player.builtDistricts, card],
+    builtDistricts: [...player.builtDistricts, builtCard],
     buildsRemaining: player.buildsRemaining - 1,
   };
 
   let newState = { ...state, players: newPlayers };
   newState = checkWinCondition(newState);
   return newState;
+}
+
+/**
+ * Apply Cult end-of-day effect: each cult on the table replaces a random blue/purple district of a random opponent.
+ */
+function applyCultEndOfDay(state: GameState, rng: Rng): GameState {
+  let players = [...state.players];
+  let log = state.log;
+
+  for (let ownerIdx = 0; ownerIdx < players.length; ownerIdx++) {
+    const cultCount = players[ownerIdx].builtDistricts.filter((d) => d.purpleAbility === "cult").length;
+    if (cultCount === 0) continue;
+    const cultCard = players[ownerIdx].builtDistricts.find((d) => d.purpleAbility === "cult")!;
+
+    for (let c = 0; c < cultCount; c++) {
+      // Find all blue/purple districts of opponents
+      const candidates: { pIdx: number; dIdx: number }[] = [];
+      for (let i = 0; i < players.length; i++) {
+        if (i === ownerIdx) continue;
+        for (let d = 0; d < players[i].builtDistricts.length; d++) {
+          const dist = players[i].builtDistricts[d];
+          if (dist.colors.includes("blue") || dist.colors.includes("purple")) {
+            candidates.push({ pIdx: i, dIdx: d });
+          }
+        }
+      }
+      if (candidates.length === 0) break;
+
+      const pick = candidates[rng.int(0, candidates.length - 1)];
+      const target = players[pick.pIdx];
+      const targetDist = target.builtDistricts[pick.dIdx];
+      const newDistricts = [...target.builtDistricts];
+      newDistricts[pick.dIdx] = {
+        ...cultCard,
+        id: `cult-copy-${Date.now()}-${rng.int(0, 9999)}`,
+      };
+      players = [...players];
+      players[pick.pIdx] = { ...target, builtDistricts: newDistricts };
+      log = [...log, { day: state.day, message: `🕯️ Секта ${players[ownerIdx].name} заменила ${targetDist.name} у ${target.name}!` }];
+    }
+  }
+
+  return { ...state, players, log };
 }
 
 /**
@@ -287,10 +385,71 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
 
     nextIdx++;
   }
+
+  // Flame spreading: for each player, duplicate flame cards in hand at end of turn
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i];
+    const flameCount = p.hand.filter((c) => c.name === FLAME_CARD_NAME).length;
+    if (flameCount > 0) {
+      const newFlames: DistrictCard[] = [];
+      for (let f = 0; f < flameCount; f++) {
+        newFlames.push({
+          id: `flame-${Date.now()}-${i}-${f}-${rng.int(0, 9999)}`,
+          name: FLAME_CARD_NAME,
+          cost: 0,
+          hp: 0,
+          colors: ["red"],
+        });
+      }
+      players = [...players];
+      players[i] = { ...p, hand: [...p.hand, ...newFlames] };
+      log = [...log, { day: state.day, message: `🔥 Пламя множится у ${p.name}! (+${flameCount})` }];
+    }
+  }
+
+  // Mine: +1g at end of turn for players with mine
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i];
+    const mineCount = p.builtDistricts.filter((d) => d.purpleAbility === "mine").length;
+    if (mineCount > 0) {
+      players = [...players];
+      players[i] = { ...p, gold: p.gold + mineCount };
+      log = [...log, { day: state.day, message: `⛏️ ${p.name} — шахта: +${mineCount}💰` }];
+    }
+  }
+
+  // City Gates: HP -2 each turn, discards at 0
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i];
+    const newDistricts = [...p.builtDistricts];
+    let changed = false;
+    let discardPile = state.discardPile;
+    for (let d = newDistricts.length - 1; d >= 0; d--) {
+      if (newDistricts[d].purpleAbility === "city_gates") {
+        const newHp = newDistricts[d].hp - 2;
+        if (newHp < 1) {
+          discardPile = [...discardPile, newDistricts[d]];
+          newDistricts.splice(d, 1);
+          log = [...log, { day: state.day, message: `🚪 Врата в город ${p.name} разрушились!` }];
+        } else {
+          newDistricts[d] = { ...newDistricts[d], hp: newHp };
+          log = [...log, { day: state.day, message: `🚪 Врата в город ${p.name}: HP → ${newHp}` }];
+        }
+        changed = true;
+      }
+    }
+    if (changed) {
+      players = [...players];
+      players[i] = { ...p, builtDistricts: newDistricts };
+      state = { ...state, discardPile };
+    }
+  }
+
   state = { ...state, players, log };
 
   if (nextIdx >= turnOrder.length) {
-    // End of day — apply end-of-day companion effects
+    // End of day — apply end-of-day effects
+    state = applyCultEndOfDay(state, rng);
     state = applyTreasurerEndOfDay(state, rng);
     state = applyRoyalGuardEndOfDay(state);
 
