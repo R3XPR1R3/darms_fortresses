@@ -53,12 +53,12 @@ export interface PurpleCardTemplate {
 export const PURPLE_CARD_TEMPLATES: PurpleCardTemplate[] = [
   { name: "Пушка", cost: 2, colors: ["purple", "red"], ability: "cannon", emoji: "💣", description: "За 1💰: −1 HP случайному кварталу противника (∞)" },
   { name: "Оборонительный форт", cost: 1, colors: ["purple"], ability: "fort", emoji: "🏰", description: "Другие постройки −1 HP, но при разрушении вы получаете золото" },
-  { name: "Памятник", cost: 2, colors: ["purple"], ability: "monument", emoji: "🗿", description: "Стоимость = карт в руке. Всегда 3 HP на столе" },
+  { name: "Памятник", cost: 2, colors: ["purple"], ability: "monument", emoji: "🗿", description: "В руке: цена = числу других карт. На столе: стоимость и HP всегда 3" },
   { name: "Магистраль", cost: 4, colors: ["purple"], ability: "highway", emoji: "🛤️", description: "Скорость героя −1" },
-  { name: "Врата в город", cost: 8, colors: ["purple", "yellow"], ability: "city_gates", emoji: "🚪", description: "HP −2 каждый ход. При 0 — сбрасывается" },
+  { name: "Врата в город", cost: 8, colors: ["purple", "yellow"], ability: "city_gates", emoji: "🚪", description: "Пока в руке: цена уменьшается на 2 каждый ход. На столе не удешевляются" },
   { name: "Склеп", cost: 4, colors: ["purple"], ability: "crypt", emoji: "⚰️", description: "При разрушении: +2 фиолетовые карты. Самоуничтожение за 2💰" },
   { name: "Склад тротила", cost: 2, colors: ["purple", "red"], ability: "tnt_storage", emoji: "🧨", description: "Уничтожьте за 2💰: −2 случайных квартала каждому" },
-  { name: "Шахта", cost: 3, colors: ["purple", "green"], ability: "mine", emoji: "⛏️", description: "+1💰 в конце хода" },
+  { name: "Шахта", cost: 3, colors: ["purple", "green"], ability: "mine", emoji: "⛏️", description: "+1💰 в конце дня (у Торговца — в конце каждого хода)" },
   { name: "Секта", cost: 2, colors: ["purple", "blue"], ability: "cult", emoji: "🕯️", description: "При постройке: заменяет случайный синий/фиолетовый квартал у случайного игрока" },
 ];
 
@@ -102,6 +102,8 @@ export interface PlayerState {
   royalGuardDraft: boolean;
   /** Designer: marked district ID to transform into purple card at next purple draft */
   designerMarkedCardId: string | null;
+  /** Contractor: contracted hero target for assassin kill reward */
+  contractorTargetHeroId?: HeroId | null;
 }
 
 /** State tracking the hero draft within a day */

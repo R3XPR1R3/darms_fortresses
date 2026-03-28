@@ -5,6 +5,7 @@ import type { GameAction, GameState, PlayerState, DraftState, CompanionId, Distr
 export type ClientMessage =
   | { type: "create_room"; playerName: string }
   | { type: "join_room"; roomId: string; playerName: string }
+  | { type: "reconnect_room"; roomId: string; playerId: string }
   | { type: "start_game" }
   | { type: "add_bot" }
   | { type: "action"; action: GameAction };
@@ -14,6 +15,7 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: "room_created"; roomId: string; playerId: string }
   | { type: "room_joined"; roomId: string; playerId: string; players: LobbyPlayer[] }
+  | { type: "room_reconnected"; roomId: string; playerId: string; players: LobbyPlayer[] }
   | { type: "lobby_update"; players: LobbyPlayer[] }
   | { type: "game_state"; state: PlayerView }
   | { type: "error"; message: string };

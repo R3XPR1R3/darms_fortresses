@@ -37,6 +37,7 @@ export function createMatch(
       companionDisabled: false,
       royalGuardDraft: false,
       designerMarkedCardId: null,
+      contractorTargetHeroId: null,
     };
   });
 

@@ -285,6 +285,7 @@ const COMPANION_NAMES: Record<string, TranslationEntry> = {
   unlucky_mage: { en: "Unlucky Mage", ru: "Неудачный маг", id: "Penyihir sial" },
   sniper: { en: "Sniper", ru: "Снайпер", id: "Sniper" },
   designer: { en: "Designer", ru: "Дизайнер", id: "Desainer" },
+  contractor: { en: "Contractor", ru: "Заказчик", id: "Kontraktor" },
   night_shadow: { en: "Night Shadow", ru: "Ночная тень", id: "Bayangan malam" },
 };
 
@@ -300,6 +301,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   unlucky_mage: { en: "All your districts will transform into this card!", ru: "Все ваши постройки превратятся в эту карту!", id: "Semua distrikmu berubah menjadi kartu ini!" },
   sniper: { en: "Permanently removes opponent companion from the pool", ru: "Навсегда убирает компаньона противника из пула", id: "Hapus permanen companion lawan dari pool" },
   designer: { en: "Selected district will turn into a purple card in next purple draft", ru: "Выбранный квартал превратится в фиолетовую карту при следующем фиолетовом драфте", id: "Distrik terpilih jadi kartu ungu pada draft ungu berikutnya" },
+  contractor: { en: "Choose a hero target: if Assassin kills this hero today, steal victim's purple cards", ru: "Выберите героя-цель: если Ассасин убьёт его сегодня, вы крадёте фиолетовые карты жертвы", id: "Pilih target hero: jika Assassin membunuh hero ini hari ini, Anda mencuri kartu ungu korban" },
   night_shadow: { en: "For 2💰: kill an unannounced character", ru: "За 2💰: убейте неназванного персонажа", id: "Dengan 2💰: bunuh karakter yang belum diumumkan" },
 };
 

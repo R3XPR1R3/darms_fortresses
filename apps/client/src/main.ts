@@ -119,6 +119,8 @@ function showMenu() {
   onlineState = null;
   stopDraftTimer();
   stopTurnTimer();
+  myPlayerId = "";
+  myRoomId = "";
   document.getElementById("winner-overlay")?.classList.remove("show");
   document.getElementById("ability-modal")?.classList.remove("show");
   renderMenu();
@@ -157,12 +159,16 @@ function showLobbyScreen(action: "create" | "join") {
 }
 
 // ---- WebSocket ----
-function connectWS(playerName: string, roomId: string | null) {
+function connectWS(playerName: string, roomId: string | null, reconnect = false) {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   const host = location.host; // includes port if non-standard
   ws = new WebSocket(`${protocol}//${host}/ws`);
 
   ws.onopen = () => {
+    if (reconnect && myRoomId && myPlayerId) {
+      ws!.send(JSON.stringify({ type: "reconnect_room", roomId: myRoomId, playerId: myPlayerId }));
+      return;
+    }
     if (roomId) {
       ws!.send(JSON.stringify({ type: "join_room", roomId, playerName }));
     } else {
@@ -176,9 +182,16 @@ function connectWS(playerName: string, roomId: string | null) {
   };
 
   ws.onclose = () => {
+    if ((mode === "lobby" || mode === "online") && myRoomId && myPlayerId) {
+      setTimeout(() => {
+        if (mode === "lobby" || mode === "online") {
+          connectWS("", myRoomId, true);
+        }
+      }, 1000);
+      return;
+    }
     if (mode === "lobby" || mode === "online") {
-      mode = "menu";
-      renderMenu();
+      showMenu();
     }
   };
 }
@@ -199,6 +212,13 @@ function handleServerMessage(msg: Record<string, unknown>) {
       isHost = false;
       lobbyPlayers = msg.players as LobbyPlayer[];
       renderLobby();
+      break;
+
+    case "room_reconnected":
+      myRoomId = msg.roomId as string;
+      myPlayerId = msg.playerId as string;
+      lobbyPlayers = msg.players as LobbyPlayer[];
+      if (mode !== "online") renderLobby();
       break;
 
     case "lobby_update":
@@ -1489,7 +1509,7 @@ function showCompanionModal(companionId: CompanionId) {
 
     case CompanionId.Bard: {
       title.textContent = `🎵 ${companionLabel}`;
-      const targets = players.filter((_p, i) => i !== myIdx && _p.companion);
+      const targets = players.filter((_p, i) => i !== myIdx && _p.companion && !isHeroRevealed(i));
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${targets.length > 0 ? targets.map((p) => {
@@ -1665,14 +1685,48 @@ function showCompanionModal(companionId: CompanionId) {
       break;
     }
 
+    case CompanionId.Contractor: {
+      title.textContent = `📋 ${companionLabel}`;
+      const draft = getDraft();
+      const faceUpBans = draft?.faceUpBans ?? [];
+      const myHero = me.hero;
+      const revealedHeroes = new Set(
+        players
+          .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
+          .filter((h): h is HeroId => h !== null),
+      );
+      const targets = Object.values(HeroId).filter((h) =>
+        h !== myHero && !faceUpBans.includes(h) && !revealedHeroes.has(h),
+      );
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
+        ${targets.map((h) =>
+          `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
+        ).join("")}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = (btn as HTMLElement).dataset.target as HeroId;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetHeroId: target });
+          close();
+        });
+      });
+      break;
+    }
+
     case CompanionId.NightShadow: {
       title.textContent = `🌑 ${companionLabel}`;
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
       const myHero = me.hero;
-      // Exclude self hero and face-up banned heroes
+      const revealedHeroes = new Set(
+        players
+          .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
+          .filter((h): h is HeroId => h !== null),
+      );
+      // Exclude self hero, already revealed heroes and face-up bans
       const targets = Object.values(HeroId).filter((h) =>
-        h !== myHero && !faceUpBans.includes(h),
+        h !== myHero && !faceUpBans.includes(h) && !revealedHeroes.has(h),
       );
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
@@ -1711,9 +1765,15 @@ function showAbilityModal(heroId: HeroId) {
       title.textContent = t("modal.assassin_title");
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
-      // Exclude self and face-up banned heroes (known to not be in play)
+      const players = getPlayers();
+      const revealedHeroes = new Set(
+        players
+          .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
+          .filter((h): h is HeroId => h !== null),
+      );
+      // Exclude self, revealed heroes and face-up banned heroes (known to not be in play)
       const targets = Object.values(HeroId).filter((h) =>
-        h !== HeroId.Assassin && !faceUpBans.includes(h),
+        h !== HeroId.Assassin && !faceUpBans.includes(h) && !revealedHeroes.has(h),
       );
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${t("modal.assassin_hint")}</p>

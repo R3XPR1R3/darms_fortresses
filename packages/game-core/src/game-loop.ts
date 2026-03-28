@@ -144,6 +144,11 @@ function useCompanion(
       if (!targetPlayerId) return null;
       const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
       if (targetIdx === -1 || targetIdx === playerIdx) return null;
+      // Bard can only target unrevealed players in turn phase.
+      if (state.turnOrder && state.phase === "turns") {
+        const posInOrder = state.turnOrder.indexOf(targetIdx);
+        if (posInOrder !== -1 && posInOrder <= state.currentTurnIndex) return null;
+      }
       const target = state.players[targetIdx];
       if (!target.companion) return null;
       newPlayers[playerIdx] = { ...player, gold: player.gold - cost, companionUsed: true };
@@ -293,7 +298,7 @@ function useCompanion(
       const flameCard: DistrictCard = {
         id: `flame-${Date.now()}-${rng.int(0, 9999)}`,
         name: FLAME_CARD_NAME,
-        cost: 0,
+        cost: 2,
         hp: 0,
         colors: ["red"],
       };
@@ -459,6 +464,14 @@ function useCompanion(
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — ночная тень: убийство за 2💰...`), rng: rng.getSeed() };
     }
 
+    case CompanionId.Contractor: {
+      // Set assassin contract target hero for this day.
+      if (!targetHeroId) return null;
+      if (targetHeroId === player.hero) return null;
+      newPlayers[playerIdx] = { ...player, contractorTargetHeroId: targetHeroId, companionUsed: true };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — заказчик: цель назначена (${targetHeroId})`), rng: rng.getSeed() };
+    }
+
     // Passive companions — should not be used via action
     case CompanionId.Treasurer:
     case CompanionId.Official:
@@ -474,7 +487,6 @@ function useCompanion(
     case CompanionId.Knight:
     case CompanionId.Nobility:
     case CompanionId.TreasureTrader:
-    case CompanionId.Contractor:
       return null;
 
     default:
