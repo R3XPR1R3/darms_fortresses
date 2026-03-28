@@ -221,6 +221,8 @@ function pickBestCompanion(
       }
       case CompanionId.Contractor: score += player.hero === HeroId.Assassin ? 5 : 1; break;
       case CompanionId.NightShadow: score += player.gold >= 3 ? 4 : 2; break;
+      case CompanionId.Investor: score += 3; break;
+      case CompanionId.Trainer: score += 4; break;
     }
 
     if (score > bestScore) {
@@ -487,6 +489,12 @@ function pickCompanionAction(
       if (unrevealed.length === 0) return null;
       return { type: "use_companion", playerId: player.id, targetHeroId: unrevealed[0].hero! };
     }
+
+    case CompanionId.Investor:
+      return { type: "use_companion", playerId: player.id };
+
+    case CompanionId.Trainer:
+      return { type: "use_companion", playerId: player.id };
 
     // Bots avoid debuff companions (Pyromancer, UnluckyMage)
     case CompanionId.Pyromancer:

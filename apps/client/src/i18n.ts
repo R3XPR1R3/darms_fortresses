@@ -187,6 +187,7 @@ const dict: Record<string, TranslationEntry> = {
   "pool.heroes": { en: "Heroes", ru: "Персонажи", id: "Hero" },
   "pool.districts": { en: "Districts", ru: "Постройки", id: "Distrik" },
   "pool.companions": { en: "Companions", ru: "Компаньоны", id: "Companion" },
+  "pool.special_companions": { en: "Special companions", ru: "Особые компаньоны", id: "Companion khusus" },
   "pool.purple": { en: "Purple cards", ru: "Фиолетовые карты", id: "Kartu ungu" },
   "pool.close": { en: "Close", ru: "Закрыть", id: "Tutup" },
 };
@@ -294,6 +295,8 @@ const COMPANION_NAMES: Record<string, TranslationEntry> = {
   designer: { en: "Designer", ru: "Дизайнер", id: "Desainer" },
   contractor: { en: "Contractor", ru: "Заказчик", id: "Kontraktor" },
   night_shadow: { en: "Night Shadow", ru: "Ночная тень", id: "Bayangan malam" },
+  investor: { en: "Investor", ru: "Инвестор", id: "Investor" },
+  trainer: { en: "Trainer", ru: "Тренер", id: "Pelatih" },
 };
 
 const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
@@ -310,6 +313,8 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   designer: { en: "Selected district will turn into a purple card in next purple draft", ru: "Выбранный квартал превратится в фиолетовую карту при следующем фиолетовом драфте", id: "Distrik terpilih jadi kartu ungu pada draft ungu berikutnya" },
   contractor: { en: "Choose a hero target: if Assassin kills this hero today, steal victim's purple cards", ru: "Выберите героя-цель: если Ассасин убьёт его сегодня, вы крадёте фиолетовые карты жертвы", id: "Pilih target hero: jika Assassin membunuh hero ini hari ini, Anda mencuri kartu ungu korban" },
   night_shadow: { en: "For 2💰: kill an unannounced character", ru: "За 2💰: убейте неназванного персонажа", id: "Dengan 2💰: bunuh karakter yang belum diumumkan" },
+  investor: { en: "Gain +2💰", ru: "Получите +2💰", id: "Dapatkan +2💰" },
+  trainer: { en: "Randomly grants one colorless hero ability: assassin/thief/sorcerer/architect", ru: "Случайно даёт одну из способностей без цвета: убийца/вор/чародей/архитектор", id: "Memberi acak satu kemampuan hero tanpa warna: assassin/pencuri/penyihir/arsitek" },
 };
 
 export function tCompanionName(id: string, fallback: string): string {

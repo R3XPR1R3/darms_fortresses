@@ -675,6 +675,16 @@ function showCardPoolModal() {
     `).join("");
 
   const companionsHtml = COMPANIONS
+    .filter((c) => c.id !== CompanionId.Investor && c.id !== CompanionId.Trainer)
+    .map((c) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}</div>
+        <div class="pool-item-sub">${tCompanionDescription(c.id, c.description)}</div>
+      </div>
+    `).join("");
+
+  const specialCompanionsHtml = COMPANIONS
+    .filter((c) => c.id === CompanionId.Investor || c.id === CompanionId.Trainer)
     .map((c) => `
       <div class="pool-item">
         <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}</div>
@@ -689,6 +699,7 @@ function showCardPoolModal() {
       <div class="pool-item">
         <div class="pool-item-title">${p.emoji} ${tDistrict(p.name)} <span style="color:#e2b714">${p.cost}💰</span></div>
         <div class="pool-item-sub">${p.colors.map((c) => districtColorDot(c)).join(" ")} • ${p.description}</div>
+        <div class="pool-item-sub">${["cannon", "crypt", "tnt_storage"].includes(p.ability) ? "🖱️ Active / clickable on your board" : "ℹ️ Info / passive effect"}</div>
       </div>
     `).join("");
 
@@ -704,6 +715,10 @@ function showCardPoolModal() {
     <div class="pool-section">
       <h4>${t("pool.companions")}</h4>
       <div class="pool-grid">${companionsHtml}</div>
+    </div>
+    <div class="pool-section">
+      <h4>${t("pool.special_companions")}</h4>
+      <div class="pool-grid">${specialCompanionsHtml}</div>
     </div>
     <div class="pool-section">
       <h4>${t("pool.purple")}</h4>
@@ -1405,11 +1420,19 @@ function renderDraft() {
     const timerHtml = `<span id="draft-timer" class="draft-timer ${draftTimerRemaining <= 10 ? 'timer-urgent' : ''}">${draftTimerRemaining}s</span>`;
 
     // Deduplicate for display
-    const unique = [...new Set(pool)];
+    let unique = [...new Set(pool)];
     // Get my hero color for restriction check
     const me = getPlayers()[getMyIndex()];
     const myHero = me?.hero;
     const myHeroColor = myHero ? (HEROES.find((h) => h.id === myHero)?.color ?? null) : null;
+
+    const hasEligibleBase = unique.some((cId) => {
+      const def = companionDef(cId);
+      return !(def?.heroColor && def.heroColor !== myHeroColor);
+    });
+    if (!hasEligibleBase) {
+      unique = [...unique, CompanionId.Investor, CompanionId.Trainer];
+    }
 
     const companionCards = unique.map((cId) => {
       const def = companionDef(cId);
