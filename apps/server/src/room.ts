@@ -193,9 +193,7 @@ function scheduleBotStep(room: Room) {
     return;
   }
 
-  const delay = action.type === "draft_pick" ? 1200
-    : action.type === "end_turn" ? 5000
-    : 1000;
+  const delay = 7000; // unified 7-second timeout for all bot actions
 
   room.botTimer = setTimeout(() => {
     room.botTimer = null;
@@ -203,8 +201,21 @@ function scheduleBotStep(room: Room) {
 
     const next = processAction(room.state, action);
     if (!next) {
-      // Action failed — force end turn to prevent infinite loop
-      if (action.type !== "end_turn") {
+      // Action failed — try fallback to unstick the bot
+      if (action.type === "purple_card_pick") {
+        // Purple draft failed — try picking a random card (0), or decline (-1)
+        const randomPick = processAction(room.state, { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: 0 });
+        if (randomPick) {
+          room.state = randomPick;
+          room.broadcastState?.();
+        } else {
+          const decline = processAction(room.state, { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: -1 });
+          if (decline) {
+            room.state = decline;
+            room.broadcastState?.();
+          }
+        }
+      } else if (action.type !== "end_turn") {
         const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
         if (fallback) {
           room.state = fallback;
@@ -243,6 +254,16 @@ function scheduleBotStep(room: Room) {
 /** Get the bot player whose turn it is, or null if it's a human's turn */
 function getBotTurn(room: Room): { botId: string } | null {
   if (!room.state) return null;
+
+  // Purple card draft — all bots that haven't picked yet need to act
+  if (room.state.purpleDraft) {
+    for (let i = 0; i < room.state.players.length; i++) {
+      if (room.state.purpleDraft.picked[i]) continue;
+      const player = room.state.players[i];
+      const rp = room.players.find((p) => p.id === player.id);
+      if (rp?.isBot) return { botId: player.id };
+    }
+  }
 
   if (room.state.phase === "draft") {
     const dIdx = currentDrafter(room.state);
