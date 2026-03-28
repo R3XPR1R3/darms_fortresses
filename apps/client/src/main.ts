@@ -626,6 +626,7 @@ function renderMenu() {
       <button class="btn btn-secondary btn-small" id="btn-lang">${t("lang.toggle")}</button>
       <input type="text" id="player-name" placeholder="${t("menu.name_placeholder")}" value="${t("menu.default_name")}" class="menu-input" maxlength="20"/>
       <button class="btn btn-primary btn-large" id="btn-local">🎮 ${t("menu.local")}</button>
+      <button class="btn btn-secondary btn-large" id="btn-card-pool">📚 ${t("menu.card_pool")}</button>
       <div class="menu-divider">${t("menu.online_divider")}</div>
       <button class="btn btn-secondary btn-large" id="btn-create">🌐 ${t("menu.create_room")}</button>
       <button class="btn btn-secondary btn-large" id="btn-join">🔗 ${t("menu.join_room")}</button>
@@ -638,8 +639,83 @@ function renderMenu() {
     renderMenu();
   });
   document.getElementById("btn-local")!.addEventListener("click", startLocal);
+  document.getElementById("btn-card-pool")!.addEventListener("click", showCardPoolModal);
   document.getElementById("btn-create")!.addEventListener("click", () => showLobbyScreen("create"));
   document.getElementById("btn-join")!.addEventListener("click", () => showLobbyScreen("join"));
+}
+
+function showCardPoolModal() {
+  const modal = document.getElementById("card-pool-modal")!;
+  const body = document.getElementById("card-pool-body")!;
+  const close = () => modal.classList.remove("show");
+
+  const deck = createBaseDeck();
+  const districts = [...new Map(
+    deck
+      .filter((c) => !c.colors.includes("purple"))
+      .map((c) => [c.name, c]),
+  ).values()].sort((a, b) => a.cost - b.cost || tDistrict(a.name).localeCompare(tDistrict(b.name)));
+
+  const heroesHtml = HEROES
+    .slice()
+    .sort((a, b) => a.speed - b.speed)
+    .map((h) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${heroPortrait(h.id, 20)} ${heroName(h.id)} <span style="color:#888">⚡${h.speed}</span></div>
+        <div class="pool-item-sub">${t("class." + h.id)}</div>
+      </div>
+    `).join("");
+
+  const districtsHtml = districts
+    .map((d) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${tDistrict(d.name)} <span style="color:#e2b714">${d.cost}💰</span></div>
+        <div class="pool-item-sub">${d.colors.map((c) => districtColorDot(c)).join(" ")}</div>
+      </div>
+    `).join("");
+
+  const companionsHtml = COMPANIONS
+    .map((c) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}</div>
+        <div class="pool-item-sub">${tCompanionDescription(c.id, c.description)}</div>
+      </div>
+    `).join("");
+
+  const purpleHtml = PURPLE_CARD_TEMPLATES
+    .slice()
+    .sort((a, b) => a.cost - b.cost || tDistrict(a.name).localeCompare(tDistrict(b.name)))
+    .map((p) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${p.emoji} ${tDistrict(p.name)} <span style="color:#e2b714">${p.cost}💰</span></div>
+        <div class="pool-item-sub">${p.colors.map((c) => districtColorDot(c)).join(" ")} • ${p.description}</div>
+      </div>
+    `).join("");
+
+  body.innerHTML = `
+    <div class="pool-section">
+      <h4>${t("pool.heroes")}</h4>
+      <div class="pool-grid">${heroesHtml}</div>
+    </div>
+    <div class="pool-section">
+      <h4>${t("pool.districts")}</h4>
+      <div class="pool-grid">${districtsHtml}</div>
+    </div>
+    <div class="pool-section">
+      <h4>${t("pool.companions")}</h4>
+      <div class="pool-grid">${companionsHtml}</div>
+    </div>
+    <div class="pool-section">
+      <h4>${t("pool.purple")}</h4>
+      <div class="pool-grid">${purpleHtml}</div>
+    </div>
+  `;
+
+  modal.classList.add("show");
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+  document.getElementById("card-pool-close")!.textContent = t("pool.close");
+  document.getElementById("card-pool-title")!.textContent = t("pool.title");
+  document.getElementById("card-pool-close")!.onclick = close;
 }
 
 function renderLobby() {

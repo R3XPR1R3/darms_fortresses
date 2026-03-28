@@ -25,6 +25,7 @@ const dict: Record<string, TranslationEntry> = {
   "menu.online_divider": { en: "— online —", ru: "— онлайн —" },
   "menu.create_room": { en: "Create room", ru: "Создать комнату" },
   "menu.join_room": { en: "Join by code", ru: "Войти по коду" },
+  "menu.card_pool": { en: "Card pool", ru: "Пул карт", id: "Pool kartu" },
 
   // Lobby
   "lobby.host": { en: "(host)", ru: "(хост)" },
@@ -182,6 +183,12 @@ const dict: Record<string, TranslationEntry> = {
   "companion_modal.no_cards": { en: "No cards", ru: "Нет карт", id: "Tidak ada kartu" },
   "companion_modal.no_upgrade": { en: "No districts to upgrade", ru: "Нет кварталов для улучшения", id: "Tidak ada distrik untuk ditingkatkan" },
   "companion_modal.no_districts": { en: "No districts", ru: "Нет кварталов", id: "Tidak ada distrik" },
+  "pool.title": { en: "Current card pool", ru: "Актуальный пул карт", id: "Pool kartu saat ini" },
+  "pool.heroes": { en: "Heroes", ru: "Персонажи", id: "Hero" },
+  "pool.districts": { en: "Districts", ru: "Постройки", id: "Distrik" },
+  "pool.companions": { en: "Companions", ru: "Компаньоны", id: "Companion" },
+  "pool.purple": { en: "Purple cards", ru: "Фиолетовые карты", id: "Kartu ungu" },
+  "pool.close": { en: "Close", ru: "Закрыть", id: "Tutup" },
 };
 
 /** Get translated string */
