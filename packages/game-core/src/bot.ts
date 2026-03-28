@@ -280,7 +280,13 @@ function pickCompanionAction(
     case CompanionId.Bard: {
       const cost = 1 + state.bardUsageCount;
       if (player.gold < cost) return null;
-      const target = opponents.filter((p) => p.companion && !p.companionDisabled)
+      const target = opponents.filter((p) => {
+        if (!p.companion || p.companionDisabled) return false;
+        const targetIdx = state.players.findIndex((sp) => sp.id === p.id);
+        if (targetIdx === -1 || !state.turnOrder) return true;
+        const posInOrder = state.turnOrder.indexOf(targetIdx);
+        return posInOrder === -1 || posInOrder > state.currentTurnIndex;
+      })
         .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length)[0];
       if (!target) return null;
       return { type: "use_companion", playerId: player.id, targetPlayerId: target.id };
@@ -361,6 +367,19 @@ function pickCompanionAction(
       if (player.gold < 2) return null;
       if (!state.turnOrder) return null;
       // Find unrevealed heroes (those after current turn)
+      const unrevealed = state.players
+        .filter((p, i) => {
+          if (i === playerIdx || !p.hero || p.assassinated) return false;
+          const posInOrder = state.turnOrder!.indexOf(i);
+          return posInOrder === -1 || posInOrder > state.currentTurnIndex;
+        })
+        .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length);
+      if (unrevealed.length === 0) return null;
+      return { type: "use_companion", playerId: player.id, targetHeroId: unrevealed[0].hero! };
+    }
+
+    case CompanionId.Contractor: {
+      if (!state.turnOrder) return null;
       const unrevealed = state.players
         .filter((p, i) => {
           if (i === playerIdx || !p.hero || p.assassinated) return false;
