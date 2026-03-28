@@ -23,6 +23,7 @@ export interface RoomPlayer {
   name: string;
   isBot: boolean;
   ws: WebSocket | null; // null for bots
+  disconnectTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const rooms = new Map<string, Room>();
@@ -49,7 +50,7 @@ export function createRoom(hostName: string, ws: WebSocket): { roomId: string; p
   const room: Room = {
     id: roomId,
     hostId: playerId,
-    players: [{ id: playerId, name: hostName, isBot: false, ws }],
+    players: [{ id: playerId, name: hostName, isBot: false, ws, disconnectTimer: null }],
     state: null,
     started: false,
     startedAt: null,
@@ -68,8 +69,21 @@ export function joinRoom(roomId: string, playerName: string, ws: WebSocket): { p
   if (room.players.length >= 4) return "Комната заполнена (макс. 4)";
 
   const playerId = generatePlayerId();
-  room.players.push({ id: playerId, name: playerName, isBot: false, ws });
+  room.players.push({ id: playerId, name: playerName, isBot: false, ws, disconnectTimer: null });
   return { playerId, players: getLobbyPlayers(room) };
+}
+
+export function reconnectRoom(roomId: string, playerId: string, ws: WebSocket): LobbyPlayer[] | string {
+  const room = rooms.get(roomId);
+  if (!room) return "Комната не найдена";
+  const player = room.players.find((p) => p.id === playerId && !p.isBot);
+  if (!player) return "Игрок не найден";
+  player.ws = ws;
+  if (player.disconnectTimer) {
+    clearTimeout(player.disconnectTimer);
+    player.disconnectTimer = null;
+  }
+  return getLobbyPlayers(room);
 }
 
 export function addBot(roomId: string, requesterId: string): LobbyPlayer[] | string {
@@ -82,7 +96,7 @@ export function addBot(roomId: string, requesterId: string): LobbyPlayer[] | str
   const botName = BOT_NAMES[botCounter % BOT_NAMES.length];
   botCounter++;
   const botId = "bot-" + Math.random().toString(36).slice(2, 8);
-  room.players.push({ id: botId, name: botName, isBot: true, ws: null });
+  room.players.push({ id: botId, name: botName, isBot: true, ws: null, disconnectTimer: null });
   return getLobbyPlayers(room);
 }
 
@@ -253,9 +267,29 @@ export function getRoom(roomId: string): Room | undefined {
   return rooms.get(roomId);
 }
 
+export function disconnectPlayer(roomId: string, playerId: string) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+  const player = room.players.find((p) => p.id === playerId && !p.isBot);
+  if (!player) return;
+  player.ws = null;
+  if (player.disconnectTimer) clearTimeout(player.disconnectTimer);
+  player.disconnectTimer = setTimeout(() => {
+    const r = rooms.get(roomId);
+    if (!r) return;
+    r.players = r.players.filter((p) => p.id !== playerId);
+    if (r.players.filter((p) => !p.isBot).length === 0) {
+      if (r.botTimer) clearTimeout(r.botTimer);
+      rooms.delete(roomId);
+    }
+  }, 60_000);
+}
+
 export function removePlayer(roomId: string, playerId: string) {
   const room = rooms.get(roomId);
   if (!room) return;
+  const player = room.players.find((p) => p.id === playerId);
+  if (player?.disconnectTimer) clearTimeout(player.disconnectTimer);
   room.players = room.players.filter((p) => p.id !== playerId);
   if (room.players.filter((p) => !p.isBot).length === 0) {
     if (room.botTimer) clearTimeout(room.botTimer);
