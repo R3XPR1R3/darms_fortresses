@@ -38,6 +38,8 @@ export enum CompanionId {
   Peacemaker = "peacemaker",
   Contractor = "contractor",
   NightShadow = "night_shadow",
+  Investor = "investor",
+  Trainer = "trainer",
 }
 
 export interface CompanionDefinition {
@@ -97,8 +99,11 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Designer, name: "Дизайнер", description: "Выбранный район превращается в случайную фиолетовую карту в следующем фиолетовом драфте", emoji: "📐", passive: false, targetType: "own_card" },
   { id: CompanionId.Innkeeper, name: "Трактирщик", description: "Покажет все фиолетовые карты противников в руке", emoji: "🍺", passive: false },
   { id: CompanionId.Peacemaker, name: "Миротворец", description: "Разрушает все пушки, склады тротила и секты (без эффектов). Уходит из пула", emoji: "🕊️", passive: false, leavesPool: true },
-  { id: CompanionId.Contractor, name: "Заказчик", description: "При убийстве цели — крадёте все фиолетовые карты жертвы", emoji: "📋", passive: true },
+  { id: CompanionId.Contractor, name: "Заказчик", description: "Назначьте цель-героя. Если Ассасин убивает её в этот день — крадёте фиолетовые карты жертвы", emoji: "📋", passive: false, targetType: "hero" },
   { id: CompanionId.NightShadow, name: "Ночная тень", description: "За 2💰: убейте неназванного персонажа", emoji: "🌑", passive: false, useCost: 2, targetType: "hero" },
+  // --- Special fallback companions (appear only when all offered are color-locked) ---
+  { id: CompanionId.Investor, name: "Инвестор", description: "Получите +2💰", emoji: "📈", passive: false },
+  { id: CompanionId.Trainer, name: "Тренер", description: "Случайно даёт одну из способностей без цвета: убийца/вор/чародей/архитектор", emoji: "🧠", passive: false },
 ] as const;
 
 /** Name constant for flame cards (Pyromancer) */

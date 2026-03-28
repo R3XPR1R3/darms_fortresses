@@ -220,8 +220,14 @@ export function useAbility(
           }
         }
 
-        // Contractor companion: steal victim's purple cards from hand
-        if (player.companion === CompanionId.Contractor && !player.companionDisabled) {
+        // Contractor companion:
+        // only rewards if assassin killed the contracted hero target this day.
+        if (
+          player.companion === CompanionId.Contractor
+          && !player.companionDisabled
+          && player.contractorTargetHeroId
+          && player.contractorTargetHeroId === ability.targetHeroId
+        ) {
           const victim = state.players[targetIdx];
           const purpleCards = victim.hand.filter((c) => c.colors.includes("purple"));
           if (purpleCards.length > 0) {
@@ -232,7 +238,7 @@ export function useAbility(
               abilityUsed: true,
             };
             newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: remainingHand };
-            log = addLog({ ...state, log }, `${player.name} — заказчик: украл ${purpleCards.length} фиолетовых карт у жертвы!`);
+            log = addLog({ ...state, log }, `${player.name} — заказчик: выполнен контракт, украдено ${purpleCards.length} фиолетовых карт!`);
             break;
           }
         }

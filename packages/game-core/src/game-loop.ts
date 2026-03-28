@@ -144,6 +144,11 @@ function useCompanion(
       if (!targetPlayerId) return null;
       const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
       if (targetIdx === -1 || targetIdx === playerIdx) return null;
+      // Bard can only target unrevealed players in turn phase.
+      if (state.turnOrder && state.phase === "turns") {
+        const posInOrder = state.turnOrder.indexOf(targetIdx);
+        if (posInOrder !== -1 && posInOrder <= state.currentTurnIndex) return null;
+      }
       const target = state.players[targetIdx];
       if (!target.companion) return null;
       newPlayers[playerIdx] = { ...player, gold: player.gold - cost, companionUsed: true };
@@ -293,7 +298,7 @@ function useCompanion(
       const flameCard: DistrictCard = {
         id: `flame-${Date.now()}-${rng.int(0, 9999)}`,
         name: FLAME_CARD_NAME,
-        cost: 0,
+        cost: 2,
         hp: 0,
         colors: ["red"],
       };
@@ -459,6 +464,64 @@ function useCompanion(
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — ночная тень: убийство за 2💰...`), rng: rng.getSeed() };
     }
 
+    case CompanionId.Contractor: {
+      // Set assassin contract target hero for this day.
+      if (!targetHeroId) return null;
+      if (targetHeroId === player.hero) return null;
+      newPlayers[playerIdx] = { ...player, contractorTargetHeroId: targetHeroId, companionUsed: true };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — заказчик: цель назначена (${targetHeroId})`), rng: rng.getSeed() };
+    }
+
+    case CompanionId.Investor: {
+      newPlayers[playerIdx] = { ...player, gold: player.gold + 2, companionUsed: true };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — инвестор: +2💰`), rng: rng.getSeed() };
+    }
+
+    case CompanionId.Trainer: {
+      const roll = rng.int(0, 3);
+      // 0 assassin-like, 1 thief-like, 2 sorcerer-like, 3 architect-like
+      if (roll === 0) {
+        const candidates = state.players
+          .map((p, i) => ({ p, i }))
+          .filter(({ p, i }) => i !== playerIdx && p.hero && !p.assassinated)
+          .filter(({ i }) => {
+            if (!state.turnOrder) return true;
+            const pos = state.turnOrder.indexOf(i);
+            return pos === -1 || pos > state.currentTurnIndex;
+          });
+        if (candidates.length > 0) {
+          const pick = candidates[rng.int(0, candidates.length - 1)];
+          newPlayers[pick.i] = { ...newPlayers[pick.i], assassinated: true };
+          newPlayers[playerIdx] = { ...newPlayers[playerIdx], companionUsed: true };
+          return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: получена способность убийцы`), rng: rng.getSeed() };
+        }
+      } else if (roll === 1) {
+        const candidates = state.players
+          .filter((p, i) => i !== playerIdx && p.hero && p.hero !== HeroId.Assassin && !p.assassinated);
+        if (candidates.length > 0) {
+          const target = candidates[rng.int(0, candidates.length - 1)];
+          newPlayers[playerIdx] = { ...newPlayers[playerIdx], robbedHeroId: target.hero, companionUsed: true };
+          return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: получена способность вора`), rng: rng.getSeed() };
+        }
+      } else if (roll === 2) {
+        // Sorcerer draw mode
+        let newDeck = [...state.deck];
+        let hand = [...player.hand];
+        for (let i = 0; i < 2 && hand.length > 0; i++) {
+          const idx = rng.int(0, hand.length - 1);
+          hand.splice(idx, 1);
+        }
+        const drawn = newDeck.splice(0, Math.min(3, newDeck.length));
+        newPlayers[playerIdx] = { ...newPlayers[playerIdx], hand: [...hand, ...drawn], companionUsed: true };
+        return { ...addLog({ ...state, players: newPlayers, deck: newDeck }, `${player.name} — тренер: получена способность чародея`), rng: rng.getSeed() };
+      } else {
+        newPlayers[playerIdx] = { ...newPlayers[playerIdx], buildsRemaining: player.buildsRemaining + 2, companionUsed: true };
+        return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: получена способность архитектора`), rng: rng.getSeed() };
+      }
+      newPlayers[playerIdx] = { ...newPlayers[playerIdx], companionUsed: true };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: эффект не сработал`), rng: rng.getSeed() };
+    }
+
     // Passive companions — should not be used via action
     case CompanionId.Treasurer:
     case CompanionId.Official:
@@ -474,7 +537,6 @@ function useCompanion(
     case CompanionId.Knight:
     case CompanionId.Nobility:
     case CompanionId.TreasureTrader:
-    case CompanionId.Contractor:
       return null;
 
     default:
