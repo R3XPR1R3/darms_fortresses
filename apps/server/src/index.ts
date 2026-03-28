@@ -4,11 +4,12 @@ import type { ClientMessage, ServerMessage } from "./protocol.js";
 import {
   createRoom,
   joinRoom,
+  reconnectRoom,
   addBot,
   startGame,
   handleAction,
   getRoom,
-  removePlayer,
+  disconnectPlayer,
   getLobbyPlayers,
   createPlayerView,
 } from "./room.js";
@@ -89,6 +90,24 @@ wss.on("connection", (ws) => {
         break;
       }
 
+      case "reconnect_room": {
+        const roomId = msg.roomId.toUpperCase();
+        const result = reconnectRoom(roomId, msg.playerId, ws);
+        if (typeof result === "string") {
+          send(ws, { type: "error", message: result });
+        } else {
+          socketMeta.set(ws, { roomId, playerId: msg.playerId });
+          send(ws, { type: "room_reconnected", roomId, playerId: msg.playerId, players: result });
+          const room = getRoom(roomId);
+          if (room?.state) {
+            broadcastState(roomId);
+          } else {
+            broadcastLobby(roomId);
+          }
+        }
+        break;
+      }
+
       case "add_bot": {
         const meta = socketMeta.get(ws);
         if (!meta) { send(ws, { type: "error", message: "Вы не в комнате" }); break; }
@@ -137,7 +156,7 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     const meta = socketMeta.get(ws);
     if (meta) {
-      removePlayer(meta.roomId, meta.playerId);
+      disconnectPlayer(meta.roomId, meta.playerId);
       broadcastLobby(meta.roomId);
     }
   });

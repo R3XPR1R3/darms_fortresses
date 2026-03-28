@@ -16,10 +16,10 @@ export interface DistrictCard {
 export type PurpleAbility =
   | "cannon"       // 2g, purple-red. For 1g shoot random district HP-1 (unlimited)
   | "fort"         // 1g, purple. Other buildings HP-1 on table, gold refund on destroy
-  | "monument"     // 2g, purple. Cost = hand size, always 3 on table
+  | "monument"     // purple. In hand: cost = other cards in hand. On table: fixed 3/3
   | "highway"      // 4g, purple. Hero speed -1
-  | "city_gates"   // 8g, purple-yellow. Cost -2 per turn, discards at 0
+  | "city_gates"   // 8g, purple-yellow. Gets cheaper in hand over time; fixed after build
   | "crypt"        // 4g, purple. On destroy: 2 random purple cards. Self-destroy for 2g
   | "tnt_storage"  // 2g, purple-red. Self-destroy for 2g, destroys 2 random districts per player
-  | "mine"         // 3g, purple-green. +1g at end of turn
+  | "mine"         // 3g, purple-green. +1g end of day (merchant: end of turn)
   | "cult";        // 2g, purple-blue. On build: replaces random blue/purple district of random player

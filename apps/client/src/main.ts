@@ -3,7 +3,7 @@ import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompan
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
-import { t, tHero, tDistrict, tLog, tName, getLang, setLang } from "./i18n.js";
+import { t, tHero, tDistrict, tLog, tName, tCompanionName, tCompanionDescription, getLang, setLang } from "./i18n.js";
 
 /** Get companion emoji for indicator circles */
 function companionEmoji(id: CompanionId | null): string {
@@ -119,6 +119,8 @@ function showMenu() {
   onlineState = null;
   stopDraftTimer();
   stopTurnTimer();
+  myPlayerId = "";
+  myRoomId = "";
   document.getElementById("winner-overlay")?.classList.remove("show");
   document.getElementById("ability-modal")?.classList.remove("show");
   renderMenu();
@@ -157,12 +159,16 @@ function showLobbyScreen(action: "create" | "join") {
 }
 
 // ---- WebSocket ----
-function connectWS(playerName: string, roomId: string | null) {
+function connectWS(playerName: string, roomId: string | null, reconnect = false) {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   const host = location.host; // includes port if non-standard
   ws = new WebSocket(`${protocol}//${host}/ws`);
 
   ws.onopen = () => {
+    if (reconnect && myRoomId && myPlayerId) {
+      ws!.send(JSON.stringify({ type: "reconnect_room", roomId: myRoomId, playerId: myPlayerId }));
+      return;
+    }
     if (roomId) {
       ws!.send(JSON.stringify({ type: "join_room", roomId, playerName }));
     } else {
@@ -176,9 +182,16 @@ function connectWS(playerName: string, roomId: string | null) {
   };
 
   ws.onclose = () => {
+    if ((mode === "lobby" || mode === "online") && myRoomId && myPlayerId) {
+      setTimeout(() => {
+        if (mode === "lobby" || mode === "online") {
+          connectWS("", myRoomId, true);
+        }
+      }, 1000);
+      return;
+    }
     if (mode === "lobby" || mode === "online") {
-      mode = "menu";
-      renderMenu();
+      showMenu();
     }
   };
 }
@@ -199,6 +212,13 @@ function handleServerMessage(msg: Record<string, unknown>) {
       isHost = false;
       lobbyPlayers = msg.players as LobbyPlayer[];
       renderLobby();
+      break;
+
+    case "room_reconnected":
+      myRoomId = msg.roomId as string;
+      myPlayerId = msg.playerId as string;
+      lobbyPlayers = msg.players as LobbyPlayer[];
+      if (mode !== "online") renderLobby();
       break;
 
     case "lobby_update":
@@ -606,6 +626,7 @@ function renderMenu() {
       <button class="btn btn-secondary btn-small" id="btn-lang">${t("lang.toggle")}</button>
       <input type="text" id="player-name" placeholder="${t("menu.name_placeholder")}" value="${t("menu.default_name")}" class="menu-input" maxlength="20"/>
       <button class="btn btn-primary btn-large" id="btn-local">🎮 ${t("menu.local")}</button>
+      <button class="btn btn-secondary btn-large" id="btn-card-pool">📚 ${t("menu.card_pool")}</button>
       <div class="menu-divider">${t("menu.online_divider")}</div>
       <button class="btn btn-secondary btn-large" id="btn-create">🌐 ${t("menu.create_room")}</button>
       <button class="btn btn-secondary btn-large" id="btn-join">🔗 ${t("menu.join_room")}</button>
@@ -613,12 +634,88 @@ function renderMenu() {
   `;
 
   document.getElementById("btn-lang")!.addEventListener("click", () => {
-    setLang(getLang() === "en" ? "ru" : "en");
+    const next = getLang() === "en" ? "ru" : getLang() === "ru" ? "id" : "en";
+    setLang(next);
     renderMenu();
   });
   document.getElementById("btn-local")!.addEventListener("click", startLocal);
+  document.getElementById("btn-card-pool")!.addEventListener("click", showCardPoolModal);
   document.getElementById("btn-create")!.addEventListener("click", () => showLobbyScreen("create"));
   document.getElementById("btn-join")!.addEventListener("click", () => showLobbyScreen("join"));
+}
+
+function showCardPoolModal() {
+  const modal = document.getElementById("card-pool-modal")!;
+  const body = document.getElementById("card-pool-body")!;
+  const close = () => modal.classList.remove("show");
+
+  const deck = createBaseDeck();
+  const districts = [...new Map(
+    deck
+      .filter((c) => !c.colors.includes("purple"))
+      .map((c) => [c.name, c]),
+  ).values()].sort((a, b) => a.cost - b.cost || tDistrict(a.name).localeCompare(tDistrict(b.name)));
+
+  const heroesHtml = HEROES
+    .slice()
+    .sort((a, b) => a.speed - b.speed)
+    .map((h) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${heroPortrait(h.id, 20)} ${heroName(h.id)} <span style="color:#888">⚡${h.speed}</span></div>
+        <div class="pool-item-sub">${t("class." + h.id)}</div>
+      </div>
+    `).join("");
+
+  const districtsHtml = districts
+    .map((d) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${tDistrict(d.name)} <span style="color:#e2b714">${d.cost}💰</span></div>
+        <div class="pool-item-sub">${d.colors.map((c) => districtColorDot(c)).join(" ")}</div>
+      </div>
+    `).join("");
+
+  const companionsHtml = COMPANIONS
+    .map((c) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}</div>
+        <div class="pool-item-sub">${tCompanionDescription(c.id, c.description)}</div>
+      </div>
+    `).join("");
+
+  const purpleHtml = PURPLE_CARD_TEMPLATES
+    .slice()
+    .sort((a, b) => a.cost - b.cost || tDistrict(a.name).localeCompare(tDistrict(b.name)))
+    .map((p) => `
+      <div class="pool-item">
+        <div class="pool-item-title">${p.emoji} ${tDistrict(p.name)} <span style="color:#e2b714">${p.cost}💰</span></div>
+        <div class="pool-item-sub">${p.colors.map((c) => districtColorDot(c)).join(" ")} • ${p.description}</div>
+      </div>
+    `).join("");
+
+  body.innerHTML = `
+    <div class="pool-section">
+      <h4>${t("pool.heroes")}</h4>
+      <div class="pool-grid">${heroesHtml}</div>
+    </div>
+    <div class="pool-section">
+      <h4>${t("pool.districts")}</h4>
+      <div class="pool-grid">${districtsHtml}</div>
+    </div>
+    <div class="pool-section">
+      <h4>${t("pool.companions")}</h4>
+      <div class="pool-grid">${companionsHtml}</div>
+    </div>
+    <div class="pool-section">
+      <h4>${t("pool.purple")}</h4>
+      <div class="pool-grid">${purpleHtml}</div>
+    </div>
+  `;
+
+  modal.classList.add("show");
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+  document.getElementById("card-pool-close")!.textContent = t("pool.close");
+  document.getElementById("card-pool-title")!.textContent = t("pool.title");
+  document.getElementById("card-pool-close")!.onclick = close;
 }
 
 function renderLobby() {
@@ -729,7 +826,7 @@ function renderTurnBanner() {
     if (purpleDraft) {
       el.className = "turn-banner my-turn";
       el.id = "turn-banner";
-      el.innerHTML = `🔮 ${t("banner.day")} ${day} — Фиолетовый драфт`;
+      el.innerHTML = `🔮 ${t("banner.day")} ${day} — ${t("purple.title")}`;
       return;
     }
     const draft = getDraft();
@@ -906,7 +1003,7 @@ function renderOpponentBoard() {
 
   // Companion
   const companionHtml = p.companion ? `
-    <div class="opp-companion">${companionEmoji(p.companion)} ${companionDef(p.companion)?.name ?? p.companion}${p.companionDisabled ? " ❌" : ""}</div>
+    <div class="opp-companion">${companionEmoji(p.companion)} ${tCompanionName(p.companion, companionDef(p.companion)?.name ?? p.companion)}${p.companionDisabled ? " ❌" : ""}</div>
   ` : "";
 
   // Districts
@@ -999,8 +1096,8 @@ function renderMyBoard() {
     const cDef = companionDef(me.companion);
     companionHtml = `
       <div class="my-companion">
-        <span class="companion-name">${companionEmoji(me.companion)} ${cDef?.name ?? me.companion}${me.companionDisabled ? " ❌" : ""}</span>
-        <span style="font-size:9px;color:#888">${cDef?.description ?? ""}</span>
+        <span class="companion-name">${companionEmoji(me.companion)} ${tCompanionName(me.companion, cDef?.name ?? me.companion)}${me.companionDisabled ? " ❌" : ""}</span>
+        <span style="font-size:9px;color:#888">${tCompanionDescription(me.companion, cDef?.description ?? "")}</span>
       </div>
     `;
   }
@@ -1066,7 +1163,7 @@ function renderMyBoard() {
       if (!me.companionUsed && me.companion && !me.companionDisabled && !isPassiveCompanion(me.companion)) {
         const cDef = companionDef(me.companion);
         const costInfo = cDef?.useCost ? ` (${cDef.useCost}💰)` : "";
-        buttons.push(`<button class="btn btn-secondary" id="btn-companion">${companionEmoji(me.companion)} ${cDef?.name ?? me.companion}${costInfo}</button>`);
+        buttons.push(`<button class="btn btn-secondary" id="btn-companion">${companionEmoji(me.companion)} ${tCompanionName(me.companion, cDef?.name ?? me.companion)}${costInfo}</button>`);
       }
 
       if (!me.incomeTaken) {
@@ -1223,8 +1320,8 @@ function renderDraft() {
     const myIdx = getMyIndex();
     if (purpleDraft.picked[myIdx]) {
       el.innerHTML = `
-        <h2 style="font-size:13px">🔮 Фиолетовый драфт</h2>
-        <p class="hint">Ожидание других игроков...</p>
+        <h2 style="font-size:13px">🔮 ${t("purple.title")}</h2>
+        <p class="hint">${t("purple.waiting")}</p>
       `;
       return;
     }
@@ -1247,10 +1344,10 @@ function renderDraft() {
       `;
     }).join("");
     el.innerHTML = `
-      <h2 style="font-size:13px">🔮 Фиолетовый драфт — День ${getDay()}</h2>
-      <p class="hint">Выберите одну из трёх фиолетовых карт:</p>
+      <h2 style="font-size:13px">🔮 ${t("purple.title_day")} ${getDay()}</h2>
+      <p class="hint">${t("purple.choose_one")}</p>
       <div class="purple-draft-grid">${cardButtons}</div>
-      <button class="btn btn-secondary" id="btn-purple-decline" style="margin-top:8px">❌ Пропустить</button>
+      <button class="btn btn-secondary" id="btn-purple-decline" style="margin-top:8px">❌ ${t("purple.skip")}</button>
     `;
     el.querySelectorAll("[data-purple-pick]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1316,7 +1413,7 @@ function renderDraft() {
 
     const companionCards = unique.map((cId) => {
       const def = companionDef(cId);
-      const passiveTag = def?.passive ? `<span style="font-size:8px;color:#aaa">авто</span>` : "";
+      const passiveTag = def?.passive ? `<span style="font-size:8px;color:#aaa">${t("companion.passive")}</span>` : "";
       // Check hero color restriction
       const restricted = def?.heroColor && def.heroColor !== myHeroColor;
       const disabledClass = restricted ? "companion-card-disabled" : "";
@@ -1325,9 +1422,9 @@ function renderDraft() {
         <button class="companion-card ${disabledClass}" data-companion="${restricted ? "" : cId}" ${disabledAttr}>
           <div class="companion-card-portrait">${def?.emoji ?? "?"}</div>
           <div class="companion-card-body">
-            <div class="companion-card-name">${def?.name ?? cId} ${passiveTag}</div>
-            <div class="companion-card-desc">${def?.description ?? ""}</div>
-            ${restricted ? `<div style="font-size:8px;color:#e04050">⛔ только ${def.heroColor === "yellow" ? "🟡" : def.heroColor === "blue" ? "🔵" : def.heroColor === "green" ? "🟢" : "🔴"}</div>` : ""}
+            <div class="companion-card-name">${def ? tCompanionName(cId, def.name) : cId} ${passiveTag}</div>
+            <div class="companion-card-desc">${def ? tCompanionDescription(cId, def.description) : ""}</div>
+            ${restricted ? `<div style="font-size:8px;color:#e04050">⛔ ${t("companion.only_color")} ${def.heroColor === "yellow" ? "🟡" : def.heroColor === "blue" ? "🔵" : def.heroColor === "green" ? "🟢" : "🔴"}</div>` : ""}
           </div>
         </button>`;
     }).join("");
@@ -1438,16 +1535,18 @@ function showCompanionModal(companionId: CompanionId) {
   modal.onclick = (e) => { if (e.target === modal) close(); };
 
   const cDef = companionDef(companionId);
+  const companionLabel = cDef ? tCompanionName(companionId, cDef.name) : companionId;
+  const companionHint = cDef ? tCompanionDescription(companionId, cDef.description) : "";
   const players = getPlayers();
   const myIdx = getMyIndex();
   const me = players[myIdx];
 
   switch (companionId) {
     case CompanionId.Hunter: {
-      title.textContent = `🏹 Охотник — выберите цель`;
+      title.textContent = `🏹 ${companionLabel}`;
       const targets = players.filter((_p, i) => i !== myIdx && !_p.assassinated);
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">За 2💰 противник сбрасывает 2 случайные карты</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${targets.map((p) => {
           const revealed = isHeroRevealed(players.indexOf(p));
           const heroTag = revealed && p.hero ? ` ${heroPortraitSmall(p.hero)}` : "";
@@ -1465,14 +1564,14 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Saboteur: {
-      title.textContent = `💣 Диверсант — выберите цель`;
+      title.textContent = `💣 ${companionLabel}`;
       const targets = players.filter((_p, i) => i !== myIdx && _p.companion && !_p.companionDisabled);
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Отключает компаньона выбранного игрока на день</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${targets.length > 0 ? targets.map((p) => {
-          const cName = companionDef(p.companion)?.name ?? "";
+          const cName = p.companion ? tCompanionName(p.companion, companionDef(p.companion)?.name ?? "") : "";
           return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
-        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+        }).join("") : `<p class="hint">${t("companion_modal.no_valid_targets")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1485,14 +1584,14 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Bard: {
-      title.textContent = `🎵 Бард — выберите цель`;
-      const targets = players.filter((_p, i) => i !== myIdx && _p.companion);
+      title.textContent = `🎵 ${companionLabel}`;
+      const targets = players.filter((_p, i) => i !== myIdx && _p.companion && !isHeroRevealed(i));
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Убирает компаньона выбранного игрока</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${targets.length > 0 ? targets.map((p) => {
-          const cName = companionDef(p.companion)?.name ?? "";
+          const cName = p.companion ? tCompanionName(p.companion, companionDef(p.companion)?.name ?? "") : "";
           return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
-        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+        }).join("") : `<p class="hint">${t("companion_modal.no_valid_targets")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1505,15 +1604,15 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Blacksmith: {
-      title.textContent = `⚒️ Кузнец — выберите квартал`;
+      title.textContent = `⚒️ ${companionLabel}`;
       const allDistricts = players.flatMap((p, i) =>
         p.builtDistricts.map((d) => ({ card: d, player: p, playerIdx: i }))
       );
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Заменяет квартал на другой за ту же цену, другого цвета</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${allDistricts.map((item) =>
           `<button class="modal-option" data-target-player="${item.player.id}" data-target-card="${item.card.id}">
-            ${item.card.name} (${item.card.cost}💰) — ${tName(item.player.name)}
+            ${tDistrict(item.card.name)} (${item.card.cost}💰) — ${tName(item.player.name)}
           </button>`
         ).join("")}
       `;
@@ -1529,13 +1628,13 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Alchemist: {
-      title.textContent = `⚗️ Алхимик — выберите квартал`;
+      title.textContent = `⚗️ ${companionLabel}`;
       const upgradeable = me.builtDistricts.filter((d) => d.cost < 5);
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Превращает квартал в случайный на 1 дороже (макс 5)</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${upgradeable.length > 0 ? upgradeable.map((d) =>
-          `<button class="modal-option" data-target-card="${d.id}">${d.name} (${d.cost}💰 → ${d.cost + 1}💰)</button>`
-        ).join("") : `<p class="hint">Нет кварталов для улучшения</p>`}
+          `<button class="modal-option" data-target-card="${d.id}">${tDistrict(d.name)} (${d.cost}💰 → ${d.cost + 1}💰)</button>`
+        ).join("") : `<p class="hint">${t("companion_modal.no_upgrade")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1548,13 +1647,13 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Cannoneer: {
-      title.textContent = `💥 Канонир — выберите карту для сжигания`;
+      title.textContent = `💥 ${companionLabel}`;
       const hand = getMyHand().filter((c) => c.name !== "🔥 Пламя");
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Сжигает карту, стреляет по случайному кварталу противника (HP −2)</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${hand.length > 0 ? hand.map((c) =>
-          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
-        ).join("") : `<p class="hint">Нет карт</p>`}
+          `<button class="modal-option" data-target-card="${c.id}">${tDistrict(c.name)} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">${t("companion_modal.no_cards")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1567,13 +1666,13 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.StrangeMerchant: {
-      title.textContent = `🧳 Странный торговец — продайте карту`;
+      title.textContent = `🧳 ${companionLabel}`;
       const hand = getMyHand();
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Сбросьте карту и получите её стоимость в золоте</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${hand.length > 0 ? hand.map((c) =>
-          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
-        ).join("") : `<p class="hint">Нет карт</p>`}
+          `<button class="modal-option" data-target-card="${c.id}">${tDistrict(c.name)} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">${t("companion_modal.no_cards")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1586,13 +1685,13 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Pyromancer: {
-      title.textContent = `🔥 Пиромант — выберите карту для поджога`;
+      title.textContent = `🔥 ${companionLabel}`;
       const hand = getMyHand().filter((c) => c.name !== "🔥 Пламя");
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Карта превращается в 🔥Пламя. В конце хода пламя множится!</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${hand.length > 0 ? hand.map((c) =>
-          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
-        ).join("") : `<p class="hint">Нет карт</p>`}
+          `<button class="modal-option" data-target-card="${c.id}">${tDistrict(c.name)} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">${t("companion_modal.no_cards")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1605,13 +1704,13 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.UnluckyMage: {
-      title.textContent = `💫 Неудачный маг — выберите карту`;
+      title.textContent = `💫 ${companionLabel}`;
       const hand = getMyHand();
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Все ваши постройки превратятся в эту карту!</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${hand.length > 0 ? hand.map((c) =>
-          `<button class="modal-option" data-target-card="${c.id}">${c.name} (${c.cost}💰)</button>`
-        ).join("") : `<p class="hint">Нет карт</p>`}
+          `<button class="modal-option" data-target-card="${c.id}">${tDistrict(c.name)} (${c.cost}💰)</button>`
+        ).join("") : `<p class="hint">${t("companion_modal.no_cards")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1624,14 +1723,14 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Sniper: {
-      title.textContent = `🎯 Снайпер — выберите цель`;
+      title.textContent = `🎯 ${companionLabel}`;
       const targets = players.filter((_p, i) => i !== myIdx && _p.companion);
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Навсегда убирает компаньона противника из пула</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${targets.length > 0 ? targets.map((p) => {
-          const cName = companionDef(p.companion)?.name ?? "";
+          const cName = p.companion ? tCompanionName(p.companion, companionDef(p.companion)?.name ?? "") : "";
           return `<button class="modal-option" data-target="${p.id}">${tName(p.name)} — ${companionEmoji(p.companion)} ${cName}</button>`;
-        }).join("") : `<p class="hint">Нет подходящих целей</p>`}
+        }).join("") : `<p class="hint">${t("companion_modal.no_valid_targets")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1644,13 +1743,13 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Designer: {
-      title.textContent = `📐 Дизайнер — выберите квартал`;
+      title.textContent = `📐 ${companionLabel}`;
       const ownDistricts = me.builtDistricts;
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">Выбранный квартал превратится в фиолетовую карту при следующем фиолетовом драфте</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${ownDistricts.length > 0 ? ownDistricts.map((d) =>
-          `<button class="modal-option" data-target-card="${d.id}">${d.name} (${d.cost}💰)</button>`
-        ).join("") : `<p class="hint">Нет кварталов</p>`}
+          `<button class="modal-option" data-target-card="${d.id}">${tDistrict(d.name)} (${d.cost}💰)</button>`
+        ).join("") : `<p class="hint">${t("companion_modal.no_districts")}</p>`}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -1662,17 +1761,51 @@ function showCompanionModal(companionId: CompanionId) {
       break;
     }
 
-    case CompanionId.NightShadow: {
-      title.textContent = `🌑 Ночная тень — выберите героя для убийства`;
+    case CompanionId.Contractor: {
+      title.textContent = `📋 ${companionLabel}`;
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
       const myHero = me.hero;
-      // Exclude self hero and face-up banned heroes
+      const revealedHeroes = new Set(
+        players
+          .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
+          .filter((h): h is HeroId => h !== null),
+      );
       const targets = Object.values(HeroId).filter((h) =>
-        h !== myHero && !faceUpBans.includes(h),
+        h !== myHero && !faceUpBans.includes(h) && !revealedHeroes.has(h),
       );
       options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">За 2💰: убейте неназванного персонажа</p>
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
+        ${targets.map((h) =>
+          `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
+        ).join("")}
+      `;
+      options.querySelectorAll(".modal-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = (btn as HTMLElement).dataset.target as HeroId;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetHeroId: target });
+          close();
+        });
+      });
+      break;
+    }
+
+    case CompanionId.NightShadow: {
+      title.textContent = `🌑 ${companionLabel}`;
+      const draft = getDraft();
+      const faceUpBans = draft?.faceUpBans ?? [];
+      const myHero = me.hero;
+      const revealedHeroes = new Set(
+        players
+          .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
+          .filter((h): h is HeroId => h !== null),
+      );
+      // Exclude self hero, already revealed heroes and face-up bans
+      const targets = Object.values(HeroId).filter((h) =>
+        h !== myHero && !faceUpBans.includes(h) && !revealedHeroes.has(h),
+      );
+      options.innerHTML = `
+        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
         ${targets.map((h) =>
           `<button class="modal-option" data-target="${h}">${heroPortrait(h, 24)} ${heroName(h)} <span style="color:#888;font-size:10px;">⚡${heroSpeed(h)}</span></button>`,
         ).join("")}
@@ -1708,9 +1841,15 @@ function showAbilityModal(heroId: HeroId) {
       title.textContent = t("modal.assassin_title");
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
-      // Exclude self and face-up banned heroes (known to not be in play)
+      const players = getPlayers();
+      const revealedHeroes = new Set(
+        players
+          .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
+          .filter((h): h is HeroId => h !== null),
+      );
+      // Exclude self, revealed heroes and face-up banned heroes (known to not be in play)
       const targets = Object.values(HeroId).filter((h) =>
-        h !== HeroId.Assassin && !faceUpBans.includes(h),
+        h !== HeroId.Assassin && !faceUpBans.includes(h) && !revealedHeroes.has(h),
       );
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${t("modal.assassin_hint")}</p>
