@@ -1,8 +1,10 @@
 // ---- Internationalization module ----
 
-export type Lang = "en" | "ru";
+export type Lang = "en" | "ru" | "id";
 
-let currentLang: Lang = (localStorage.getItem("darms_lang") as Lang) || "en";
+const LANGS: Lang[] = ["en", "ru", "id"];
+const savedLang = localStorage.getItem("darms_lang") as Lang | null;
+let currentLang: Lang = savedLang && LANGS.includes(savedLang) ? savedLang : "en";
 
 export function getLang(): Lang { return currentLang; }
 
@@ -12,7 +14,9 @@ export function setLang(lang: Lang) {
 }
 
 // ---- Translation dictionary ----
-const dict: Record<string, { en: string; ru: string }> = {
+type TranslationEntry = { en: string; ru: string; id?: string };
+
+const dict: Record<string, TranslationEntry> = {
   // Menu
   "menu.subtitle": { en: "Card strategy", ru: "Карточная стратегия" },
   "menu.name_placeholder": { en: "Your name", ru: "Твоё имя" },
@@ -21,6 +25,7 @@ const dict: Record<string, { en: string; ru: string }> = {
   "menu.online_divider": { en: "— online —", ru: "— онлайн —" },
   "menu.create_room": { en: "Create room", ru: "Создать комнату" },
   "menu.join_room": { en: "Join by code", ru: "Войти по коду" },
+  "menu.card_pool": { en: "Card pool", ru: "Пул карт", id: "Pool kartu" },
 
   // Lobby
   "lobby.host": { en: "(host)", ru: "(хост)" },
@@ -166,18 +171,36 @@ const dict: Record<string, { en: string; ru: string }> = {
   "ban.hidden": { en: "hidden", ru: "скрытых" },
 
   // Language
-  "lang.toggle": { en: "RU", ru: "EN" },
+  "lang.toggle": { en: "RU", ru: "ID", id: "EN" },
+  "purple.title": { en: "Purple draft", ru: "Фиолетовый драфт", id: "Draft ungu" },
+  "purple.waiting": { en: "Waiting for other players...", ru: "Ожидание других игроков...", id: "Menunggu pemain lain..." },
+  "purple.title_day": { en: "Purple draft — Day", ru: "Фиолетовый драфт — День", id: "Draft ungu — Hari" },
+  "purple.choose_one": { en: "Choose one of three purple cards:", ru: "Выберите одну из трёх фиолетовых карт:", id: "Pilih satu dari tiga kartu ungu:" },
+  "purple.skip": { en: "Skip", ru: "Пропустить", id: "Lewati" },
+  "companion.passive": { en: "passive", ru: "авто", id: "pasif" },
+  "companion.only_color": { en: "only", ru: "только", id: "hanya" },
+  "companion_modal.no_valid_targets": { en: "No valid targets", ru: "Нет подходящих целей", id: "Tidak ada target yang cocok" },
+  "companion_modal.no_cards": { en: "No cards", ru: "Нет карт", id: "Tidak ada kartu" },
+  "companion_modal.no_upgrade": { en: "No districts to upgrade", ru: "Нет кварталов для улучшения", id: "Tidak ada distrik untuk ditingkatkan" },
+  "companion_modal.no_districts": { en: "No districts", ru: "Нет кварталов", id: "Tidak ada distrik" },
+  "pool.title": { en: "Current card pool", ru: "Актуальный пул карт", id: "Pool kartu saat ini" },
+  "pool.heroes": { en: "Heroes", ru: "Персонажи", id: "Hero" },
+  "pool.districts": { en: "Districts", ru: "Постройки", id: "Distrik" },
+  "pool.companions": { en: "Companions", ru: "Компаньоны", id: "Companion" },
+  "pool.special_companions": { en: "Special companions", ru: "Особые компаньоны", id: "Companion khusus" },
+  "pool.purple": { en: "Purple cards", ru: "Фиолетовые карты", id: "Kartu ungu" },
+  "pool.close": { en: "Close", ru: "Закрыть", id: "Tutup" },
 };
 
 /** Get translated string */
 export function t(key: string): string {
   const entry = dict[key];
   if (!entry) return key;
-  return entry[currentLang];
+  return entry[currentLang] ?? entry.en;
 }
 
 // ---- Hero name translations ----
-const HERO_NAMES: Record<string, { en: string; ru: string }> = {
+const HERO_NAMES: Record<string, TranslationEntry> = {
   assassin:  { en: "Fahira Mirai",       ru: "Фахира Мирай" },
   thief:     { en: "Mitchell Silas",     ru: "Митчелл Сайлас" },
   sorcerer:  { en: "Master Zedrud",      ru: "Мастер Зедруд" },
@@ -191,11 +214,11 @@ const HERO_NAMES: Record<string, { en: string; ru: string }> = {
 export function tHero(heroId: string): string {
   const entry = HERO_NAMES[heroId];
   if (!entry) return heroId;
-  return entry[currentLang];
+  return entry[currentLang] ?? entry.en;
 }
 
 // ---- District name translations ----
-const DISTRICT_NAMES: Record<string, { en: string; ru: string }> = {
+const DISTRICT_NAMES: Record<string, TranslationEntry> = {
   // Yellow
   "Сторожевая башня": { en: "Watchtower", ru: "Сторожевая башня" },
   "Тронный зал":      { en: "Throne Room", ru: "Тронный зал" },
@@ -235,35 +258,81 @@ const DISTRICT_NAMES: Record<string, { en: string; ru: string }> = {
 export function tDistrict(name: string): string {
   const entry = DISTRICT_NAMES[name];
   if (!entry) return name;
-  return entry[currentLang];
+  return entry[currentLang] ?? entry.en;
 }
 
 // ---- Bot name translations ----
-const BOT_NAMES: Record<string, string> = {
-  "Бот Алиса": "Bot Alice",
-  "Бот Борис": "Bot Boris",
-  "Бот Вика":  "Bot Vika",
-  "Бот Григорий": "Bot Gregory",
-  "Бот Дарья": "Bot Daria",
+const BOT_NAMES: Record<string, { en: string; id: string }> = {
+  "Бот Алиса": { en: "Bot Alice", id: "Bot Alisa" },
+  "Бот Борис": { en: "Bot Boris", id: "Bot Boris" },
+  "Бот Вика":  { en: "Bot Vika", id: "Bot Vika" },
+  "Бот Григорий": { en: "Bot Gregory", id: "Bot Grigori" },
+  "Бот Дарья": { en: "Bot Daria", id: "Bot Daria" },
 };
 
 export function tName(name: string): string {
-  if (currentLang === "en" && BOT_NAMES[name]) return BOT_NAMES[name];
+  if ((currentLang === "en" || currentLang === "id") && BOT_NAMES[name]) return BOT_NAMES[name][currentLang];
   if (currentLang === "ru") {
     // Reverse lookup
-    for (const [ru, en] of Object.entries(BOT_NAMES)) {
-      if (name === en) return ru;
+    for (const [ru, translated] of Object.entries(BOT_NAMES)) {
+      if (name === translated.en || name === translated.id) return ru;
     }
   }
   return name;
 }
 
+const COMPANION_NAMES: Record<string, TranslationEntry> = {
+  hunter: { en: "Hunter", ru: "Охотник", id: "Pemburu" },
+  saboteur: { en: "Saboteur", ru: "Диверсант", id: "Saboteur" },
+  bard: { en: "Bard", ru: "Бард", id: "Bard" },
+  blacksmith: { en: "Blacksmith", ru: "Кузнец", id: "Pandai besi" },
+  alchemist: { en: "Alchemist", ru: "Алхимик", id: "Alkemis" },
+  cannoneer: { en: "Cannoneer", ru: "Канонир", id: "Kanonir" },
+  strange_merchant: { en: "Strange Merchant", ru: "Странный торговец", id: "Pedagang aneh" },
+  pyromancer: { en: "Pyromancer", ru: "Пиромант", id: "Piromancer" },
+  unlucky_mage: { en: "Unlucky Mage", ru: "Неудачный маг", id: "Penyihir sial" },
+  sniper: { en: "Sniper", ru: "Снайпер", id: "Sniper" },
+  designer: { en: "Designer", ru: "Дизайнер", id: "Desainer" },
+  contractor: { en: "Contractor", ru: "Заказчик", id: "Kontraktor" },
+  night_shadow: { en: "Night Shadow", ru: "Ночная тень", id: "Bayangan malam" },
+  investor: { en: "Investor", ru: "Инвестор", id: "Investor" },
+  trainer: { en: "Trainer", ru: "Тренер", id: "Pelatih" },
+};
+
+const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
+  hunter: { en: "For 2💰: opponent discards 2 random cards", ru: "За 2💰: противник сбрасывает 2 случайные карты", id: "Dengan 2💰: lawan membuang 2 kartu acak" },
+  saboteur: { en: "Disables selected player's companion for this day", ru: "Отключает компаньона выбранного игрока на день", id: "Menonaktifkan companion pemain terpilih untuk hari ini" },
+  bard: { en: "Removes selected player's companion", ru: "Убирает компаньона выбранного игрока", id: "Menghapus companion pemain terpilih" },
+  blacksmith: { en: "Replace a district with another of same cost but different color", ru: "Заменяет квартал на другой за ту же цену, другого цвета", id: "Ganti distrik dengan harga sama tapi warna berbeda" },
+  alchemist: { en: "Transforms district into random one with +1 cost (max 5)", ru: "Превращает квартал в случайный на 1 дороже (макс 5)", id: "Ubah distrik jadi acak dengan biaya +1 (maks 5)" },
+  cannoneer: { en: "Burns a card and shoots random enemy district (HP −2)", ru: "Сжигает карту, стреляет по случайному кварталу противника (HP −2)", id: "Bakar kartu dan tembak distrik lawan acak (HP −2)" },
+  strange_merchant: { en: "Discard a card and gain gold equal to its cost", ru: "Сбросьте карту и получите её стоимость в золоте", id: "Buang kartu dan dapat emas sebesar biayanya" },
+  pyromancer: { en: "Card turns into 🔥Flame. Flame multiplies at end of turn!", ru: "Карта превращается в 🔥Пламя. В конце хода пламя множится!", id: "Kartu menjadi 🔥Api. Api bertambah di akhir giliran!" },
+  unlucky_mage: { en: "All your districts will transform into this card!", ru: "Все ваши постройки превратятся в эту карту!", id: "Semua distrikmu berubah menjadi kartu ini!" },
+  sniper: { en: "Permanently removes opponent companion from the pool", ru: "Навсегда убирает компаньона противника из пула", id: "Hapus permanen companion lawan dari pool" },
+  designer: { en: "Selected district will turn into a purple card in next purple draft", ru: "Выбранный квартал превратится в фиолетовую карту при следующем фиолетовом драфте", id: "Distrik terpilih jadi kartu ungu pada draft ungu berikutnya" },
+  contractor: { en: "Choose a hero target: if Assassin kills this hero today, steal victim's purple cards", ru: "Выберите героя-цель: если Ассасин убьёт его сегодня, вы крадёте фиолетовые карты жертвы", id: "Pilih target hero: jika Assassin membunuh hero ini hari ini, Anda mencuri kartu ungu korban" },
+  night_shadow: { en: "For 2💰: kill an unannounced character", ru: "За 2💰: убейте неназванного персонажа", id: "Dengan 2💰: bunuh karakter yang belum diumumkan" },
+  investor: { en: "Gain +2💰", ru: "Получите +2💰", id: "Dapatkan +2💰" },
+  trainer: { en: "Randomly grants one colorless hero ability: assassin/thief/sorcerer/architect", ru: "Случайно даёт одну из способностей без цвета: убийца/вор/чародей/архитектор", id: "Memberi acak satu kemampuan hero tanpa warna: assassin/pencuri/penyihir/arsitek" },
+};
+
+export function tCompanionName(id: string, fallback: string): string {
+  const entry = COMPANION_NAMES[id];
+  return entry ? (entry[currentLang] ?? entry.en) : fallback;
+}
+
+export function tCompanionDescription(id: string, fallback: string): string {
+  const entry = COMPANION_DESCRIPTIONS[id];
+  return entry ? (entry[currentLang] ?? entry.en) : fallback;
+}
+
 // ---- Log message translation ----
 // Log messages come from game-core in Russian. We translate them on display.
-const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string }> = [
-  { pattern: /💀 (.+?) \((.+?)\) был убит! Ход пропущен\./, en: (_, name, pname) => `💀 ${name} (${pname}) was killed! Turn skipped.` },
-  { pattern: /(.+?) украл (\d+) золота у убитого (.+)/, en: (_, a, g, b) => `${a} stole ${g} gold from killed ${b}` },
-  { pattern: /(.+?) украл (\d+) золота у (.+)/, en: (_, a, g, b) => `${a} stole ${g} gold from ${b}` },
+const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?: (...m: string[]) => string }> = [
+  { pattern: /💀 (.+?) \((.+?)\) был убит! Ход пропущен\./, en: (_, name, pname) => `💀 ${name} (${pname}) was killed! Turn skipped.`, id: (_, name, pname) => `💀 ${name} (${pname}) terbunuh! Giliran dilewati.` },
+  { pattern: /(.+?) украл (\d+) золота у убитого (.+)/, en: (_, a, g, b) => `${a} stole ${g} gold from killed ${b}`, id: (_, a, g, b) => `${a} mencuri ${g} emas dari ${b} yang terbunuh` },
+  { pattern: /(.+?) украл (\d+) золота у (.+)/, en: (_, a, g, b) => `${a} stole ${g} gold from ${b}`, id: (_, a, g, b) => `${a} mencuri ${g} emas dari ${b}` },
   { pattern: /(.+?) \(Король\) \+(\d+) золота за жёлтые кварталы/, en: (_, n, g) => `${n} (King) +${g} gold for yellow districts` },
   { pattern: /(.+?) \(Клерик\) \+(\d+) золота за синие кварталы/, en: (_, n, g) => `${n} (Cleric) +${g} gold for blue districts` },
   { pattern: /(.+?) \(Торговец\) \+(\d+) золота \((\d+) зелёных \+1 бонус\)/, en: (_, n, g, c) => `${n} (Merchant) +${g} gold (${c} green +1 bonus)` },
@@ -281,9 +350,11 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string }> =
 
 export function tLog(message: string): string {
   if (currentLang === "ru") return message;
-  for (const { pattern, en } of LOG_PATTERNS) {
+  for (const { pattern, en, id } of LOG_PATTERNS) {
     const m = message.match(pattern);
-    if (m) return en(...m);
+    if (!m) continue;
+    if (currentLang === "id" && id) return id(...m);
+    return en(...m);
   }
   return message;
 }

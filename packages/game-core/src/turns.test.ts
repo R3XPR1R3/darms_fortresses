@@ -4,6 +4,7 @@ import { createMatch } from "./setup.js";
 import { initDraft, draftPick } from "./draft.js";
 import { buildTurnOrder, takeIncome, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
 import type { DistrictCard } from "@darms/shared-types";
+import { HeroId, FLAME_CARD_NAME } from "@darms/shared-types";
 
 function makeDeck(count: number): DistrictCard[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -142,6 +143,131 @@ describe("turn phase", () => {
 
     expect(ordered.phase).toBe("draft");
     expect(ordered.day).toBe(2);
+  });
+
+  it("monument uses hand-based build cost and becomes fixed 3/3 on table", () => {
+    const { state, rng } = draftAll(42);
+    const ordered = buildTurnOrder(state, rng);
+    const playerIdx = currentPlayer(ordered)!;
+    const player = ordered.players[playerIdx];
+
+    const monument: DistrictCard = {
+      id: "mon-1",
+      name: "Памятник",
+      cost: 2,
+      hp: 2,
+      colors: ["purple"],
+      purpleAbility: "monument",
+    };
+
+    const hand = [...player.hand, monument];
+    const withMonument = {
+      ...ordered,
+      players: ordered.players.map((p, i) => i === playerIdx ? { ...p, hand, gold: 10 } : p),
+    };
+
+    const result = buildDistrict(withMonument, player.id, monument.id)!;
+    // 6 cards in hand incl. monument => pay 5
+    expect(result.players[playerIdx].gold).toBe(5);
+    const built = result.players[playerIdx].builtDistricts.find((d) => d.id === monument.id)!;
+    expect(built.cost).toBe(3);
+    expect(built.hp).toBe(3);
+  });
+
+  it("city gates discount only in hand and stop changing on table", () => {
+    const { state, rng } = draftAll(42);
+    const ordered = buildTurnOrder(state, rng);
+    const playerIdx = currentPlayer(ordered)!;
+    const player = ordered.players[playerIdx];
+
+    const gates: DistrictCard = {
+      id: "gate-1",
+      name: "Врата в город",
+      cost: 8,
+      hp: 8,
+      colors: ["purple", "yellow"],
+      purpleAbility: "city_gates",
+    };
+
+    let s = {
+      ...ordered,
+      players: ordered.players.map((p, i) => i === playerIdx ? { ...p, hand: [...p.hand, gates], gold: 20 } : p),
+    };
+
+    s = advanceTurn(s, rng);
+    const discounted = s.players[playerIdx].hand.find((c) => c.id === "gate-1")!;
+    expect(discounted.cost).toBe(6);
+
+    s = buildDistrict(s, player.id, "gate-1")!;
+    const onTable = s.players[playerIdx].builtDistricts.find((d) => d.id === "gate-1")!;
+    expect(onTable.cost).toBe(6);
+    expect(onTable.hp).toBe(6);
+
+    // advance one more turn: hand discounts continue, table gates unchanged
+    s = advanceTurn(s, rng);
+    const onTableAfter = s.players[playerIdx].builtDistricts.find((d) => d.id === "gate-1")!;
+    expect(onTableAfter.cost).toBe(6);
+    expect(onTableAfter.hp).toBe(6);
+  });
+
+  it("flame burns two cards at end of turn, then gets replaced by new flames", () => {
+    const { state, rng } = draftAll(42);
+    const ordered = buildTurnOrder(state, rng);
+    const playerIdx = currentPlayer(ordered)!;
+    const player = ordered.players[playerIdx];
+
+    const flame: DistrictCard = {
+      id: "flame-a",
+      name: FLAME_CARD_NAME,
+      cost: 2,
+      hp: 0,
+      colors: ["red"],
+    };
+
+    const withFlame = {
+      ...ordered,
+      players: ordered.players.map((p, i) => i === playerIdx ? { ...p, hand: [...p.hand, flame] } : p),
+    };
+
+    const next = advanceTurn(withFlame, rng);
+    const hand = next.players[playerIdx].hand;
+    const flames = hand.filter((c) => c.name === FLAME_CARD_NAME);
+    // 1 old flame removed, 2 burned cards become 2 new flames
+    expect(flames.length).toBe(2);
+    expect(hand.length).toBe(player.hand.length); // +1 old flame -2 burned +2 new
+  });
+
+  it("mine pays at end of day for non-merchant and each turn for merchant", () => {
+    const { state, rng } = draftAll(42);
+    const ordered = buildTurnOrder(state, rng);
+    const playerIdx = currentPlayer(ordered)!;
+    const merchantIdx = ordered.players.findIndex((p, i) => i !== playerIdx);
+    const mineCard: DistrictCard = {
+      id: "mine-1",
+      name: "Шахта",
+      cost: 3,
+      hp: 3,
+      colors: ["purple", "green"],
+      purpleAbility: "mine",
+    };
+
+    let s = {
+      ...ordered,
+      players: ordered.players.map((p, i) => {
+        if (i === playerIdx) return { ...p, hero: HeroId.King, builtDistricts: [...p.builtDistricts, mineCard], gold: 0 };
+        if (i === merchantIdx) return { ...p, hero: HeroId.Merchant, builtDistricts: [...p.builtDistricts, mineCard], gold: 0 };
+        return p;
+      }),
+    };
+
+    // one turn: merchant gets +1, non-merchant does not yet
+    s = advanceTurn(s, rng);
+    expect(s.players[merchantIdx].gold).toBe(1);
+    expect(s.players[playerIdx].gold).toBe(0);
+
+    // finish day => non-merchant gets payout
+    for (let i = 0; i < 3; i++) s = advanceTurn(s, rng);
+    expect(s.players[playerIdx].gold).toBeGreaterThanOrEqual(1);
   });
 });
 

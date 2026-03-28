@@ -111,7 +111,10 @@ function canPickCompanion(companionId: CompanionId, heroColor: string | null): b
  */
 function generateCompanionPool(rng: Rng, banned: CompanionId[] = []): CompanionId[] {
   const excluded = new Set(banned);
-  const allCompanions = COMPANIONS.map((c) => c.id).filter((id) => !excluded.has(id));
+  const specialFallback = new Set<CompanionId>([CompanionId.Investor, CompanionId.Trainer]);
+  const allCompanions = COMPANIONS
+    .map((c) => c.id)
+    .filter((id) => !excluded.has(id) && !specialFallback.has(id));
   const shuffled = [...allCompanions];
   rng.shuffle(shuffled);
   return shuffled.slice(0, 3);
@@ -267,11 +270,15 @@ export function companionPick(
 
   // Check companion is in the offered pool
   const pool = draft.companionChoices?.[0];
-  if (!pool || !pool.includes(companionId)) return null;
+  if (!pool) return null;
 
   // Check hero color restriction
   const heroColor = getPlayerHeroColor(state, expectedPlayerIdx);
-  if (!canPickCompanion(companionId, heroColor)) return null;
+  const hasEligibleInPool = pool.some((id) => canPickCompanion(id, heroColor));
+  const isFallbackSpecial = companionId === CompanionId.Investor || companionId === CompanionId.Trainer;
+  if (!isFallbackSpecial && !pool.includes(companionId)) return null;
+  if (!isFallbackSpecial && !canPickCompanion(companionId, heroColor)) return null;
+  if (isFallbackSpecial && hasEligibleInPool) return null; // specials only when all offered are locked
 
   // Collect already-picked companions (for replacement exclusion)
   const alreadyPicked = state.players
@@ -367,7 +374,16 @@ export function initPurpleDraft(state: GameState, rng: Rng): GameState {
   }
 
   const offers = newPlayers.map(() => {
-    return [generatePurpleCard(rng), generatePurpleCard(rng), generatePurpleCard(rng)];
+    const picked = new Set<string>();
+    const local: DistrictCard[] = [];
+    while (local.length < 3 && picked.size < PURPLE_CARD_TEMPLATES.length) {
+      const c = generatePurpleCard(rng);
+      const key = `${c.name}:${c.purpleAbility}`;
+      if (picked.has(key)) continue;
+      picked.add(key);
+      local.push(c);
+    }
+    return local;
   });
   const picked = newPlayers.map(() => false);
   return {
