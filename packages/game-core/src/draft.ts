@@ -89,6 +89,7 @@ export function initDraft(state: GameState, rng: Rng): GameState {
       assassinated: false,
       robbedHeroId: null,
       incomeTaken: false,
+      incomeOffer: null,
       buildsRemaining: 0,
       abilityUsed: false,
       companion: null,

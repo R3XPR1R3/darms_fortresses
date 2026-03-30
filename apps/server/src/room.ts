@@ -352,6 +352,7 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
       builtDistricts: p.builtDistricts,
       hero: revealed ? p.hero : null,
       incomeTaken: p.incomeTaken,
+      incomeOffer: i === myIndex ? (p.incomeOffer ?? null) : null,
       buildsRemaining: p.buildsRemaining,
       abilityUsed: p.abilityUsed,
       assassinated: revealed ? p.assassinated : false,

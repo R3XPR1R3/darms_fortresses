@@ -50,7 +50,7 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
         log = addLog({ ...state, log }, `${p.name} (Король) +${yellowCount} золота за жёлтые кварталы`);
       }
       newCrownHolder = playerIdx;
-      // City Gates: if King has gates in hand, auto-build one for free at full table value.
+      // City Gates: King auto-builds gates for free at start of their turn.
       const gateIdx = newPlayers[playerIdx].hand.findIndex((d) => d.purpleAbility === "city_gates");
       if (gateIdx !== -1) {
         const hand = [...newPlayers[playerIdx].hand];
@@ -59,7 +59,7 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
         const built = { ...card, cost: 8, originalCost: 8, hp: 8 };
         const builtDistricts = [...newPlayers[playerIdx].builtDistricts, built];
         newPlayers[playerIdx] = { ...newPlayers[playerIdx], hand, builtDistricts };
-        log = addLog({ ...state, log }, `${p.name} (Король) автоматически выставил Врата в город бесплатно`);
+        log = addLog({ ...state, log }, `${p.name} (Лидер) автоматически выставил Врата в город`);
       }
       break;
     }
@@ -79,7 +79,7 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
       ).length;
       const bonus = greenCount + 1; // +1 passive bonus
       newPlayers[playerIdx] = { ...p, gold: p.gold + bonus };
-      log = addLog({ ...state, log }, `${p.name} (Торговец) +${bonus} золота (${greenCount} зелёных +1 бонус)`);
+        log = addLog({ ...state, log }, `${p.name} (Казначей) +${bonus} золота (${greenCount} зелёных +1 бонус)`);
       break;
     }
     case HeroId.Architect: {

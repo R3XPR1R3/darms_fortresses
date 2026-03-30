@@ -65,6 +65,12 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
     }
 
     // Step 2: Take income if not taken
+    if (player.incomeOffer && player.incomeOffer.length > 0) {
+      const pick = [...player.incomeOffer].sort((a, b) => b.cost - a.cost)[0];
+      return { type: "income_pick", playerId: botPlayerId, cardId: pick.id };
+    }
+
+    // Step 2: Take income if not taken
     if (!player.incomeTaken) {
       const canBuild = player.hand.some(
         (c) => c.cost <= player.gold + 1 && !player.builtDistricts.some((d) => d.name === c.name),

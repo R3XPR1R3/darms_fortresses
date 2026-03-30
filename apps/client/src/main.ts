@@ -47,6 +47,7 @@ interface PlayerViewEntry {
   builtDistricts: PlayerState["builtDistricts"];
   hero: PlayerState["hero"];
   incomeTaken: boolean;
+  incomeOffer?: PlayerState["incomeOffer"];
   buildsRemaining: number;
   abilityUsed: boolean;
   assassinated: boolean;
@@ -416,6 +417,7 @@ function getPlayers(): PlayerViewEntry[] {
         builtDistricts: p.builtDistricts,
         hero: revealed ? p.hero : null,
         incomeTaken: p.incomeTaken,
+        incomeOffer: isMe ? (p.incomeOffer ?? null) : null,
         buildsRemaining: p.buildsRemaining,
         abilityUsed: p.abilityUsed,
         assassinated: revealed ? p.assassinated : false,
@@ -1185,7 +1187,12 @@ function renderMyBoard() {
         buttons.push(`<button class="btn btn-secondary" id="btn-companion">${companionEmoji(me.companion)} ${tCompanionName(me.companion, cDef?.name ?? me.companion)}${costInfo}</button>`);
       }
 
-      if (!me.incomeTaken) {
+      if (me.incomeOffer && me.incomeOffer.length > 0) {
+        const offerHtml = me.incomeOffer.map((c) =>
+          `<button class="btn btn-card income-pick" data-income-pick="${c.id}">🃏 ${tDistrict(c.name)} (${c.cost})</button>`,
+        ).join("");
+        buttons.push(`<div class="hint">Выбери 1 карту, вторая уйдёт наверх колоды:</div>${offerHtml}`);
+      } else if (!me.incomeTaken) {
         buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
         buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
       }
@@ -1216,6 +1223,12 @@ function renderMyBoard() {
   });
   document.getElementById("btn-draw")?.addEventListener("click", () => {
     dispatch({ type: "income", playerId: getMyId(), choice: "card" });
+  });
+  el.querySelectorAll("[data-income-pick]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cardId = (btn as HTMLElement).dataset.incomePick!;
+      dispatch({ type: "income_pick", playerId: getMyId(), cardId });
+    });
   });
   document.getElementById("btn-end")?.addEventListener("click", () => {
     dispatch({ type: "end_turn", playerId: getMyId() });

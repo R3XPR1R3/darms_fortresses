@@ -337,7 +337,7 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /(.+?) украл (\d+) золота у (.+)/, en: (_, a, g, b) => `${a} stole ${g} gold from ${b}`, id: (_, a, g, b) => `${a} mencuri ${g} emas dari ${b}` },
   { pattern: /(.+?) \(Король\) \+(\d+) золота за жёлтые кварталы/, en: (_, n, g) => `${n} (King) +${g} gold for yellow districts` },
   { pattern: /(.+?) \(Клерик\) \+(\d+) золота за синие кварталы/, en: (_, n, g) => `${n} (Cleric) +${g} gold for blue districts` },
-  { pattern: /(.+?) \(Торговец\) \+(\d+) золота \((\d+) зелёных \+1 бонус\)/, en: (_, n, g, c) => `${n} (Merchant) +${g} gold (${c} green +1 bonus)` },
+  { pattern: /(.+?) \(Казначей\) \+(\d+) золота \((\d+) зелёных \+1 бонус\)/, en: (_, n, g, c) => `${n} (Treasurer) +${g} gold (${c} green +1 bonus)` },
   { pattern: /(.+?) \(Архитектор\) берёт (\d+) карты, может строить до 3/, en: (_, n, c) => `${n} (Architect) draws ${c} cards, can build up to 3` },
   { pattern: /(.+?) \(Генерал\) \+(\d+) золота за красные кварталы/, en: (_, n, g) => `${n} (General) +${g} gold for red districts` },
   { pattern: /(.+?) совершил убийство\.\.\./, en: (_, n) => `${n} committed murder...` },

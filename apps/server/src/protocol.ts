@@ -55,6 +55,7 @@ export interface PlayerViewEntry {
   builtDistricts: PlayerState["builtDistricts"];
   hero: PlayerState["hero"];
   incomeTaken: boolean;
+  incomeOffer: PlayerState["incomeOffer"];
   buildsRemaining: number;
   abilityUsed: boolean;
   assassinated: boolean;

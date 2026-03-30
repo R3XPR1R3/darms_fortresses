@@ -60,13 +60,13 @@ export const PURPLE_CARD_TEMPLATES: PurpleCardTemplate[] = [
   { name: "Магистраль", cost: 4, colors: ["purple"], ability: "highway", emoji: "🛤️", description: "Скорость героя −1" },
   { name: "Врата в город", cost: 8, colors: ["purple", "yellow"], ability: "city_gates", emoji: "🚪", description: "Пока в руке: цена уменьшается на 2 каждый ход. На столе не удешевляются" },
   { name: "Склеп", cost: 4, colors: ["purple"], ability: "crypt", emoji: "⚰️", description: "При разрушении: +2 фиолетовые карты. Самоуничтожение за 2💰" },
-  { name: "Склад тротила", cost: 2, colors: ["purple", "red"], ability: "tnt_storage", emoji: "🧨", description: "Уничтожьте за 2💰: −2 случайных квартала каждому" },
+  { name: "Склад тротила", cost: 2, colors: ["purple"], ability: "tnt_storage", emoji: "🧨", description: "Уничтожьте за 2💰: −2 случайных квартала каждому" },
   { name: "Шахта", cost: 3, colors: ["purple", "green"], ability: "mine", emoji: "⛏️", description: "+1💰 в конце дня (у Торговца — в конце каждого хода)" },
-  { name: "Секта", cost: 2, colors: ["purple", "blue"], ability: "cult", emoji: "🕯️", description: "Активируется только синим героем: заменяет случайный квартал случайного игрока" },
-  { name: "Алтарь силы", cost: 4, colors: ["purple"], ability: "altar_power", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
-  { name: "Алтарь здоровья", cost: 4, colors: ["purple"], ability: "altar_health", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
-  { name: "Алтарь интеллекта", cost: 4, colors: ["purple"], ability: "altar_intellect", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
-  { name: "Алтарь выносливости", cost: 4, colors: ["purple"], ability: "altar_stamina", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
+  { name: "Секта", cost: 2, colors: ["purple", "blue"], ability: "cult", emoji: "🕯️", description: "Активируется только Клериком: заменяет случайный квартал случайного игрока" },
+  { name: "Алтарь силы", cost: 1, colors: ["purple"], ability: "altar_power", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
+  { name: "Алтарь здоровья", cost: 1, colors: ["purple"], ability: "altar_health", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
+  { name: "Алтарь интеллекта", cost: 1, colors: ["purple"], ability: "altar_intellect", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
+  { name: "Алтарь выносливости", cost: 1, colors: ["purple"], ability: "altar_stamina", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
 ];
 
 export interface LogEntry {
@@ -89,6 +89,8 @@ export interface PlayerState {
   hero: HeroId | null;
   /** Has this player taken their income action this turn? */
   incomeTaken: boolean;
+  /** Two-card income offer waiting for explicit player pick */
+  incomeOffer?: DistrictCard[] | null;
   /** How many builds remaining this turn (architect gets 3, others 1) */
   buildsRemaining: number;
   /** Has this player used their hero ability this turn? */
