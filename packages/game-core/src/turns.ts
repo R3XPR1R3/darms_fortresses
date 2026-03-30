@@ -88,8 +88,8 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
 }
 
 /**
- * Process income action: take 2 gold OR draw 2 cards split:
- * highest-cost card to self, second card to next player.
+ * Process income action: take 2 gold OR draw 2 cards:
+ * choose best to self (by current heuristic), second goes to top of deck.
  * Swindler companion: first income gives BOTH (gold + card-flow bonus), then can take one more.
  * Druid companion: drawn cards become dual-colored.
  */
@@ -110,12 +110,9 @@ export function takeIncome(
 
   const rng = { int: (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1)) };
   const hasDruid = player.companion === CompanionId.Druid && !player.companionDisabled;
-  const nextPlayerIdx = (playerIdx + 1) % state.players.length;
-
   const drawTwoAndSplit = (
     deck: typeof state.deck,
     selfHand: typeof player.hand,
-    nextHand: typeof state.players[number]["hand"],
   ) => {
     const newDeck = [...deck];
     const drawn: typeof selfHand = [];
@@ -124,19 +121,19 @@ export function takeIncome(
       if (hasDruid) card = addRandomColor(card, rng);
       drawn.push(card);
     }
-    if (drawn.length === 0) return { newDeck, selfHand, nextHand };
-    if (drawn.length === 1) return { newDeck, selfHand: [...selfHand, drawn[0]], nextHand };
+    if (drawn.length === 0) return { newDeck, selfHand };
+    if (drawn.length === 1) return { newDeck, selfHand: [...selfHand, drawn[0]] };
     const sorted = [...drawn].sort((a, b) => b.cost - a.cost);
+    newDeck.unshift(sorted[1]); // second card goes back on top of deck
     return {
       newDeck,
       selfHand: [...selfHand, sorted[0]],
-      nextHand: [...nextHand, sorted[1]],
     };
   };
 
   if (hasSwindler) {
     // Swindler: give BOTH gold + card-flow bonus, mark companion used, don't mark income taken
-    const split = drawTwoAndSplit(state.deck, player.hand, state.players[nextPlayerIdx].hand);
+    const split = drawTwoAndSplit(state.deck, player.hand);
     const newPlayers = [...state.players];
     newPlayers[playerIdx] = {
       ...player,
@@ -144,14 +141,24 @@ export function takeIncome(
       hand: split.selfHand,
       companionUsed: true, // swindler bonus used, but income NOT taken — can take once more
     };
-    if (nextPlayerIdx !== playerIdx) {
-      newPlayers[nextPlayerIdx] = { ...state.players[nextPlayerIdx], hand: split.nextHand };
+    if (player.hero === HeroId.King) {
+      const gateIdx = newPlayers[playerIdx].hand.findIndex((d) => d.purpleAbility === "city_gates");
+      if (gateIdx !== -1) {
+        const hand = [...newPlayers[playerIdx].hand];
+        const gate = hand[gateIdx];
+        hand.splice(gateIdx, 1);
+        newPlayers[playerIdx] = {
+          ...newPlayers[playerIdx],
+          hand,
+          builtDistricts: [...newPlayers[playerIdx].builtDistricts, { ...gate, cost: 8, originalCost: 8, hp: 8 }],
+        };
+      }
     }
     return {
       ...state,
       players: newPlayers,
       deck: split.newDeck,
-      log: [...state.log, { day: state.day, message: `${player.name} — шулер: +2💰, +1🃏 себе, +1🃏 следующему` }],
+      log: [...state.log, { day: state.day, message: `${player.name} — шулер: +2💰, +1🃏 себе, +1🃏 на верх колоды` }],
     };
   }
 
@@ -165,15 +172,25 @@ export function takeIncome(
     return { ...state, players: newPlayers };
   }
 
-  const split = drawTwoAndSplit(state.deck, player.hand, state.players[nextPlayerIdx].hand);
+  const split = drawTwoAndSplit(state.deck, player.hand);
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
     ...player,
     hand: split.selfHand,
     incomeTaken: true,
   };
-  if (nextPlayerIdx !== playerIdx) {
-    newPlayers[nextPlayerIdx] = { ...state.players[nextPlayerIdx], hand: split.nextHand };
+  if (player.hero === HeroId.King) {
+    const gateIdx = newPlayers[playerIdx].hand.findIndex((d) => d.purpleAbility === "city_gates");
+    if (gateIdx !== -1) {
+      const hand = [...newPlayers[playerIdx].hand];
+      const gate = hand[gateIdx];
+      hand.splice(gateIdx, 1);
+      newPlayers[playerIdx] = {
+        ...newPlayers[playerIdx],
+        hand,
+        builtDistricts: [...newPlayers[playerIdx].builtDistricts, { ...gate, cost: 8, originalCost: 8, hp: 8 }],
+      };
+    }
   }
   return { ...state, players: newPlayers, deck: split.newDeck };
 }

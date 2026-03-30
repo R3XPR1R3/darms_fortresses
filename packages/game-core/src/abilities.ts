@@ -50,6 +50,17 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
         log = addLog({ ...state, log }, `${p.name} (Король) +${yellowCount} золота за жёлтые кварталы`);
       }
       newCrownHolder = playerIdx;
+      // City Gates: King auto-builds gates for free at start of their turn.
+      const gateIdx = newPlayers[playerIdx].hand.findIndex((d) => d.purpleAbility === "city_gates");
+      if (gateIdx !== -1) {
+        const hand = [...newPlayers[playerIdx].hand];
+        const card = hand[gateIdx];
+        hand.splice(gateIdx, 1);
+        const built = { ...card, cost: 8, originalCost: 8, hp: 8 };
+        const builtDistricts = [...newPlayers[playerIdx].builtDistricts, built];
+        newPlayers[playerIdx] = { ...newPlayers[playerIdx], hand, builtDistricts };
+        log = addLog({ ...state, log }, `${p.name} (Лидер) автоматически выставил Врата в город`);
+      }
       break;
     }
     case HeroId.Cleric: {
