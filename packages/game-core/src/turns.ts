@@ -371,7 +371,7 @@ export function buildDistrict(
   // Monument: table value is fixed at 3 (hp and score value via cost)
   let builtCard = { ...card, hp: card.cost, originalCost: card.originalCost ?? card.cost, baseColors: card.baseColors ?? card.colors };
   if (card.purpleAbility === "monument") {
-    builtCard = { ...card, cost: 3, hp: 3 };
+    builtCard = { ...card, cost: 3, hp: 3, originalCost: card.originalCost ?? 3, baseColors: card.baseColors ?? card.colors };
   }
 
   // Fort: reduce other (non-fort) districts HP by 1 when on table
@@ -535,6 +535,50 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   }
 
   state = { ...state, players, log };
+
+  // Plague effect (if active): at end of each turn
+  // - random player loses 1 gold
+  // - random player loses 1 district HP on table (if possible)
+  if ((state.plagueDaysLeft ?? 0) > 0) {
+    const plaguePlayers = [...state.players];
+    let plagueLog = state.log;
+    const goldCandidates = plaguePlayers
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => p.gold > 0);
+    if (goldCandidates.length > 0) {
+      const picked = goldCandidates[rng.int(0, goldCandidates.length - 1)];
+      plaguePlayers[picked.i] = { ...plaguePlayers[picked.i], gold: plaguePlayers[picked.i].gold - 1 };
+      plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: ${plaguePlayers[picked.i].name} потерял 1💰` }];
+    }
+
+    const hpCandidates: { pIdx: number; dIdx: number }[] = [];
+    for (let i = 0; i < plaguePlayers.length; i++) {
+      for (let d = 0; d < plaguePlayers[i].builtDistricts.length; d++) {
+        if (plaguePlayers[i].builtDistricts[d].purpleAbility === "stronghold") continue;
+        hpCandidates.push({ pIdx: i, dIdx: d });
+      }
+    }
+    if (hpCandidates.length > 0) {
+      const picked = hpCandidates[rng.int(0, hpCandidates.length - 1)];
+      const owner = plaguePlayers[picked.pIdx];
+      const districts = [...owner.builtDistricts];
+      const target = districts[picked.dIdx];
+      const newHp = target.hp - 1;
+      if (newHp < 1) {
+        const destroyed = districts[picked.dIdx];
+        districts.splice(picked.dIdx, 1);
+        plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
+        state = { ...state, discardPile: [...state.discardPile, destroyed] };
+        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} разрушен ${destroyed.name}` }];
+      } else {
+        districts[picked.dIdx] = { ...target, hp: newHp };
+        plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
+        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.hp}→${newHp})` }];
+      }
+    }
+
+    state = { ...state, players: plaguePlayers, log: plagueLog };
+  }
 
   // Plague effect (if active): at end of each turn
   // - random player loses 1 gold
