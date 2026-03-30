@@ -1,5 +1,5 @@
 import type { GameState, AbilityPayload, PlayerState, LogEntry } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 function addLog(state: GameState, message: string): LogEntry[] {
@@ -68,7 +68,7 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
       ).length;
       const bonus = greenCount + 1; // +1 passive bonus
       newPlayers[playerIdx] = { ...p, gold: p.gold + bonus };
-      log = addLog({ ...state, log }, `${p.name} (Торговец) +${bonus} золота (${greenCount} зелёных +1 бонус)`);
+        log = addLog({ ...state, log }, `${p.name} (Казначей) +${bonus} золота (${greenCount} зелёных +1 бонус)`);
       break;
     }
     case HeroId.Architect: {
@@ -316,6 +316,8 @@ export function useAbility(
 
       // Cleric's districts are immune to destruction
       if (target.hero === HeroId.Cleric) return null;
+      // Stronghold cannot be damaged or destroyed
+      if (card.purpleAbility === "stronghold") return null;
 
       // General spends gold to deal damage to district HP
       if (player.gold < 1) return null;
@@ -342,29 +344,16 @@ export function useAbility(
         if (card.purpleAbility === "crypt") {
           const purpleCards: typeof target.hand = [];
           for (let i = 0; i < 2; i++) {
-            const tplIdx = rng.int(0, 8); // 9 templates
-            const tpl = (() => {
-              // inline access to templates
-              const templates = [
-                { name: "Пушка", cost: 2, colors: ["purple", "red"] as const, ability: "cannon" as const },
-                { name: "Оборонительный форт", cost: 1, colors: ["purple"] as const, ability: "fort" as const },
-                { name: "Памятник", cost: 2, colors: ["purple"] as const, ability: "monument" as const },
-                { name: "Магистраль", cost: 4, colors: ["purple"] as const, ability: "highway" as const },
-                { name: "Врата в город", cost: 8, colors: ["purple", "yellow"] as const, ability: "city_gates" as const },
-                { name: "Склеп", cost: 4, colors: ["purple"] as const, ability: "crypt" as const },
-                { name: "Склад тротила", cost: 2, colors: ["purple", "red"] as const, ability: "tnt_storage" as const },
-                { name: "Шахта", cost: 3, colors: ["purple", "green"] as const, ability: "mine" as const },
-                { name: "Секта", cost: 2, colors: ["purple", "blue"] as const, ability: "cult" as const },
-              ];
-              return templates[tplIdx];
-            })();
+            const tpl = PURPLE_CARD_TEMPLATES[rng.int(0, PURPLE_CARD_TEMPLATES.length - 1)];
             purpleCards.push({
               id: `purple-crypt-${Date.now()}-${rng.int(0, 9999)}`,
               name: tpl.name,
               cost: tpl.cost,
+              originalCost: tpl.cost,
               hp: tpl.cost,
-              colors: [...tpl.colors],
-              purpleAbility: tpl.ability,
+              colors: [...tpl.colors] as typeof target.hand[number]["colors"],
+              baseColors: [...tpl.colors] as typeof target.hand[number]["colors"],
+              purpleAbility: tpl.ability as typeof target.hand[number]["purpleAbility"],
             });
           }
           const updatedTarget = newPlayers[targetIdx] ?? { ...target, builtDistricts: newTargetDistricts };
@@ -404,6 +393,21 @@ export function useAbility(
 export function checkWinCondition(state: GameState): GameState {
   for (let i = 0; i < state.players.length; i++) {
     const p = state.players[i];
+    const altarCount = p.builtDistricts.filter((d) =>
+      d.purpleAbility === "altar_power"
+      || d.purpleAbility === "altar_health"
+      || d.purpleAbility === "altar_intellect"
+      || d.purpleAbility === "altar_stamina"
+    ).length;
+    if (altarCount >= 3 && !p.finishedFirst) {
+      const newPlayers = [...state.players];
+      newPlayers[i] = { ...p, finishedFirst: true };
+      return {
+        ...state,
+        players: newPlayers,
+        log: addLog(state, `${p.name} построил 3 алтаря! Последний день.`),
+      };
+    }
     if (p.builtDistricts.length >= WIN_DISTRICTS && !p.finishedFirst) {
       const newPlayers = [...state.players];
       newPlayers[i] = { ...p, finishedFirst: true };

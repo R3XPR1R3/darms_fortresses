@@ -88,8 +88,9 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
 }
 
 /**
- * Process income action: take 1 gold OR draw 1 card from deck.
- * Swindler companion: first income gives BOTH (gold + card), then can take one more.
+ * Process income action: take 2 gold OR draw 2 cards split:
+ * highest-cost card to self, second card to next player.
+ * Swindler companion: first income gives BOTH (gold + card-flow bonus), then can take one more.
  * Druid companion: drawn cards become dual-colored.
  */
 export function takeIncome(
@@ -109,28 +110,48 @@ export function takeIncome(
 
   const rng = { int: (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1)) };
   const hasDruid = player.companion === CompanionId.Druid && !player.companionDisabled;
+  const nextPlayerIdx = (playerIdx + 1) % state.players.length;
+
+  const drawTwoAndSplit = (
+    deck: typeof state.deck,
+    selfHand: typeof player.hand,
+    nextHand: typeof state.players[number]["hand"],
+  ) => {
+    const newDeck = [...deck];
+    const drawn: typeof selfHand = [];
+    for (let i = 0; i < 2 && newDeck.length > 0; i++) {
+      let card = newDeck.shift()!;
+      if (hasDruid) card = addRandomColor(card, rng);
+      drawn.push(card);
+    }
+    if (drawn.length === 0) return { newDeck, selfHand, nextHand };
+    if (drawn.length === 1) return { newDeck, selfHand: [...selfHand, drawn[0]], nextHand };
+    const sorted = [...drawn].sort((a, b) => b.cost - a.cost);
+    return {
+      newDeck,
+      selfHand: [...selfHand, sorted[0]],
+      nextHand: [...nextHand, sorted[1]],
+    };
+  };
 
   if (hasSwindler) {
-    // Swindler: give BOTH gold + card, mark companion used, don't mark income taken
-    let newDeck = [...state.deck];
-    let newHand = [...player.hand];
-    if (newDeck.length > 0) {
-      let drawn = newDeck.shift()!;
-      if (hasDruid) drawn = addRandomColor(drawn, rng);
-      newHand = [...newHand, drawn];
-    }
+    // Swindler: give BOTH gold + card-flow bonus, mark companion used, don't mark income taken
+    const split = drawTwoAndSplit(state.deck, player.hand, state.players[nextPlayerIdx].hand);
     const newPlayers = [...state.players];
     newPlayers[playerIdx] = {
       ...player,
-      gold: player.gold + 1,
-      hand: newHand,
+      gold: player.gold + 2,
+      hand: split.selfHand,
       companionUsed: true, // swindler bonus used, but income NOT taken — can take once more
     };
+    if (nextPlayerIdx !== playerIdx) {
+      newPlayers[nextPlayerIdx] = { ...state.players[nextPlayerIdx], hand: split.nextHand };
+    }
     return {
       ...state,
       players: newPlayers,
-      deck: newDeck,
-      log: [...state.log, { day: state.day, message: `${player.name} — шулер: +1💰 и +1🃏` }],
+      deck: split.newDeck,
+      log: [...state.log, { day: state.day, message: `${player.name} — шулер: +2💰, +1🃏 себе, +1🃏 следующему` }],
     };
   }
 
@@ -138,26 +159,23 @@ export function takeIncome(
     const newPlayers = [...state.players];
     newPlayers[playerIdx] = {
       ...player,
-      gold: player.gold + 1,
+      gold: player.gold + 2,
       incomeTaken: true,
     };
     return { ...state, players: newPlayers };
   }
 
-  if (state.deck.length === 0) return null;
-
-  const newDeck = [...state.deck];
-  let drawn = newDeck.shift()!;
-  if (hasDruid) drawn = addRandomColor(drawn, rng);
-
+  const split = drawTwoAndSplit(state.deck, player.hand, state.players[nextPlayerIdx].hand);
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
     ...player,
-    hand: [...player.hand, drawn],
+    hand: split.selfHand,
     incomeTaken: true,
   };
-
-  return { ...state, players: newPlayers, deck: newDeck };
+  if (nextPlayerIdx !== playerIdx) {
+    newPlayers[nextPlayerIdx] = { ...state.players[nextPlayerIdx], hand: split.nextHand };
+  }
+  return { ...state, players: newPlayers, deck: split.newDeck };
 }
 
 /**
@@ -208,6 +226,11 @@ export function buildDistrict(
     effectiveCost = Math.max(0, player.hand.length - 1); // minus the monument itself
   }
 
+  // City Gates can only be built by Leader (King role).
+  if (card.purpleAbility === "city_gates" && player.hero !== HeroId.King) {
+    return null;
+  }
+
   // Sun Priestess: blue districts cost -1 (only for blue hero)
   if (
     player.companion === CompanionId.SunPriestess
@@ -241,8 +264,77 @@ export function buildDistrict(
   const newHand = [...player.hand];
   newHand.splice(cardIdx, 1);
 
+  // One-shot spells: cast from hand, do not stay on table.
+  if (card.spellAbility) {
+    const newPlayers = [...state.players];
+    let log = state.log;
+    const randomInt = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1));
+
+    if (card.spellAbility === "ignite") {
+      const opponents = state.players
+        .map((p, i) => ({ p, i }))
+        .filter((x) => x.i !== playerIdx && x.p.hand.length > 0);
+      if (opponents.length > 0) {
+        const picked = opponents[randomInt(0, opponents.length - 1)];
+        const target = state.players[picked.i];
+        const targetHand = [...target.hand];
+        const targetCardIdx = randomInt(0, targetHand.length - 1);
+        targetHand[targetCardIdx] = {
+          id: `flame-spell-${Date.now()}-${randomInt(0, 9999)}`,
+          name: FLAME_CARD_NAME,
+          cost: 2,
+          originalCost: 2,
+          hp: 0,
+          colors: ["red"],
+          baseColors: ["red"],
+        };
+        newPlayers[picked.i] = { ...target, hand: targetHand };
+        log = [...log, { day: state.day, message: `🔥 ${player.name} применил Поджигание к ${target.name}` }];
+      }
+    } else if (card.spellAbility === "gold_rain") {
+      for (let i = 0; i < newPlayers.length; i++) {
+        newPlayers[i] = { ...newPlayers[i], gold: newPlayers[i].gold + 1 };
+      }
+      log = [...log, { day: state.day, message: `🌧️ ${player.name} применил Золотой дождь: все получили +1💰` }];
+    } else if (card.spellAbility === "holy_day") {
+      for (let i = 0; i < newPlayers.length; i++) {
+        const districts = newPlayers[i].builtDistricts.map((d) => ({
+          ...d,
+          baseColors: d.baseColors ?? d.colors,
+          colors: ["blue"],
+        }));
+        newPlayers[i] = { ...newPlayers[i], builtDistricts: districts };
+      }
+      log = [...log, { day: state.day, message: `✨ ${player.name} применил Священный день: до конца дня все кварталы синие` }];
+    } else if (card.spellAbility === "flood") {
+      for (let i = 0; i < newPlayers.length; i++) {
+        const owner = newPlayers[i];
+        const districts = [...owner.builtDistricts];
+        const toReturn = Math.min(4, districts.length);
+        const returned: DistrictCard[] = [];
+        for (let k = 0; k < toReturn; k++) {
+          const pick = randomInt(0, districts.length - 1);
+          returned.push(districts[pick]);
+          districts.splice(pick, 1);
+        }
+        newPlayers[i] = { ...owner, builtDistricts: districts, hand: [...owner.hand, ...returned] };
+      }
+      log = [...log, { day: state.day, message: `🌊 ${player.name} применил Потоп: до 4 случайных кварталов у каждого вернулись в руку` }];
+    } else if (card.spellAbility === "plague") {
+      log = [...log, { day: state.day, message: `☣️ ${player.name} применил Чуму: эффект активен 2 дня` }];
+    }
+
+    newPlayers[playerIdx] = {
+      ...newPlayers[playerIdx],
+      gold: player.gold - effectiveCost,
+      hand: newHand,
+      buildsRemaining: player.buildsRemaining - 1,
+    };
+    return { ...state, players: newPlayers, log, plagueDaysLeft: card.spellAbility === "plague" ? 2 : (state.plagueDaysLeft ?? 0) };
+  }
+
   // Monument: table value is fixed at 3 (hp and score value via cost)
-  let builtCard = { ...card, hp: card.cost };
+  let builtCard = { ...card, hp: card.cost, originalCost: card.originalCost ?? card.cost, baseColors: card.baseColors ?? card.colors };
   if (card.purpleAbility === "monument") {
     builtCard = { ...card, cost: 3, hp: 3 };
   }
@@ -264,48 +356,6 @@ export function buildDistrict(
   return newState;
 }
 
-/**
- * Apply Cult end-of-day effect: each cult on the table replaces a random blue/purple district of a random opponent.
- */
-function applyCultEndOfDay(state: GameState, rng: Rng): GameState {
-  let players = [...state.players];
-  let log = state.log;
-
-  for (let ownerIdx = 0; ownerIdx < players.length; ownerIdx++) {
-    const cultCount = players[ownerIdx].builtDistricts.filter((d) => d.purpleAbility === "cult").length;
-    if (cultCount === 0) continue;
-    const cultCard = players[ownerIdx].builtDistricts.find((d) => d.purpleAbility === "cult")!;
-
-    for (let c = 0; c < cultCount; c++) {
-      // Find all blue/purple districts of opponents
-      const candidates: { pIdx: number; dIdx: number }[] = [];
-      for (let i = 0; i < players.length; i++) {
-        if (i === ownerIdx) continue;
-        for (let d = 0; d < players[i].builtDistricts.length; d++) {
-          const dist = players[i].builtDistricts[d];
-          if (dist.colors.includes("blue") || dist.colors.includes("purple")) {
-            candidates.push({ pIdx: i, dIdx: d });
-          }
-        }
-      }
-      if (candidates.length === 0) break;
-
-      const pick = candidates[rng.int(0, candidates.length - 1)];
-      const target = players[pick.pIdx];
-      const targetDist = target.builtDistricts[pick.dIdx];
-      const newDistricts = [...target.builtDistricts];
-      newDistricts[pick.dIdx] = {
-        ...cultCard,
-        id: `cult-copy-${Date.now()}-${rng.int(0, 9999)}`,
-      };
-      players = [...players];
-      players[pick.pIdx] = { ...target, builtDistricts: newDistricts };
-      log = [...log, { day: state.day, message: `🕯️ Секта ${players[ownerIdx].name} заменила ${targetDist.name} у ${target.name}!` }];
-    }
-  }
-
-  return { ...state, players, log };
-}
 
 /**
  * Apply Treasurer end-of-day effect: richest player gives 1 gold + 1 card to Treasurer's owner.
@@ -349,7 +399,7 @@ function applyTreasurerEndOfDay(state: GameState, rng: Rng): GameState {
       gold: newPlayers[i].gold + goldTransfer,
       hand: cardTransfer ? [...newPlayers[i].hand, cardTransfer] : newPlayers[i].hand,
     };
-    log = [...log, { day: state.day, message: `${p.name} — казначей: ${richest.name} отдал ${goldTransfer}💰${cardTransfer ? " и карту" : ""}` }];
+    log = [...log, { day: state.day, message: `${p.name} — торговец: ${richest.name} отдал ${goldTransfer}💰${cardTransfer ? " и карту" : ""}` }];
   }
   return { ...state, players: newPlayers, log };
 }
@@ -421,8 +471,10 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
             id: `flame-${Date.now()}-${i}-${f}-${b}-${rng.int(0, 9999)}`,
             name: FLAME_CARD_NAME,
             cost: 2,
+            originalCost: 2,
             hp: 0,
             colors: ["red"],
+            baseColors: ["red"],
           });
         }
       }
@@ -447,42 +499,86 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     }
   }
 
-  // City Gates in hand get cheaper by 2 each turn.
-  // Once built, their table value is fixed (no decay on table).
-  for (let i = 0; i < players.length; i++) {
-    const p = players[i];
-    const newHand = [...p.hand];
-    let changed = false;
-    for (let h = 0; h < newHand.length; h++) {
-      if (newHand[h].purpleAbility === "city_gates") {
-        const discounted = Math.max(0, newHand[h].cost - 2);
-        newHand[h] = { ...newHand[h], cost: discounted, hp: discounted };
-        log = [...log, { day: state.day, message: `🚪 Врата в город у ${p.name} в руке: стоимость → ${discounted}` }];
-        changed = true;
-      }
-    }
-    if (changed) {
-      players = [...players];
-      players[i] = { ...p, hand: newHand };
-    }
-  }
-
   state = { ...state, players, log };
 
+  // Plague effect (if active): at end of each turn
+  // - random player loses 1 gold
+  // - random player loses 1 district HP on table (if possible)
+  if ((state.plagueDaysLeft ?? 0) > 0) {
+    const plaguePlayers = [...state.players];
+    let plagueLog = state.log;
+    const goldCandidates = plaguePlayers
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => p.gold > 0);
+    if (goldCandidates.length > 0) {
+      const picked = goldCandidates[rng.int(0, goldCandidates.length - 1)];
+      plaguePlayers[picked.i] = { ...plaguePlayers[picked.i], gold: plaguePlayers[picked.i].gold - 1 };
+      plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: ${plaguePlayers[picked.i].name} потерял 1💰` }];
+    }
+
+    const hpCandidates: { pIdx: number; dIdx: number }[] = [];
+    for (let i = 0; i < plaguePlayers.length; i++) {
+      for (let d = 0; d < plaguePlayers[i].builtDistricts.length; d++) {
+        if (plaguePlayers[i].builtDistricts[d].purpleAbility === "stronghold") continue;
+        hpCandidates.push({ pIdx: i, dIdx: d });
+      }
+    }
+    if (hpCandidates.length > 0) {
+      const picked = hpCandidates[rng.int(0, hpCandidates.length - 1)];
+      const owner = plaguePlayers[picked.pIdx];
+      const districts = [...owner.builtDistricts];
+      const target = districts[picked.dIdx];
+      const newHp = target.hp - 1;
+      if (newHp < 1) {
+        const destroyed = districts[picked.dIdx];
+        districts.splice(picked.dIdx, 1);
+        plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
+        state = { ...state, discardPile: [...state.discardPile, destroyed] };
+        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} разрушен ${destroyed.name}` }];
+      } else {
+        districts[picked.dIdx] = { ...target, hp: newHp };
+        plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
+        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.hp}→${newHp})` }];
+      }
+    }
+
+    state = { ...state, players: plaguePlayers, log: plagueLog };
+  }
+
   if (nextIdx >= turnOrder.length) {
-    // End-of-day mine payout for non-merchant heroes.
+    // End-of-day cleanup for Holy Day spell: restore original district colors.
     for (let i = 0; i < state.players.length; i++) {
       const p = state.players[i];
-      const mineCount = p.builtDistricts.filter((d) => d.purpleAbility === "mine").length;
-      if (mineCount > 0 && p.hero !== HeroId.Merchant) {
+      const restored = p.builtDistricts.map((d) => ({
+        ...d,
+        colors: d.baseColors ?? d.colors,
+      }));
+      const newPlayers = [...state.players];
+      newPlayers[i] = { ...p, builtDistricts: restored };
+      state = { ...state, players: newPlayers };
+    }
+
+    // City Gates in hand get cheaper by 2 at end of each day.
+    for (let i = 0; i < state.players.length; i++) {
+      const p = state.players[i];
+      const newHand = [...p.hand];
+      let changed = false;
+      for (let h = 0; h < newHand.length; h++) {
+        if (newHand[h].purpleAbility === "city_gates") {
+          const discounted = Math.max(0, newHand[h].cost - 2);
+          newHand[h] = { ...newHand[h], cost: discounted, hp: discounted };
+          state = { ...state, log: [...state.log, { day: state.day, message: `🚪 Врата в город у ${p.name} в руке: стоимость → ${discounted}` }] };
+          changed = true;
+        }
+      }
+      if (changed) {
         const newPlayers = [...state.players];
-        newPlayers[i] = { ...p, gold: p.gold + mineCount };
-        state = { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `⛏️ ${p.name} — шахта (конец дня): +${mineCount}💰` }] };
+        newPlayers[i] = { ...p, hand: newHand };
+        state = { ...state, players: newPlayers };
       }
     }
 
     // End of day — apply end-of-day effects
-    state = applyCultEndOfDay(state, rng);
     state = applyTreasurerEndOfDay(state, rng);
     state = applyRoyalGuardEndOfDay(state);
 
@@ -505,6 +601,9 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
       return calculateScores({ ...state, log: state.log });
     }
 
+    // Tick plague duration by day.
+    const plagueDaysLeft = Math.max(0, (state.plagueDaysLeft ?? 0) - 1);
+
     // Day is over — go back to draft for next day
     return {
       ...state,
@@ -514,6 +613,7 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
       currentTurnIndex: 0,
       turnOrder: null,
       day: state.day + 1,
+      plagueDaysLeft,
     };
   }
 

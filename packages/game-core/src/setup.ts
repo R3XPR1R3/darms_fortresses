@@ -4,7 +4,7 @@ import type { Rng } from "./rng.js";
 /**
  * Create the initial game state for a 4-player match.
  *
- * - Each player receives 5 random cards (no purple in first hand)
+ * - Each player receives 4 random cards (no purple in first hand)
  * - First player (crown holder) is chosen randomly
  * - Each player starts with 2 gold
  */
@@ -18,7 +18,7 @@ export function createMatch(
   rng.shuffle(shuffled);
 
   const players: PlayerState[] = playerInfos.map((info) => {
-    const hand = shuffled.splice(0, 5);
+    const hand = shuffled.splice(0, 4);
     return {
       id: info.id,
       name: info.name,
@@ -59,5 +59,6 @@ export function createMatch(
     bardUsageCount: 0,
     bannedCompanions: [],
     purpleDraft: null,
+    plagueDaysLeft: 0,
   };
 }

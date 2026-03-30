@@ -550,19 +550,23 @@ function colorStyle(colors: string[]): { cls: string; style: string } {
 }
 
 /** Map building name → texture file (color_cost) */
-function buildingTextureUrl(d: { colors: string[]; cost: number }): string {
+function buildingTextureUrl(d: { colors: string[]; cost: number; spellAbility?: string }): string {
+  if (d.spellAbility) return "/buildings/purple.png";
   const color = d.colors[0] ?? "purple";
   const key = `${color}_${d.cost}`;
   return `/buildings/${key}.png`;
 }
 
-function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number }): string {
+function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number; spellAbility?: string }): string {
   const cs = colorStyle(d.colors);
   const hpLabel = d.hp != null && d.hp !== d.cost ? `<div class="card-hp">HP ${d.hp}</div>` : "";
+  const spellClass = d.spellAbility ? "spell-card" : "";
+  const spellLabel = d.spellAbility ? `<div class="spell-badge">✦ Заклинание ✦</div>` : "";
   const texUrl = buildingTextureUrl(d);
-  return `<div class="district-card ${cs.cls}" style="${cs.style}">
+  return `<div class="district-card ${cs.cls} ${spellClass}" style="${cs.style}">
     <img class="card-texture" src="${texUrl}" alt="" />
     <div class="card-cost-badge">${d.cost}</div>
+    ${spellLabel}
     <div class="card-name">${tDistrict(d.name)}</div>
     ${hpLabel}
   </div>`;
@@ -1118,7 +1122,7 @@ function renderMyBoard() {
   }
 
   // My districts — purple buildings with active abilities are clickable
-  const activePurple = new Set(["cannon", "crypt", "tnt_storage"]);
+  const activePurple = new Set(["cannon", "crypt", "tnt_storage", "cult"]);
   const districts = me.builtDistricts.map((d) => {
     const isClickable = myTurnNow && d.purpleAbility && activePurple.has(d.purpleAbility);
     const tpl = d.purpleAbility ? PURPLE_CARD_TEMPLATES.find((t) => t.ability === d.purpleAbility) : null;
