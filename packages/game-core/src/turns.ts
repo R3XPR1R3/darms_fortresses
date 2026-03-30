@@ -1,4 +1,4 @@
-import type { GameState, DistrictCard } from "@darms/shared-types";
+import type { GameState, DistrictCard, CardColor } from "@darms/shared-types";
 import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
@@ -336,7 +336,7 @@ export function buildDistrict(
         const districts = newPlayers[i].builtDistricts.map((d) => ({
           ...d,
           baseColors: d.baseColors ?? d.colors,
-          colors: ["blue"],
+          colors: ["blue" as CardColor],
         }));
         newPlayers[i] = { ...newPlayers[i], builtDistricts: districts };
       }
