@@ -278,7 +278,7 @@ export function buildDistrict(
         const districts = newPlayers[i].builtDistricts.map((d) => ({
           ...d,
           baseColors: d.baseColors ?? d.colors,
-          colors: ["blue"],
+          colors: ["blue"] as DistrictCard["colors"],
         }));
         newPlayers[i] = { ...newPlayers[i], builtDistricts: districts };
       }
@@ -311,9 +311,9 @@ export function buildDistrict(
   }
 
   // Monument: table value is fixed at 3 (hp and score value via cost)
-  let builtCard = { ...card, hp: card.cost, originalCost: card.originalCost ?? card.cost, baseColors: card.baseColors ?? card.colors };
+  let builtCard: DistrictCard = { ...card, hp: card.cost, originalCost: card.originalCost ?? card.cost, baseColors: card.baseColors ?? card.colors };
   if (card.purpleAbility === "monument") {
-    builtCard = { ...card, cost: 3, hp: 3 };
+    builtCard = { ...card, cost: 3, hp: 3, originalCost: card.originalCost ?? 3, baseColors: card.baseColors ?? card.colors };
   }
 
   // Fort: reduce other (non-fort) districts HP by 1 when on table
