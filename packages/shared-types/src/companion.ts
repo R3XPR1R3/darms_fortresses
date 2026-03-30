@@ -64,7 +64,7 @@ export interface CompanionDefinition {
 export const COMPANIONS: readonly CompanionDefinition[] = [
   // --- Wave 1 ---
   { id: CompanionId.Farmer, name: "Фермер", description: "+1 золото", emoji: "🧑‍🌾", passive: false },
-  { id: CompanionId.Treasurer, name: "Казначей", description: "В конце дня богатейший даёт вам 1💰 и 1🃏 (только 🟢)", emoji: "💰", passive: true, heroColor: "green", indicatorColor: "#2ecc71" },
+  { id: CompanionId.Treasurer, name: "Торговец", description: "В конце дня богатейший даёт вам 1💰 и 1🃏 (только 🟢)", emoji: "💰", passive: true, heroColor: "green", indicatorColor: "#2ecc71" },
   { id: CompanionId.Hunter, name: "Охотник", description: "За 2💰: противник сбрасывает 2 случайные карты", emoji: "🏹", passive: false, targetType: "player", useCost: 2 },
   { id: CompanionId.Mason, name: "Каменщик", description: "За 1💰: разделяет дорогую карту из руки на две", emoji: "🧱", passive: false, useCost: 1 },
   { id: CompanionId.Saboteur, name: "Диверсант", description: "Компаньон выбранного игрока не работает сегодня", emoji: "💣", passive: false, targetType: "player" },

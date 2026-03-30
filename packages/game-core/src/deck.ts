@@ -5,6 +5,7 @@ interface CardTemplate {
   cost: number;
   colors: CardColor[];
   count: number;
+  spellAbility?: "ignite" | "gold_rain" | "holy_day" | "flood" | "plague";
 }
 
 const TEMPLATES: CardTemplate[] = [
@@ -49,6 +50,13 @@ const TEMPLATES: CardTemplate[] = [
   // Multi-color with purple (noble-specific abilities in future)
   { name: "Королевская библиотека", cost: 4, colors: ["yellow", "purple"], count: 1 },
   { name: "Священная роща", cost: 4, colors: ["blue", "purple"], count: 1 },
+
+  // Spells
+  { name: "Поджигание", cost: 1, colors: ["purple"], count: 2, spellAbility: "ignite" },
+  { name: "Золотой дождь", cost: 0, colors: ["purple"], count: 2, spellAbility: "gold_rain" },
+  { name: "Священный день", cost: 1, colors: ["purple"], count: 2, spellAbility: "holy_day" },
+  { name: "Потоп", cost: 0, colors: ["purple"], count: 2, spellAbility: "flood" },
+  { name: "Чума", cost: 2, colors: ["purple"], count: 2, spellAbility: "plague" },
 ];
 
 let _nextId = 0;
@@ -62,8 +70,11 @@ export function createBaseDeck(): DistrictCard[] {
         id: `d-${_nextId++}`,
         name: t.name,
         cost: t.cost,
+        originalCost: t.cost,
         hp: t.cost,
         colors: t.colors,
+        baseColors: t.colors,
+        spellAbility: t.spellAbility,
       });
     }
   }
@@ -95,8 +106,10 @@ export function generateCard(cost: number, colors: CardColor[]): DistrictCard {
     id: `gen-${_genId++}`,
     name,
     cost,
+    originalCost: cost,
     hp: cost,
     colors,
+    baseColors: colors,
   };
 }
 
