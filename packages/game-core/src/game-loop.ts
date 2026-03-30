@@ -194,7 +194,11 @@ function useCompanion(
       if (opponents.length === 0) return null;
       const oppPick = opponents[rng.int(0, opponents.length - 1)];
       const opp = state.players[oppPick.i];
-      const distIdx = rng.int(0, opp.builtDistricts.length - 1);
+      const damageable = opp.builtDistricts
+        .map((d, i) => ({ d, i }))
+        .filter(({ d }) => d.purpleAbility !== "stronghold");
+      if (damageable.length === 0) return null;
+      const distIdx = damageable[rng.int(0, damageable.length - 1)].i;
       const targetDist = opp.builtDistricts[distIdx];
       const newHp = targetDist.hp - 2;
       const newOppDistricts = [...opp.builtDistricts];
@@ -299,8 +303,10 @@ function useCompanion(
         id: `flame-${Date.now()}-${rng.int(0, 9999)}`,
         name: FLAME_CARD_NAME,
         cost: 2,
+        originalCost: 2,
         hp: 0,
         colors: ["red"],
+        baseColors: ["red"],
       };
       newHand[cardIdx] = flameCard;
       newPlayers[playerIdx] = { ...player, hand: newHand, companionUsed: true };
@@ -632,6 +638,8 @@ function activateBuilding(
   switch (card.purpleAbility) {
     case "cannon": {
       // For 1 gold, shoot random opponent district HP-1
+      const heroColor = getHeroColor(state, playerIdx);
+      if (heroColor !== "red") return null;
       if (player.gold < 1) return null;
       const opponents = state.players
         .map((p, i) => ({ p, i }))
@@ -639,7 +647,11 @@ function activateBuilding(
       if (opponents.length === 0) return null;
       const opp = opponents[rng.int(0, opponents.length - 1)];
       const target = state.players[opp.i];
-      const distIdx = rng.int(0, target.builtDistricts.length - 1);
+      const validTargets = target.builtDistricts
+        .map((d, i) => ({ d, i }))
+        .filter(({ d }) => d.purpleAbility !== "stronghold");
+      if (validTargets.length === 0) return null;
+      const distIdx = validTargets[rng.int(0, validTargets.length - 1)].i;
       const dist = target.builtDistricts[distIdx];
       const newHp = dist.hp - 1;
       const newOppDistricts = [...target.builtDistricts];
@@ -657,6 +669,32 @@ function activateBuilding(
       newPlayers[opp.i] = { ...target, builtDistricts: newOppDistricts };
       return { ...addLog({ ...state, players: newPlayers, discardPile }, msg), rng: rng.getSeed() };
     }
+    case "cult": {
+      // Can be used only by blue hero. Replaces a random district of a random opponent with cult.
+      const heroColor = getHeroColor(state, playerIdx);
+      if (heroColor !== "blue") return null;
+      const opponents = state.players
+        .map((p, i) => ({ p, i }))
+        .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0);
+      if (opponents.length === 0) return null;
+      const opp = opponents[rng.int(0, opponents.length - 1)];
+      const target = state.players[opp.i];
+      const distIdx = rng.int(0, target.builtDistricts.length - 1);
+      const replaced = target.builtDistricts[distIdx];
+      const newOppDistricts = [...target.builtDistricts];
+      newOppDistricts[distIdx] = {
+        ...card,
+        id: `cult-copy-${Date.now()}-${rng.int(0, 9999)}`,
+      };
+      newPlayers[opp.i] = { ...target, builtDistricts: newOppDistricts };
+      return {
+        ...addLog(
+          { ...state, players: newPlayers },
+          `🕯️ ${player.name} активировал Секту: ${replaced.name} у ${target.name} превращён в Секту`,
+        ),
+        rng: rng.getSeed(),
+      };
+    }
 
     case "crypt": {
       // Self-destroy for 2 gold — get 2 random purple cards
@@ -671,8 +709,10 @@ function activateBuilding(
           id: `purple-gen-${Date.now()}-${rng.int(0, 9999)}`,
           name: tpl.name,
           cost: tpl.cost,
+          originalCost: tpl.cost,
           hp: tpl.cost,
           colors: tpl.colors as DistrictCard["colors"],
+          baseColors: tpl.colors as DistrictCard["colors"],
           purpleAbility: tpl.ability,
         });
       }
@@ -699,7 +739,11 @@ function activateBuilding(
         const pDistricts = [...p.builtDistricts];
         const destroyed: string[] = [];
         for (let d = 0; d < 2 && pDistricts.length > 0; d++) {
-          const idx = rng.int(0, pDistricts.length - 1);
+          const candidates = pDistricts
+            .map((dist, idx) => ({ dist, idx }))
+            .filter(({ dist }) => dist.purpleAbility !== "stronghold");
+          if (candidates.length === 0) break;
+          const idx = candidates[rng.int(0, candidates.length - 1)].idx;
           destroyed.push(pDistricts[idx].name);
           discardPile = [...discardPile, pDistricts[idx]];
           pDistricts.splice(idx, 1);

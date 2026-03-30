@@ -22,12 +22,12 @@ export interface HeroDefinition {
 export type CardColor = "yellow" | "blue" | "green" | "red" | "purple";
 
 export const HEROES: readonly HeroDefinition[] = [
-  { id: HeroId.Assassin, name: "Фахира Мирай", speed: 1, color: null, heroClass: "assassin" },
-  { id: HeroId.Thief, name: "Митчелл Сайлас", speed: 2, color: null, heroClass: "thief" },
-  { id: HeroId.Sorcerer, name: "Мастер Зедруд", speed: 3, color: null, heroClass: "sorcerer" },
-  { id: HeroId.King, name: "Король Ирисий Фаорис", speed: 4, color: "yellow", heroClass: "king" },
-  { id: HeroId.Cleric, name: "Эшли Фирия", speed: 5, color: "blue", heroClass: "cleric" },
-  { id: HeroId.Merchant, name: "Мархат Фахари", speed: 6, color: "green", heroClass: "merchant" },
-  { id: HeroId.Architect, name: "Себастиан Мэйвис", speed: 7, color: null, heroClass: "architect" },
-  { id: HeroId.General, name: "Греш Мавров", speed: 8, color: "red", heroClass: "general" },
+  { id: HeroId.Assassin, name: "Убийца", speed: 1, color: null, heroClass: "assassin" },
+  { id: HeroId.Thief, name: "Специалист", speed: 2, color: null, heroClass: "thief" },
+  { id: HeroId.Sorcerer, name: "Стратег", speed: 3, color: null, heroClass: "sorcerer" },
+  { id: HeroId.King, name: "Лидер", speed: 4, color: "yellow", heroClass: "king" },
+  { id: HeroId.Cleric, name: "Клерик", speed: 5, color: "blue", heroClass: "cleric" },
+  { id: HeroId.Merchant, name: "Казначей", speed: 6, color: "green", heroClass: "merchant" },
+  { id: HeroId.Architect, name: "Архитектор", speed: 7, color: null, heroClass: "architect" },
+  { id: HeroId.General, name: "Генерал", speed: 8, color: "red", heroClass: "general" },
 ] as const;

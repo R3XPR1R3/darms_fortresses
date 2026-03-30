@@ -59,5 +59,6 @@ export function createMatch(
     bardUsageCount: 0,
     bannedCompanions: [],
     purpleDraft: null,
+    plagueDaysLeft: 0,
   };
 }

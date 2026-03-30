@@ -79,11 +79,11 @@ const dict: Record<string, TranslationEntry> = {
 
   // Hero classes
   "class.assassin": { en: "Assassin", ru: "Убийца" },
-  "class.thief": { en: "Thief", ru: "Вор" },
-  "class.sorcerer": { en: "Sorcerer", ru: "Чародей" },
-  "class.king": { en: "King", ru: "Король" },
+  "class.thief": { en: "Specialist", ru: "Специалист" },
+  "class.sorcerer": { en: "Strategist", ru: "Стратег" },
+  "class.king": { en: "Leader", ru: "Лидер" },
   "class.cleric": { en: "Cleric", ru: "Клерик" },
-  "class.merchant": { en: "Merchant", ru: "Торговец" },
+  "class.merchant": { en: "Treasurer", ru: "Казначей" },
   "class.architect": { en: "Architect", ru: "Архитектор" },
   "class.general": { en: "General", ru: "Генерал" },
 
@@ -201,14 +201,14 @@ export function t(key: string): string {
 
 // ---- Hero name translations ----
 const HERO_NAMES: Record<string, TranslationEntry> = {
-  assassin:  { en: "Fahira Mirai",       ru: "Фахира Мирай" },
-  thief:     { en: "Mitchell Silas",     ru: "Митчелл Сайлас" },
-  sorcerer:  { en: "Master Zedrud",      ru: "Мастер Зедруд" },
-  king:      { en: "King Irisiy Faoris", ru: "Король Ирисий Фаорис" },
-  cleric:    { en: "Ashley Firia",       ru: "Эшли Фирия" },
-  merchant:  { en: "Marhat Fahari",      ru: "Мархат Фахари" },
-  architect: { en: "Sebastian Maevis",   ru: "Себастиан Мэйвис" },
-  general:   { en: "Gresh Mavrov",       ru: "Греш Мавров" },
+  assassin:  { en: "Assassin",   ru: "Убийца" },
+  thief:     { en: "Specialist", ru: "Специалист" },
+  sorcerer:  { en: "Strategist", ru: "Стратег" },
+  king:      { en: "Leader",     ru: "Лидер" },
+  cleric:    { en: "Cleric",     ru: "Клерик" },
+  merchant:  { en: "Treasurer",  ru: "Казначей" },
+  architect: { en: "Architect",  ru: "Архитектор" },
+  general:   { en: "General",    ru: "Генерал" },
 };
 
 export function tHero(heroId: string): string {
@@ -288,6 +288,7 @@ const COMPANION_NAMES: Record<string, TranslationEntry> = {
   blacksmith: { en: "Blacksmith", ru: "Кузнец", id: "Pandai besi" },
   alchemist: { en: "Alchemist", ru: "Алхимик", id: "Alkemis" },
   cannoneer: { en: "Cannoneer", ru: "Канонир", id: "Kanonir" },
+  treasurer: { en: "Trader", ru: "Торговец", id: "Pedagang" },
   strange_merchant: { en: "Strange Merchant", ru: "Странный торговец", id: "Pedagang aneh" },
   pyromancer: { en: "Pyromancer", ru: "Пиромант", id: "Piromancer" },
   unlucky_mage: { en: "Unlucky Mage", ru: "Неудачный маг", id: "Penyihir sial" },
@@ -306,6 +307,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   blacksmith: { en: "Replace a district with another of same cost but different color", ru: "Заменяет квартал на другой за ту же цену, другого цвета", id: "Ganti distrik dengan harga sama tapi warna berbeda" },
   alchemist: { en: "Transforms district into random one with +1 cost (max 5)", ru: "Превращает квартал в случайный на 1 дороже (макс 5)", id: "Ubah distrik jadi acak dengan biaya +1 (maks 5)" },
   cannoneer: { en: "Burns a card and shoots random enemy district (HP −2)", ru: "Сжигает карту, стреляет по случайному кварталу противника (HP −2)", id: "Bakar kartu dan tembak distrik lawan acak (HP −2)" },
+  treasurer: { en: "At end of day, richest player gives you 1 gold and 1 card", ru: "В конце дня богатейший даёт вам 1 золото и 1 карту", id: "Di akhir hari, pemain terkaya memberi Anda 1 emas dan 1 kartu" },
   strange_merchant: { en: "Discard a card and gain gold equal to its cost", ru: "Сбросьте карту и получите её стоимость в золоте", id: "Buang kartu dan dapat emas sebesar biayanya" },
   pyromancer: { en: "Card turns into 🔥Flame. Flame multiplies at end of turn!", ru: "Карта превращается в 🔥Пламя. В конце хода пламя множится!", id: "Kartu menjadi 🔥Api. Api bertambah di akhir giliran!" },
   unlucky_mage: { en: "All your districts will transform into this card!", ru: "Все ваши постройки превратятся в эту карту!", id: "Semua distrikmu berubah menjadi kartu ini!" },

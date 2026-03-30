@@ -27,6 +27,8 @@ export interface GameState {
   bannedCompanions: CompanionId[];
   /** Purple card draft state (days 3,6,9,12) */
   purpleDraft: PurpleDraftState | null;
+  /** Plague spell duration in days (0 = inactive). */
+  plagueDaysLeft?: number;
 }
 
 /** State for the purple card draft mini-phase */
@@ -53,13 +55,18 @@ export interface PurpleCardTemplate {
 export const PURPLE_CARD_TEMPLATES: PurpleCardTemplate[] = [
   { name: "Пушка", cost: 2, colors: ["purple", "red"], ability: "cannon", emoji: "💣", description: "За 1💰: −1 HP случайному кварталу противника (∞)" },
   { name: "Оборонительный форт", cost: 1, colors: ["purple"], ability: "fort", emoji: "🏰", description: "Другие постройки −1 HP, но при разрушении вы получаете золото" },
+  { name: "Укрепрайон", cost: 4, colors: ["purple"], ability: "stronghold", emoji: "🧱", description: "Эту постройку нельзя разрушить или повредить" },
   { name: "Памятник", cost: 2, colors: ["purple"], ability: "monument", emoji: "🗿", description: "В руке: цена = числу других карт. На столе: стоимость и HP всегда 3" },
   { name: "Магистраль", cost: 4, colors: ["purple"], ability: "highway", emoji: "🛤️", description: "Скорость героя −1" },
   { name: "Врата в город", cost: 8, colors: ["purple", "yellow"], ability: "city_gates", emoji: "🚪", description: "Пока в руке: цена уменьшается на 2 каждый ход. На столе не удешевляются" },
   { name: "Склеп", cost: 4, colors: ["purple"], ability: "crypt", emoji: "⚰️", description: "При разрушении: +2 фиолетовые карты. Самоуничтожение за 2💰" },
   { name: "Склад тротила", cost: 2, colors: ["purple", "red"], ability: "tnt_storage", emoji: "🧨", description: "Уничтожьте за 2💰: −2 случайных квартала каждому" },
   { name: "Шахта", cost: 3, colors: ["purple", "green"], ability: "mine", emoji: "⛏️", description: "+1💰 в конце дня (у Торговца — в конце каждого хода)" },
-  { name: "Секта", cost: 2, colors: ["purple", "blue"], ability: "cult", emoji: "🕯️", description: "При постройке: заменяет случайный синий/фиолетовый квартал у случайного игрока" },
+  { name: "Секта", cost: 2, colors: ["purple", "blue"], ability: "cult", emoji: "🕯️", description: "Активируется только синим героем: заменяет случайный квартал случайного игрока" },
+  { name: "Алтарь силы", cost: 4, colors: ["purple"], ability: "altar_power", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
+  { name: "Алтарь здоровья", cost: 4, colors: ["purple"], ability: "altar_health", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
+  { name: "Алтарь интеллекта", cost: 4, colors: ["purple"], ability: "altar_intellect", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
+  { name: "Алтарь выносливости", cost: 4, colors: ["purple"], ability: "altar_stamina", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
 ];
 
 export interface LogEntry {
