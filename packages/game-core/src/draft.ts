@@ -4,6 +4,18 @@ import type { Rng } from "./rng.js";
 
 const ALL_HEROES: HeroId[] = Object.values(HeroId);
 
+function splitBansKeepingLeaderFaceDown(heroes: HeroId[]): { faceUp: HeroId | null; faceDown: HeroId | null } {
+  if (heroes.length === 0) return { faceUp: null, faceDown: null };
+  if (heroes.length === 1) return { faceUp: null, faceDown: heroes[0] };
+  const nonLeaderIdx = heroes.findIndex((h) => h !== HeroId.King);
+  if (nonLeaderIdx === -1) {
+    return { faceUp: null, faceDown: heroes[0] };
+  }
+  const faceUp = heroes[nonLeaderIdx];
+  const other = heroes.find((_, idx) => idx !== nonLeaderIdx) ?? null;
+  return { faceUp, faceDown: other };
+}
+
 /**
  * Initialize the draft for a new day.
  *
@@ -29,10 +41,10 @@ export function initDraft(state: GameState, rng: Rng): GameState {
 
   if (!hasRoyalGuard) {
     // Normal: auto-ban before draft: first card face-up, second face-down
-    const faceUpBan = heroes.pop()!;
-    const faceDownBan = heroes.pop()!;
-    faceUpBans = [faceUpBan];
-    faceDownBans = [faceDownBan];
+    const candidates = [heroes.pop()!, heroes.pop()!];
+    const split = splitBansKeepingLeaderFaceDown(candidates);
+    faceUpBans = split.faceUp ? [split.faceUp] : [];
+    faceDownBans = split.faceDown ? [split.faceDown] : [];
   }
   // If Royal Guard: no initial bans, all 8 heroes available
 
@@ -182,15 +194,17 @@ export function draftPick(
 
     if (hasRoyalGuard && remaining.length >= 2) {
       // Royal Guard: ban 1 up + 1 down from remaining, rest stay banned
-      finalFaceUp = remaining.slice(0, 1);
-      finalFaceDown = remaining.slice(1, 2);
+      const split = splitBansKeepingLeaderFaceDown(remaining.slice(0, 2));
+      finalFaceUp = split.faceUp ? [split.faceUp] : [];
+      finalFaceDown = split.faceDown ? [split.faceDown] : [];
       // Any extras also go to face-down bans
       if (remaining.length > 2) {
         finalFaceDown = [...finalFaceDown, ...remaining.slice(2)];
       }
     } else {
-      finalFaceUp = remaining[0] ? [remaining[0]] : [];
-      finalFaceDown = remaining[1] ? [remaining[1]] : [];
+      const split = splitBansKeepingLeaderFaceDown(remaining.slice(0, 2));
+      finalFaceUp = split.faceUp ? [split.faceUp] : [];
+      finalFaceDown = split.faceDown ? [split.faceDown] : [];
     }
 
     // Skip companion draft before day 4
@@ -338,8 +352,10 @@ function generatePurpleCard(rng: Rng): DistrictCard {
     id: `purple-${_purpleGenId++}`,
     name: tpl.name,
     cost: tpl.cost,
+    originalCost: tpl.cost,
     hp: tpl.cost,
     colors: tpl.colors as DistrictCard["colors"],
+    baseColors: tpl.colors as DistrictCard["colors"],
     purpleAbility: tpl.ability,
   };
 }
