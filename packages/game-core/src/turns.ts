@@ -44,6 +44,7 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
   let newPlayers = state.players.map((p) => ({
     ...p,
     incomeTaken: false,
+    incomeOffer: null,
     buildsRemaining: p.hero === HeroId.Architect ? 3 : 1,
     abilityUsed: false,
     companionUsed: false,
@@ -88,8 +89,7 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
 }
 
 /**
- * Process income action: take 2 gold OR draw 2 cards:
- * choose best to self (by current heuristic), second goes to top of deck.
+ * Process income action: take 2 gold OR draw 2 cards and choose 1 via follow-up income_pick.
  * Swindler companion: first income gives BOTH (gold + card-flow bonus), then can take one more.
  * Druid companion: drawn cards become dual-colored.
  */
@@ -110,55 +110,34 @@ export function takeIncome(
 
   const rng = { int: (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1)) };
   const hasDruid = player.companion === CompanionId.Druid && !player.companionDisabled;
-  const drawTwoAndSplit = (
+  const drawTwoOffer = (
     deck: typeof state.deck,
-    selfHand: typeof player.hand,
   ) => {
     const newDeck = [...deck];
-    const drawn: typeof selfHand = [];
+    const drawn: DistrictCard[] = [];
     for (let i = 0; i < 2 && newDeck.length > 0; i++) {
       let card = newDeck.shift()!;
       if (hasDruid) card = addRandomColor(card, rng);
       drawn.push(card);
     }
-    if (drawn.length === 0) return { newDeck, selfHand };
-    if (drawn.length === 1) return { newDeck, selfHand: [...selfHand, drawn[0]] };
-    const sorted = [...drawn].sort((a, b) => b.cost - a.cost);
-    newDeck.unshift(sorted[1]); // second card goes back on top of deck
-    return {
-      newDeck,
-      selfHand: [...selfHand, sorted[0]],
-    };
+    return { newDeck, drawn };
   };
 
   if (hasSwindler) {
     // Swindler: give BOTH gold + card-flow bonus, mark companion used, don't mark income taken
-    const split = drawTwoAndSplit(state.deck, player.hand);
+    const offer = drawTwoOffer(state.deck);
     const newPlayers = [...state.players];
     newPlayers[playerIdx] = {
       ...player,
       gold: player.gold + 2,
-      hand: split.selfHand,
+      incomeOffer: offer.drawn,
       companionUsed: true, // swindler bonus used, but income NOT taken — can take once more
     };
-    if (player.hero === HeroId.King) {
-      const gateIdx = newPlayers[playerIdx].hand.findIndex((d) => d.purpleAbility === "city_gates");
-      if (gateIdx !== -1) {
-        const hand = [...newPlayers[playerIdx].hand];
-        const gate = hand[gateIdx];
-        hand.splice(gateIdx, 1);
-        newPlayers[playerIdx] = {
-          ...newPlayers[playerIdx],
-          hand,
-          builtDistricts: [...newPlayers[playerIdx].builtDistricts, { ...gate, cost: 8, originalCost: 8, hp: 8 }],
-        };
-      }
-    }
     return {
       ...state,
       players: newPlayers,
-      deck: split.newDeck,
-      log: [...state.log, { day: state.day, message: `${player.name} — шулер: +2💰, +1🃏 себе, +1🃏 на верх колоды` }],
+      deck: offer.newDeck,
+      log: [...state.log, { day: state.day, message: `${player.name} — шулер: +2💰 и выбор из 2 карт` }],
     };
   }
 
@@ -172,27 +151,66 @@ export function takeIncome(
     return { ...state, players: newPlayers };
   }
 
-  const split = drawTwoAndSplit(state.deck, player.hand);
+  const offer = drawTwoOffer(state.deck);
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
     ...player,
-    hand: split.selfHand,
+    incomeOffer: offer.drawn,
+  };
+  return { ...state, players: newPlayers, deck: offer.newDeck };
+}
+
+/** Resolve explicit income card choice from previously offered 2 cards. */
+export function pickIncomeCard(
+  state: GameState,
+  playerId: string,
+  cardId: string,
+): GameState | null {
+  const playerIdx = state.players.findIndex((p) => p.id === playerId);
+  if (playerIdx === -1) return null;
+  const player = state.players[playerIdx];
+  if (!player.incomeOffer || player.incomeOffer.length === 0) return null;
+  const pickIdx = player.incomeOffer.findIndex((c) => c.id === cardId);
+  if (pickIdx === -1) return null;
+  const picked = player.incomeOffer[pickIdx];
+  const other = player.incomeOffer.find((_, i) => i !== pickIdx) ?? null;
+
+  const newDeck = [...state.deck];
+  if (other) newDeck.unshift(other);
+
+  const newPlayers = [...state.players];
+  let updated = {
+    ...player,
+    hand: [...player.hand, picked],
+    incomeOffer: null,
     incomeTaken: true,
   };
-  if (player.hero === HeroId.King) {
-    const gateIdx = newPlayers[playerIdx].hand.findIndex((d) => d.purpleAbility === "city_gates");
+  // Swindler bonus pick does not consume the normal income action.
+  if (
+    player.companion === CompanionId.Swindler
+    && player.companionUsed
+    && !player.incomeTaken
+  ) {
+    updated = { ...updated, incomeTaken: false };
+  }
+
+  // Leader auto-builds City Gates if picked into hand.
+  if (updated.hero === HeroId.King) {
+    const gateIdx = updated.hand.findIndex((d) => d.purpleAbility === "city_gates");
     if (gateIdx !== -1) {
-      const hand = [...newPlayers[playerIdx].hand];
+      const hand = [...updated.hand];
       const gate = hand[gateIdx];
       hand.splice(gateIdx, 1);
-      newPlayers[playerIdx] = {
-        ...newPlayers[playerIdx],
+      updated = {
+        ...updated,
         hand,
-        builtDistricts: [...newPlayers[playerIdx].builtDistricts, { ...gate, cost: 8, originalCost: 8, hp: 8 }],
+        builtDistricts: [...updated.builtDistricts, { ...gate, cost: 8, originalCost: 8, hp: 8 }],
       };
     }
   }
-  return { ...state, players: newPlayers, deck: split.newDeck };
+
+  newPlayers[playerIdx] = updated;
+  return { ...state, players: newPlayers, deck: newDeck };
 }
 
 /**

@@ -2,7 +2,7 @@ import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
 import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, purpleCardPick } from "./draft.js";
-import { buildTurnOrder, takeIncome, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
+import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
 import { useAbility, checkWinCondition } from "./abilities.js";
 import { generateRandomCard, generateDifferentColorCard, generateCard } from "./deck.js";
 
@@ -586,6 +586,8 @@ export function processAction(state: GameState, action: GameAction): GameState |
     }
     case "income":
       return takeIncome(state, action.playerId, action.choice);
+    case "income_pick":
+      return pickIncomeCard(state, action.playerId, action.cardId);
 
     case "build": {
       return buildDistrict(state, action.playerId, action.cardId);

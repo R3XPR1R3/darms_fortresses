@@ -89,6 +89,8 @@ export interface PlayerState {
   hero: HeroId | null;
   /** Has this player taken their income action this turn? */
   incomeTaken: boolean;
+  /** Two-card income offer waiting for explicit player pick */
+  incomeOffer?: DistrictCard[] | null;
   /** How many builds remaining this turn (architect gets 3, others 1) */
   buildsRemaining: number;
   /** Has this player used their hero ability this turn? */

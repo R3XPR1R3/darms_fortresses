@@ -27,6 +27,7 @@ export function createMatch(
       builtDistricts: [],
       hero: null,
       incomeTaken: false,
+      incomeOffer: null,
       buildsRemaining: 0,
       abilityUsed: false,
       assassinated: false,

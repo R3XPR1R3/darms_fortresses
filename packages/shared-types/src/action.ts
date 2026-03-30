@@ -7,6 +7,7 @@ export type GameAction =
   | CompanionPickAction
   | PurpleCardPickAction
   | IncomeAction
+  | IncomePickAction
   | BuildAction
   | AbilityAction
   | UseCompanionAction
@@ -25,6 +26,13 @@ export interface IncomeAction {
   type: "income";
   playerId: string;
   choice: "card" | "gold";
+}
+
+/** Player picks one of two offered income cards */
+export interface IncomePickAction {
+  type: "income_pick";
+  playerId: string;
+  cardId: string;
 }
 
 /** Player builds a district from hand */
