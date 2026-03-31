@@ -203,7 +203,8 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
     return "Нельзя делать ход за другого игрока";
   }
 
-  logAction(room, action, "human");
+  const isBot = room.players.find((p) => p.id === playerId)?.isBot ?? false;
+  logAction(room, action, isBot ? "bot" : "human");
 
   const next = processAction(room.state, action);
   if (!next) {
@@ -225,15 +226,17 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
     saveMatchSummary(summary).catch((err) => console.error("[match-log] Error:", err));
   }
 
-  // Schedule async bot actions after human action
-  scheduleBotStep(room);
+  // Schedule bot actions only after human action (avoid recursive scheduling)
+  if (!isBot) {
+    scheduleBotStep(room);
+  }
 
   return null; // success
 }
 
 /**
  * Schedule a single bot action step with appropriate delay.
- * After executing, broadcasts state and schedules the next step.
+ * Bot actions go through the same handleAction() path as human players.
  */
 function scheduleBotStep(room: Room) {
   // Clear any existing timer
@@ -254,30 +257,22 @@ function scheduleBotStep(room: Room) {
   const botInfo = getBotTurn(room);
   if (!botInfo) return; // Human's turn — stop scheduling
 
-  // Determine delay: draft = 1.2s, end_turn = 5s, other actions = 1s
   const action = botAction(room.state, botInfo.botId);
   if (!action) {
     const botName = room.state.players.find((p) => p.id === botInfo.botId)?.name ?? botInfo.botId;
     console.log(`[${room.id}] ⚠️ Bot ${botName} returned NULL action (phase=${room.state.phase}, draftPhase=${room.state.draft?.draftPhase ?? "none"})`);
-    // Bot has no action — try fallback based on phase
+    // Fallback actions — also go through handleAction
+    const fallbacks: GameAction[] = [];
     if (room.state.phase === "draft" && room.state.draft?.draftPhase === "companion") {
-      console.log(`[${room.id}] → Fallback: Investor companion pick`);
-      const fallback = processAction(room.state, {
-        type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor,
-      });
-      if (fallback) {
-        room.state = fallback;
-        if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
-        room.broadcastState?.();
-      }
+      fallbacks.push({ type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor });
     } else if (room.state.phase === "turns") {
-      const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
-      if (fallback) {
-        room.state = fallback;
-        if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
-        room.broadcastState?.();
-      }
+      fallbacks.push({ type: "end_turn", playerId: botInfo.botId });
     }
+    for (const fb of fallbacks) {
+      const err = handleAction(room.id, botInfo.botId, fb);
+      if (!err) break;
+    }
+    room.broadcastState?.();
     scheduleBotStep(room);
     return;
   }
@@ -288,59 +283,25 @@ function scheduleBotStep(room: Room) {
     room.botTimer = null;
     if (!room.state || room.state.phase === "end") return;
 
-    logAction(room, action, "bot");
-
-    const next = processAction(room.state, action);
-    if (!next) {
-      console.log(`[${room.id}] ❌ Bot action REJECTED: ${action.type}`);
-      // Action failed — try fallback to unstick the bot
+    const err = handleAction(room.id, botInfo.botId, action);
+    if (err) {
+      console.log(`[${room.id}] ❌ Bot action REJECTED: ${action.type} — ${err}`);
+      // Fallback attempts — same handleAction path
+      const fallbacks: GameAction[] = [];
       if (action.type === "purple_card_pick") {
-        // Purple draft failed — try picking a random card (0), or decline (-1)
-        const randomPick = processAction(room.state, { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: 0 });
-        if (randomPick) {
-          room.state = randomPick;
-          room.broadcastState?.();
-        } else {
-          const decline = processAction(room.state, { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: -1 });
-          if (decline) {
-            room.state = decline;
-            room.broadcastState?.();
-          }
-        }
+        fallbacks.push(
+          { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: 0 },
+          { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: -1 },
+        );
       } else if (action.type === "companion_pick") {
-        // Companion pick failed — try Investor fallback
-        const fallback = processAction(room.state, {
-          type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor,
-        });
-        if (fallback) {
-          room.state = fallback;
-          if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
-          room.broadcastState?.();
-        }
+        fallbacks.push({ type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor });
       } else if (action.type !== "end_turn") {
-        const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
-        if (fallback) {
-          room.state = fallback;
-          if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
-          room.broadcastState?.();
-        }
+        fallbacks.push({ type: "end_turn", playerId: botInfo.botId });
       }
-      scheduleBotStep(room);
-      return;
-    }
-    room.state = next;
-
-    // Start new draft if day transition happened
-    if (room.state.phase === "draft" && !room.state.draft) {
-      room.state = startDraft(room.state);
-    }
-
-    // Log match if game ended
-    if (room.state.phase === "end" && !room.matchLogged) {
-      room.matchLogged = true;
-      const botIds = new Set(room.players.filter((p) => p.isBot).map((p) => p.id));
-      const summary = generateMatchSummary(room.state, room.id, room.startedAt ?? new Date(), botIds);
-      saveMatchSummary(summary).catch((err) => console.error("[match-log] Error:", err));
+      for (const fb of fallbacks) {
+        const fbErr = handleAction(room.id, botInfo.botId, fb);
+        if (!fbErr) break;
+      }
     }
 
     // Broadcast updated state
