@@ -129,6 +129,71 @@ export function startGame(roomId: string, requesterId: string): string | null {
   return null; // success
 }
 
+/** Detailed server-side action logger (console only, for debugging stuck games) */
+function logAction(room: Room, action: GameAction, source: "human" | "bot") {
+  const state = room.state;
+  if (!state) return;
+  const player = state.players.find((p) => p.id === action.playerId);
+  const name = player?.name ?? action.playerId;
+  const tag = `[${room.id} D${state.day}]`;
+  const who = source === "bot" ? `🤖${name}` : `👤${name}`;
+
+  switch (action.type) {
+    case "draft_pick":
+      console.log(`${tag} ${who} picks hero: ${action.heroId}`);
+      break;
+    case "companion_pick":
+      console.log(`${tag} ${who} picks companion: ${action.companionId}`);
+      break;
+    case "purple_card_pick": {
+      const offers = state.purpleDraft?.offers[state.players.indexOf(player!)];
+      const cardName = offers && action.cardIndex >= 0 ? offers[action.cardIndex]?.name : "SKIP";
+      console.log(`${tag} ${who} purple pick: ${cardName} (idx ${action.cardIndex})`);
+      break;
+    }
+    case "income":
+      console.log(`${tag} ${who} income: ${action.choice}`);
+      break;
+    case "income_pick": {
+      const offer = player?.incomeOffer;
+      const picked = offer?.find((c) => c.id === action.cardId);
+      const returned = offer?.find((c) => c.id !== action.cardId);
+      console.log(`${tag} ${who} picks card [${picked?.name ?? "?"}], returns [${returned?.name ?? "?"}] to deck`);
+      break;
+    }
+    case "build": {
+      const card = player?.hand.find((c) => c.id === action.cardId);
+      console.log(`${tag} ${who} builds: ${card?.name ?? "?"} (cost ${card?.cost ?? "?"})`);
+      break;
+    }
+    case "ability": {
+      const ab = action.ability;
+      if (ab.hero === "assassin") console.log(`${tag} ${who} ASSASSINATE → ${ab.targetHeroId}`);
+      else if (ab.hero === "thief") console.log(`${tag} ${who} ROB → ${ab.targetHeroId}`);
+      else if (ab.hero === "sorcerer" && ab.mode === "draw") console.log(`${tag} ${who} sorcerer: discard 2, draw 3`);
+      else if (ab.hero === "sorcerer" && ab.mode === "swap") console.log(`${tag} ${who} sorcerer: swap hands → ${ab.targetPlayerId}`);
+      else if (ab.hero === "general") console.log(`${tag} ${who} DESTROY → card ${ab.cardId} of ${ab.targetPlayerId}`);
+      else console.log(`${tag} ${who} ability: ${ab.hero}`);
+      break;
+    }
+    case "use_companion": {
+      const comp = player?.companion;
+      console.log(`${tag} ${who} uses companion ${comp}${action.targetPlayerId ? ` → player ${action.targetPlayerId}` : ""}${action.targetCardId ? ` → card ${action.targetCardId}` : ""}${action.targetHeroId ? ` → hero ${action.targetHeroId}` : ""}`);
+      break;
+    }
+    case "activate_building": {
+      const building = player?.builtDistricts.find((d) => d.id === action.cardId);
+      console.log(`${tag} ${who} activates building: ${building?.name ?? action.cardId}`);
+      break;
+    }
+    case "end_turn":
+      console.log(`${tag} ${who} END TURN`);
+      break;
+    default:
+      console.log(`${tag} ${who} action: ${(action as GameAction).type}`);
+  }
+}
+
 export function handleAction(roomId: string, playerId: string, action: GameAction): string | null {
   const room = rooms.get(roomId);
   if (!room || !room.state) return "Игра не найдена";
@@ -138,8 +203,13 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
     return "Нельзя делать ход за другого игрока";
   }
 
+  logAction(room, action, "human");
+
   const next = processAction(room.state, action);
-  if (!next) return "Недопустимое действие";
+  if (!next) {
+    console.log(`[${room.id}] ❌ Action REJECTED: ${action.type} by ${playerId}`);
+    return "Недопустимое действие";
+  }
   room.state = next;
 
   // If draft ended and no draft state, start new draft
@@ -187,9 +257,11 @@ function scheduleBotStep(room: Room) {
   // Determine delay: draft = 1.2s, end_turn = 5s, other actions = 1s
   const action = botAction(room.state, botInfo.botId);
   if (!action) {
+    const botName = room.state.players.find((p) => p.id === botInfo.botId)?.name ?? botInfo.botId;
+    console.log(`[${room.id}] ⚠️ Bot ${botName} returned NULL action (phase=${room.state.phase}, draftPhase=${room.state.draft?.draftPhase ?? "none"})`);
     // Bot has no action — try fallback based on phase
     if (room.state.phase === "draft" && room.state.draft?.draftPhase === "companion") {
-      // Stuck on companion pick — try Investor fallback
+      console.log(`[${room.id}] → Fallback: Investor companion pick`);
       const fallback = processAction(room.state, {
         type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor,
       });
@@ -216,8 +288,11 @@ function scheduleBotStep(room: Room) {
     room.botTimer = null;
     if (!room.state || room.state.phase === "end") return;
 
+    logAction(room, action, "bot");
+
     const next = processAction(room.state, action);
     if (!next) {
+      console.log(`[${room.id}] ❌ Bot action REJECTED: ${action.type}`);
       // Action failed — try fallback to unstick the bot
       if (action.type === "purple_card_pick") {
         // Purple draft failed — try picking a random card (0), or decline (-1)
