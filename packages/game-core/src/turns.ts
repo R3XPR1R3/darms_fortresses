@@ -219,10 +219,7 @@ export function pickIncomeCard(
   }
 
   newPlayers[playerIdx] = updated;
-  const logMsg = other
-    ? `🃏 ${player.name} выбирает ${picked.name}, кладёт ${other.name} в колоду`
-    : `🃏 ${player.name} выбирает ${picked.name}`;
-  return { ...state, players: newPlayers, deck: newDeck, log: [...state.log, { day: state.day, message: logMsg }] };
+  return { ...state, players: newPlayers, deck: newDeck, log: [...state.log, { day: state.day, message: `🃏 ${player.name} выбрал карту` }] };
 }
 
 /**
