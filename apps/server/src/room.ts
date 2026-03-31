@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { GameState, GameAction } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import type { LobbyPlayer, PlayerView, PlayerViewEntry, DraftView } from "./protocol.js";
@@ -44,13 +45,18 @@ function generatePlayerId(): string {
   return "p-" + Math.random().toString(36).slice(2, 10);
 }
 
+/** Sanitize player name: trim, limit length, strip control chars */
+function sanitizeName(name: string): string {
+  return name.replace(/[\x00-\x1f]/g, "").trim().slice(0, 30) || "Player";
+}
+
 export function createRoom(hostName: string, ws: WebSocket): { roomId: string; playerId: string } {
   const roomId = generateRoomId();
   const playerId = generatePlayerId();
   const room: Room = {
     id: roomId,
     hostId: playerId,
-    players: [{ id: playerId, name: hostName, isBot: false, ws, disconnectTimer: null }],
+    players: [{ id: playerId, name: sanitizeName(hostName), isBot: false, ws, disconnectTimer: null }],
     state: null,
     started: false,
     startedAt: null,
@@ -69,7 +75,7 @@ export function joinRoom(roomId: string, playerName: string, ws: WebSocket): { p
   if (room.players.length >= 4) return "Комната заполнена (макс. 4)";
 
   const playerId = generatePlayerId();
-  room.players.push({ id: playerId, name: playerName, isBot: false, ws, disconnectTimer: null });
+  room.players.push({ id: playerId, name: sanitizeName(playerName), isBot: false, ws, disconnectTimer: null });
   return { playerId, players: getLobbyPlayers(room) };
 }
 
@@ -107,7 +113,7 @@ export function startGame(roomId: string, requesterId: string): string | null {
   if (room.started) return "Игра уже запущена";
   if (room.players.length < 4) return "Нужно минимум 4 игрока";
 
-  const seed = Date.now();
+  const seed = randomBytes(4).readUInt32BE(0);
   const rng = createRng(seed);
   const deck = createBaseDeck();
   const playerDescs = room.players.map((p) => ({ id: p.id, name: p.name }));

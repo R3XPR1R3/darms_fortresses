@@ -21,10 +21,17 @@ const httpServer = createServer((_req, res) => {
   res.end(JSON.stringify({ status: "ok", service: "darms-server" }));
 });
 
-const wss = new WebSocketServer({ server: httpServer });
+const MAX_MESSAGE_SIZE = 16 * 1024; // 16 KB
+const RATE_LIMIT_WINDOW = 1000; // 1 second
+const RATE_LIMIT_MAX = 15; // max 15 messages per second
+
+const wss = new WebSocketServer({ server: httpServer, maxPayload: MAX_MESSAGE_SIZE });
 
 // Track which room/player each socket belongs to
 const socketMeta = new WeakMap<WebSocket, { roomId: string; playerId: string }>();
+
+// Rate-limiter state per socket
+const rateLimiter = new WeakMap<WebSocket, number[]>();
 
 function send(ws: WebSocket, msg: ServerMessage) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -62,11 +69,23 @@ function ensureBroadcast(roomId: string) {
 
 wss.on("connection", (ws) => {
   ws.on("message", (raw) => {
+    // Rate limiting
+    const now = Date.now();
+    let timestamps = rateLimiter.get(ws);
+    if (!timestamps) { timestamps = []; rateLimiter.set(ws, timestamps); }
+    // Prune old timestamps
+    while (timestamps.length > 0 && now - timestamps[0] > RATE_LIMIT_WINDOW) timestamps.shift();
+    if (timestamps.length >= RATE_LIMIT_MAX) {
+      send(ws, { type: "error", message: "Too many requests" });
+      return;
+    }
+    timestamps.push(now);
+
     let msg: ClientMessage;
     try {
       msg = JSON.parse(String(raw));
     } catch {
-      send(ws, { type: "error", message: "Некорректный JSON" });
+      send(ws, { type: "error", message: "Invalid message" });
       return;
     }
 

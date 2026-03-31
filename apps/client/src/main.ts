@@ -3,7 +3,7 @@ import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompan
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateChanges, resetAnimState } from "./anim.js";
-import { t, tHero, tDistrict, tLog, tName, tCompanionName, tCompanionDescription, getLang, setLang } from "./i18n.js";
+import { t, tHero, tDistrict, tLog, tName, tCompanionName, tCompanionDescription, getLang, setLang, KEYWORDS, kwHtml, expandKw, tSpellName, tSpellDesc, tPurpleName, tPurpleDesc, getGuideHtml } from "./i18n.js";
 
 /** Get companion emoji for indicator circles */
 function companionEmoji(id: CompanionId | null): string {
@@ -563,7 +563,7 @@ function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?
   const cs = colorStyle(d.colors);
   const hpLabel = d.hp != null && d.hp !== d.cost ? `<div class="card-hp">HP ${d.hp}</div>` : "";
   const spellClass = d.spellAbility ? "spell-card" : "";
-  const spellLabel = d.spellAbility ? `<div class="spell-badge">✦ Заклинание ✦</div>` : "";
+  const spellLabel = d.spellAbility ? `<div class="spell-badge">✦ ${kwHtml("spell")} ✦</div>` : "";
   const texUrl = buildingTextureUrl(d);
   return `<div class="district-card ${cs.cls} ${spellClass}" style="${cs.style}">
     <img class="card-texture" src="${texUrl}" alt="" />
@@ -658,17 +658,24 @@ function showCardPoolModal() {
   const deck = createBaseDeck();
   const districts = [...new Map(
     deck
-      .filter((c) => !c.colors.includes("purple"))
+      .filter((c) => !c.colors.includes("purple") && !c.spellAbility)
       .map((c) => [c.name, c]),
   ).values()].sort((a, b) => a.cost - b.cost || tDistrict(a.name).localeCompare(tDistrict(b.name)));
 
+  const spells = [...new Map(
+    deck
+      .filter((c) => c.spellAbility)
+      .map((c) => [c.spellAbility!, c]),
+  ).values()];
+
+  // ---- Cards tab ----
   const heroesHtml = HEROES
     .slice()
     .sort((a, b) => a.speed - b.speed)
     .map((h) => `
       <div class="pool-item">
         <div class="pool-item-title">${heroPortrait(h.id, 20)} ${heroName(h.id)} <span style="color:#888">⚡${h.speed}</span></div>
-        <div class="pool-item-sub">${t("class." + h.id)}</div>
+        <div class="pool-item-sub">${t("class." + h.id)} — ${expandKw(t("ability_desc." + h.id))}</div>
       </div>
     `).join("");
 
@@ -680,36 +687,45 @@ function showCardPoolModal() {
       </div>
     `).join("");
 
-  const companionsHtml = COMPANIONS
-    .filter((c) => c.id !== CompanionId.Investor && c.id !== CompanionId.Trainer)
-    .map((c) => `
-      <div class="pool-item">
-        <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}</div>
-        <div class="pool-item-sub">${tCompanionDescription(c.id, c.description)}</div>
+  const spellsHtml = spells
+    .map((s) => `
+      <div class="pool-item" style="border-color:#8e44ad">
+        <div class="pool-item-title">✦ ${tSpellName(s.name)} <span style="color:#e2b714">${s.cost}💰</span></div>
+        <div class="pool-item-sub">${expandKw(tSpellDesc(s.spellAbility!))}</div>
       </div>
     `).join("");
+
+  const companionsHtml = COMPANIONS
+    .filter((c) => c.id !== CompanionId.Investor && c.id !== CompanionId.Trainer)
+    .map((c) => {
+      const colorTag = c.heroColor ? ` <span style="color:${COLOR_HEX[c.heroColor] ?? "#888"};font-size:10px">${districtColorDot(c.heroColor)}</span>` : "";
+      return `
+      <div class="pool-item">
+        <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}${colorTag}</div>
+        <div class="pool-item-sub">${expandKw(tCompanionDescription(c.id, c.description))}</div>
+      </div>
+    `;}).join("");
 
   const specialCompanionsHtml = COMPANIONS
     .filter((c) => c.id === CompanionId.Investor || c.id === CompanionId.Trainer)
     .map((c) => `
       <div class="pool-item">
         <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}</div>
-        <div class="pool-item-sub">${tCompanionDescription(c.id, c.description)}</div>
+        <div class="pool-item-sub">${expandKw(tCompanionDescription(c.id, c.description))}</div>
       </div>
     `).join("");
 
   const purpleHtml = PURPLE_CARD_TEMPLATES
     .slice()
-    .sort((a, b) => a.cost - b.cost || tDistrict(a.name).localeCompare(tDistrict(b.name)))
+    .sort((a, b) => a.cost - b.cost || tPurpleName(a.name).localeCompare(tPurpleName(b.name)))
     .map((p) => `
-      <div class="pool-item">
-        <div class="pool-item-title">${p.emoji} ${tDistrict(p.name)} <span style="color:#e2b714">${p.cost}💰</span></div>
-        <div class="pool-item-sub">${p.colors.map((c) => districtColorDot(c)).join(" ")} • ${p.description}</div>
-        <div class="pool-item-sub">${["cannon", "crypt", "tnt_storage"].includes(p.ability) ? "🖱️ Active / clickable on your board" : "ℹ️ Info / passive effect"}</div>
+      <div class="pool-item" style="border-color:#9060e0">
+        <div class="pool-item-title">${p.emoji} ${tPurpleName(p.name)} <span style="color:#e2b714">${p.cost}💰</span></div>
+        <div class="pool-item-sub">${p.colors.map((c) => districtColorDot(c)).join(" ")} • ${expandKw(tPurpleDesc(p.ability))}</div>
       </div>
     `).join("");
 
-  body.innerHTML = `
+  const cardsContent = `
     <div class="pool-section">
       <h4>${t("pool.heroes")}</h4>
       <div class="pool-grid">${heroesHtml}</div>
@@ -717,6 +733,10 @@ function showCardPoolModal() {
     <div class="pool-section">
       <h4>${t("pool.districts")}</h4>
       <div class="pool-grid">${districtsHtml}</div>
+    </div>
+    <div class="pool-section">
+      <h4>${t("pool.spells")}</h4>
+      <div class="pool-grid">${spellsHtml}</div>
     </div>
     <div class="pool-section">
       <h4>${t("pool.companions")}</h4>
@@ -731,6 +751,47 @@ function showCardPoolModal() {
       <div class="pool-grid">${purpleHtml}</div>
     </div>
   `;
+
+  // ---- Keywords tab ----
+  const keywordsContent = `
+    <div class="pool-section">
+      <h4>${t("pool.keywords")}</h4>
+      <div class="pool-grid keywords-grid">
+        ${KEYWORDS.map((kw) => `
+          <div class="pool-item kw-item">
+            <div class="pool-item-title">${kwHtml(kw.id)}</div>
+            <div class="pool-item-sub">${kw.description[getLang()] ?? kw.description.en}</div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+
+  // ---- Guide tab ----
+  const guideContent = `<div class="pool-section guide-content">${getGuideHtml()}</div>`;
+
+  body.innerHTML = `
+    <div class="pool-tabs">
+      <button class="pool-tab active" data-tab="cards">${t("pool.tab.cards")}</button>
+      <button class="pool-tab" data-tab="keywords">${t("pool.tab.keywords")}</button>
+      <button class="pool-tab" data-tab="guide">${t("pool.tab.guide")}</button>
+    </div>
+    <div class="pool-tab-content" data-tab-content="cards">${cardsContent}</div>
+    <div class="pool-tab-content" data-tab-content="keywords" style="display:none">${keywordsContent}</div>
+    <div class="pool-tab-content" data-tab-content="guide" style="display:none">${guideContent}</div>
+  `;
+
+  // Tab switching
+  body.querySelectorAll<HTMLButtonElement>(".pool-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      body.querySelectorAll<HTMLButtonElement>(".pool-tab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const tab = btn.dataset.tab!;
+      body.querySelectorAll<HTMLElement>(".pool-tab-content").forEach((el) => {
+        el.style.display = el.dataset.tabContent === tab ? "" : "none";
+      });
+    });
+  });
 
   modal.classList.add("show");
   modal.onclick = (e) => { if (e.target === modal) close(); };
