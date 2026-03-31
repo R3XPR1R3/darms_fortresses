@@ -208,6 +208,7 @@ export function useAbility(
       // Can only target unrevealed heroes (those who haven't had their turn yet)
       if (ability.targetHeroId === HeroId.Assassin) return null;
       const targetIdx = findPlayerByHero(state.players, ability.targetHeroId);
+      const targetHeroName = HEROES.find((h) => h.id === ability.targetHeroId)?.name ?? "???";
       if (targetIdx !== -1) {
         // Check if target hero has already been revealed (had their turn)
         if (state.turnOrder) {
@@ -226,8 +227,6 @@ export function useAbility(
               abilityUsed: true,
             };
             newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: [] };
-            log = addLog({ ...state, log }, `${player.name} совершил убийство и забрал ${victim.hand.length} карт (мародёр)!`);
-            break;
           }
         }
 
@@ -249,8 +248,6 @@ export function useAbility(
               abilityUsed: true,
             };
             newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: remainingHand };
-            log = addLog({ ...state, log }, `${player.name} — заказчик: выполнен контракт, украдено ${purpleCards.length} фиолетовых карт!`);
-            break;
           }
         }
 
@@ -262,15 +259,12 @@ export function useAbility(
             const colorCount = player.builtDistricts.filter((d) => d.colors.includes(victimHeroDef.color!)).length;
             if (colorCount > 0) {
               newPlayers[playerIdx] = { ...newPlayers[playerIdx], gold: (newPlayers[playerIdx].gold ?? player.gold) + colorCount };
-              log = addLog({ ...state, log }, `${player.name} совершил убийство и получил +${colorCount}💰 (могильщик)!`);
               newPlayers[playerIdx] = { ...newPlayers[playerIdx], abilityUsed: true };
-              break;
             }
           }
         }
-
-        log = addLog({ ...state, log }, `${player.name} совершил убийство...`);
       }
+      log = addLog({ ...state, log }, `🗡️ Убийца выбрал ${targetHeroName}`);
       newPlayers[playerIdx] = { ...newPlayers[playerIdx], abilityUsed: true };
       break;
     }
