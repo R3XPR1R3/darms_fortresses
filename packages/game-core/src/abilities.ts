@@ -231,7 +231,7 @@ export function useAbility(
         }
 
         // Contractor companion:
-        // only rewards if assassin killed the contracted hero target this day.
+        // if assassin killed the contracted hero target — steal ALL victim's cards.
         if (
           player.companion === CompanionId.Contractor
           && !player.companionDisabled
@@ -239,15 +239,13 @@ export function useAbility(
           && player.contractorTargetHeroId === ability.targetHeroId
         ) {
           const victim = state.players[targetIdx];
-          const purpleCards = victim.hand.filter((c) => c.colors.includes("purple"));
-          if (purpleCards.length > 0) {
-            const remainingHand = victim.hand.filter((c) => !c.colors.includes("purple"));
+          if (victim.hand.length > 0) {
             newPlayers[playerIdx] = {
               ...newPlayers[playerIdx],
-              hand: [...player.hand, ...purpleCards],
+              hand: [...(newPlayers[playerIdx].hand ?? player.hand), ...victim.hand],
               abilityUsed: true,
             };
-            newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: remainingHand };
+            newPlayers[targetIdx] = { ...newPlayers[targetIdx], hand: [] };
           }
         }
 
