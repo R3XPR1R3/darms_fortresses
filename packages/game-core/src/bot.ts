@@ -157,9 +157,14 @@ function pickBestCompanion(
     return true;
   });
 
-  // Fallback: if nothing eligible, pick a special fallback companion (Investor/Trainer)
+  // Fallback: if nothing eligible, choose between Investor and Trainer
   if (eligible.length === 0) {
-    return CompanionId.Investor;
+    return rng.next() > 0.5 ? CompanionId.Trainer : CompanionId.Investor;
+  }
+
+  // Only one option — pick it immediately
+  if (eligible.length === 1) {
+    return eligible[0];
   }
 
   const candidates = eligible;

@@ -1349,10 +1349,12 @@ function startDraftTimer(draft: DraftView) {
             const def = companionDef(cId);
             return !def?.heroColor || def.heroColor === myHeroClr;
           });
-          const pick = eligible.length > 0 ? eligible : currentDraft.companionPool;
-          if (pick.length > 0) {
-            const companionId = pick[Math.floor(Math.random() * pick.length)];
+          if (eligible.length > 0) {
+            const companionId = eligible[Math.floor(Math.random() * eligible.length)];
             dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
+          } else {
+            // No eligible — pick Investor (Trainer also valid, server accepts both)
+            dispatch({ type: "companion_pick", playerId: getMyId(), companionId: CompanionId.Investor });
           }
         } else if (currentDraft.availableHeroes.length > 0) {
           // Auto-pick a random hero

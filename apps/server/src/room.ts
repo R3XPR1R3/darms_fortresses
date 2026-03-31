@@ -264,7 +264,10 @@ function scheduleBotStep(room: Room) {
     // Fallback actions — also go through handleAction
     const fallbacks: GameAction[] = [];
     if (room.state.phase === "draft" && room.state.draft?.draftPhase === "companion") {
-      fallbacks.push({ type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor });
+      fallbacks.push(
+        { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor },
+        { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Trainer },
+      );
     } else if (room.state.phase === "turns") {
       fallbacks.push({ type: "end_turn", playerId: botInfo.botId });
     }
@@ -294,7 +297,10 @@ function scheduleBotStep(room: Room) {
           { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: -1 },
         );
       } else if (action.type === "companion_pick") {
-        fallbacks.push({ type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor });
+        fallbacks.push(
+          { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor },
+          { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Trainer },
+        );
       } else if (action.type !== "end_turn") {
         fallbacks.push({ type: "end_turn", playerId: botInfo.botId });
       }
