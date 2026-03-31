@@ -89,8 +89,8 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
 }
 
 /**
- * Process income action: take 2 gold OR draw 2 cards and choose 1 via follow-up income_pick.
- * Swindler companion: first income gives BOTH (gold + card-flow bonus), then can take one more.
+ * Process income action: take 2 gold OR draw 2 cards (choose 1, return 1 to deck top).
+ * Swindler companion: first income gives BOTH (gold + card-draw), then can take income once more.
  * Druid companion: drawn cards become dual-colored.
  */
 export function takeIncome(
@@ -124,7 +124,7 @@ export function takeIncome(
   };
 
   if (hasSwindler) {
-    // Swindler: give BOTH gold + card-flow bonus, mark companion used, don't mark income taken
+    // Swindler: give BOTH gold + card-draw, mark companion used, don't mark income taken
     const offer = drawTwoOffer(state.deck);
     const newPlayers = [...state.players];
     newPlayers[playerIdx] = {
@@ -256,9 +256,9 @@ export function buildDistrict(
   let effectiveCost = card.cost;
   const heroColor = HEROES.find((h) => h.id === player.hero)?.color ?? null;
 
-  // Monument: cost = number of other cards in hand (after removing monument)
+  // Monument: always costs 3 to build from hand
   if (card.purpleAbility === "monument") {
-    effectiveCost = Math.max(0, player.hand.length - 1); // minus the monument itself
+    effectiveCost = 3;
   }
 
   // City Gates can only be built by Leader (King role).
@@ -356,7 +356,7 @@ export function buildDistrict(
       }
       log = [...log, { day: state.day, message: `🌊 ${player.name} применил Потоп: до 4 случайных кварталов у каждого вернулись в руку` }];
     } else if (card.spellAbility === "plague") {
-      log = [...log, { day: state.day, message: `☣️ ${player.name} применил Чуму: эффект активен 2 дня` }];
+      log = [...log, { day: state.day, message: `☣️ ${player.name} применил Чуму: эффект активен 3 дня` }];
     }
 
     newPlayers[playerIdx] = {
@@ -365,13 +365,13 @@ export function buildDistrict(
       hand: newHand,
       buildsRemaining: player.buildsRemaining - 1,
     };
-    return { ...state, players: newPlayers, log, plagueDaysLeft: card.spellAbility === "plague" ? 2 : (state.plagueDaysLeft ?? 0) };
+    return { ...state, players: newPlayers, log, plagueDaysLeft: card.spellAbility === "plague" ? 3 : (state.plagueDaysLeft ?? 0) };
   }
 
-  // Monument: table value is fixed at 3 (hp and score value via cost)
+  // Monument: on table always 5 cost / 5 HP
   let builtCard = { ...card, hp: card.cost, originalCost: card.originalCost ?? card.cost, baseColors: card.baseColors ?? card.colors };
   if (card.purpleAbility === "monument") {
-    builtCard = { ...card, cost: 3, hp: 3, originalCost: card.originalCost ?? 3, baseColors: card.baseColors ?? card.colors };
+    builtCard = { ...card, cost: 5, hp: 5, originalCost: card.originalCost ?? 5, baseColors: card.baseColors ?? card.colors };
   }
 
   // Fort: reduce other (non-fort) districts HP by 1 when on table
@@ -536,94 +536,6 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
 
   state = { ...state, players, log };
 
-  // Plague effect (if active): at end of each turn
-  // - random player loses 1 gold
-  // - random player loses 1 district HP on table (if possible)
-  if ((state.plagueDaysLeft ?? 0) > 0) {
-    const plaguePlayers = [...state.players];
-    let plagueLog = state.log;
-    const goldCandidates = plaguePlayers
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => p.gold > 0);
-    if (goldCandidates.length > 0) {
-      const picked = goldCandidates[rng.int(0, goldCandidates.length - 1)];
-      plaguePlayers[picked.i] = { ...plaguePlayers[picked.i], gold: plaguePlayers[picked.i].gold - 1 };
-      plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: ${plaguePlayers[picked.i].name} потерял 1💰` }];
-    }
-
-    const hpCandidates: { pIdx: number; dIdx: number }[] = [];
-    for (let i = 0; i < plaguePlayers.length; i++) {
-      for (let d = 0; d < plaguePlayers[i].builtDistricts.length; d++) {
-        if (plaguePlayers[i].builtDistricts[d].purpleAbility === "stronghold") continue;
-        hpCandidates.push({ pIdx: i, dIdx: d });
-      }
-    }
-    if (hpCandidates.length > 0) {
-      const picked = hpCandidates[rng.int(0, hpCandidates.length - 1)];
-      const owner = plaguePlayers[picked.pIdx];
-      const districts = [...owner.builtDistricts];
-      const target = districts[picked.dIdx];
-      const newHp = target.hp - 1;
-      if (newHp < 1) {
-        const destroyed = districts[picked.dIdx];
-        districts.splice(picked.dIdx, 1);
-        plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
-        state = { ...state, discardPile: [...state.discardPile, destroyed] };
-        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} разрушен ${destroyed.name}` }];
-      } else {
-        districts[picked.dIdx] = { ...target, hp: newHp };
-        plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
-        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.hp}→${newHp})` }];
-      }
-    }
-
-    state = { ...state, players: plaguePlayers, log: plagueLog };
-  }
-
-  // Plague effect (if active): at end of each turn
-  // - random player loses 1 gold
-  // - random player loses 1 district HP on table (if possible)
-  if ((state.plagueDaysLeft ?? 0) > 0) {
-    const plaguePlayers = [...state.players];
-    let plagueLog = state.log;
-    const goldCandidates = plaguePlayers
-      .map((p, i) => ({ p, i }))
-      .filter(({ p }) => p.gold > 0);
-    if (goldCandidates.length > 0) {
-      const picked = goldCandidates[rng.int(0, goldCandidates.length - 1)];
-      plaguePlayers[picked.i] = { ...plaguePlayers[picked.i], gold: plaguePlayers[picked.i].gold - 1 };
-      plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: ${plaguePlayers[picked.i].name} потерял 1💰` }];
-    }
-
-    const hpCandidates: { pIdx: number; dIdx: number }[] = [];
-    for (let i = 0; i < plaguePlayers.length; i++) {
-      for (let d = 0; d < plaguePlayers[i].builtDistricts.length; d++) {
-        if (plaguePlayers[i].builtDistricts[d].purpleAbility === "stronghold") continue;
-        hpCandidates.push({ pIdx: i, dIdx: d });
-      }
-    }
-    if (hpCandidates.length > 0) {
-      const picked = hpCandidates[rng.int(0, hpCandidates.length - 1)];
-      const owner = plaguePlayers[picked.pIdx];
-      const districts = [...owner.builtDistricts];
-      const target = districts[picked.dIdx];
-      const newHp = target.hp - 1;
-      if (newHp < 1) {
-        const destroyed = districts[picked.dIdx];
-        districts.splice(picked.dIdx, 1);
-        plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
-        state = { ...state, discardPile: [...state.discardPile, destroyed] };
-        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} разрушен ${destroyed.name}` }];
-      } else {
-        districts[picked.dIdx] = { ...target, hp: newHp };
-        plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
-        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.hp}→${newHp})` }];
-      }
-    }
-
-    state = { ...state, players: plaguePlayers, log: plagueLog };
-  }
-
   if (nextIdx >= turnOrder.length) {
     // End-of-day cleanup for Holy Day spell: restore original district colors.
     for (let i = 0; i < state.players.length; i++) {
@@ -655,6 +567,63 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
         newPlayers[i] = { ...p, hand: newHand };
         state = { ...state, players: newPlayers };
       }
+    }
+
+    // End of day — Mine income for all heroes (+1 per mine)
+    {
+      const minePlayers = [...state.players];
+      let mineLog = state.log;
+      for (let i = 0; i < minePlayers.length; i++) {
+        const p = minePlayers[i];
+        const mineCount = p.builtDistricts.filter((d) => d.purpleAbility === "mine").length;
+        if (mineCount > 0) {
+          minePlayers[i] = { ...p, gold: p.gold + mineCount };
+          mineLog = [...mineLog, { day: state.day, message: `⛏️ ${p.name} — шахта: +${mineCount}💰` }];
+        }
+      }
+      state = { ...state, players: minePlayers, log: mineLog };
+    }
+
+    // End of day — Plague effect (once per day, if active)
+    if ((state.plagueDaysLeft ?? 0) > 0) {
+      const plaguePlayers = [...state.players];
+      let plagueLog = state.log;
+      const goldCandidates = plaguePlayers
+        .map((p, i) => ({ p, i }))
+        .filter(({ p }) => p.gold > 0);
+      if (goldCandidates.length > 0) {
+        const picked = goldCandidates[rng.int(0, goldCandidates.length - 1)];
+        plaguePlayers[picked.i] = { ...plaguePlayers[picked.i], gold: plaguePlayers[picked.i].gold - 1 };
+        plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: ${plaguePlayers[picked.i].name} потерял 1💰` }];
+      }
+
+      const hpCandidates: { pIdx: number; dIdx: number }[] = [];
+      for (let i = 0; i < plaguePlayers.length; i++) {
+        for (let d = 0; d < plaguePlayers[i].builtDistricts.length; d++) {
+          if (plaguePlayers[i].builtDistricts[d].purpleAbility === "stronghold") continue;
+          hpCandidates.push({ pIdx: i, dIdx: d });
+        }
+      }
+      if (hpCandidates.length > 0) {
+        const picked = hpCandidates[rng.int(0, hpCandidates.length - 1)];
+        const owner = plaguePlayers[picked.pIdx];
+        const districts = [...owner.builtDistricts];
+        const target = districts[picked.dIdx];
+        const newHp = target.hp - 1;
+        if (newHp < 1) {
+          const destroyed = districts[picked.dIdx];
+          districts.splice(picked.dIdx, 1);
+          plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
+          state = { ...state, discardPile: [...state.discardPile, destroyed] };
+          plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} разрушен ${destroyed.name}` }];
+        } else {
+          districts[picked.dIdx] = { ...target, hp: newHp };
+          plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
+          plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.hp}→${newHp})` }];
+        }
+      }
+
+      state = { ...state, players: plaguePlayers, log: plagueLog };
     }
 
     // End of day — apply end-of-day effects

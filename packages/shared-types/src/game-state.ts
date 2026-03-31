@@ -56,7 +56,7 @@ export const PURPLE_CARD_TEMPLATES: PurpleCardTemplate[] = [
   { name: "Пушка", cost: 2, colors: ["purple", "red"], ability: "cannon", emoji: "💣", description: "За 1💰: −1 HP случайному кварталу противника (∞)" },
   { name: "Оборонительный форт", cost: 1, colors: ["purple"], ability: "fort", emoji: "🏰", description: "Другие постройки −1 HP, но при разрушении вы получаете золото" },
   { name: "Укрепрайон", cost: 4, colors: ["purple"], ability: "stronghold", emoji: "🧱", description: "Эту постройку нельзя разрушить или повредить" },
-  { name: "Памятник", cost: 2, colors: ["purple"], ability: "monument", emoji: "🗿", description: "В руке: цена = числу других карт. На столе: стоимость и HP всегда 3" },
+  { name: "Памятник", cost: 3, colors: ["purple"], ability: "monument", emoji: "🗿", description: "В руке: стоит 3💰. На столе: стоимость и HP всегда 5" },
   { name: "Магистраль", cost: 4, colors: ["purple"], ability: "highway", emoji: "🛤️", description: "Скорость героя −1" },
   { name: "Врата в город", cost: 8, colors: ["purple", "yellow"], ability: "city_gates", emoji: "🚪", description: "Пока в руке: цена уменьшается на 2 каждый ход. На столе не удешевляются" },
   { name: "Склеп", cost: 4, colors: ["purple"], ability: "crypt", emoji: "⚰️", description: "При разрушении: +2 фиолетовые карты. Самоуничтожение за 2💰" },

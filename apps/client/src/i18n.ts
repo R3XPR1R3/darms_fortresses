@@ -501,7 +501,7 @@ const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
   gold_rain: { en: "{kw:spell} All players gain +1💰", ru: "{kw:spell} Все игроки получают +1💰" },
   holy_day: { en: "{kw:spell} All districts temporarily become 🔵 blue until end of day", ru: "{kw:spell} Все кварталы временно становятся 🔵 синими до конца дня" },
   flood: { en: "{kw:spell} Up to 4 random districts per player return to hand", ru: "{kw:spell} До 4 случайных кварталов у каждого возвращаются в руку" },
-  plague: { en: "{kw:spell} 2-day effect: random player loses gold, random districts take damage", ru: "{kw:spell} Эффект 2 дня: случайный игрок теряет золото, случайные кварталы получают урон" },
+  plague: { en: "{kw:spell} 3-day effect: each day a random player loses gold, a random district takes damage", ru: "{kw:spell} Эффект 3 дня: каждый день случайный игрок теряет золото, случайный квартал получает урон" },
 };
 
 export function tSpellName(name: string): string {
@@ -538,12 +538,12 @@ const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
   cannon: { en: "{kw:activate} 1💰: deal 1 damage to random enemy district (unlimited uses)", ru: "{kw:activate} За 1💰: −1 HP случайному кварталу противника (без ограничений)" },
   fort: { en: "Other districts get −1 HP. Refund gold when destroyed", ru: "Другие постройки −1 HP. При разрушении получаете золото" },
   stronghold: { en: "{kw:protect}: cannot be destroyed or damaged", ru: "{kw:protect}: нельзя разрушить или повредить" },
-  monument: { en: "In hand: cost = number of other cards. On board: always 3💰/3 HP", ru: "В руке: цена = числу других карт. На столе: всегда 3💰/3 HP" },
+  monument: { en: "In hand: costs 3💰 to build. On board: always 5💰/5 HP", ru: "В руке: стоит 3💰. На столе: всегда 5💰/5 HP" },
   highway: { en: "Your hero's speed −1 (act earlier)", ru: "Скорость вашего героя −1 (ходите раньше)" },
   city_gates: { en: "In hand: cost −2 each turn. Leader auto-builds it free", ru: "В руке: цена −2 каждый ход. Лидер строит автоматически и бесплатно" },
   crypt: { en: "{kw:activate} Self-destroy for 2💰. On any destroy: +2 random purple cards", ru: "{kw:activate} Самоуничтожение за 2💰. При любом разрушении: +2 случайные фиолетовые карты" },
   tnt_storage: { en: "{kw:activate} Self-destroy for 2💰: {kw:destroy} 2 random districts per player", ru: "{kw:activate} Самоуничтожение за 2💰: {kw:destroy} 2 случайных квартала у каждого" },
-  mine: { en: "+1💰 end of day. Treasurer: +1💰 end of each turn", ru: "+1💰 в конце дня. У Казначея: +1💰 в конце каждого хода" },
+  mine: { en: "+1💰 at end of day for everyone. Treasurer also gets +1💰 at end of each turn", ru: "+1💰 в конце дня для всех. Казначей также получает +1💰 в конце каждого хода" },
   cult: { en: "Cleric only: {kw:activate} replace random district of random player", ru: "Только Клерик: {kw:activate} заменяет случайный квартал случайного игрока" },
   altar_power: { en: "{kw:altar}: build 3 different altars to win", ru: "{kw:altar}: постройте 3 разных алтаря для победы" },
   altar_health: { en: "{kw:altar}: build 3 different altars to win", ru: "{kw:altar}: постройте 3 разных алтаря для победы" },

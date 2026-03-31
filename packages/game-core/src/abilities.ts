@@ -304,6 +304,7 @@ export function useAbility(
         log = addLog({ ...state, log }, `${player.name} (Чародей) сбросил ${discarded.length} карт, взял ${drawn.length}`);
       } else {
         // Swap hands — can target any player (including assassinated)
+        if (!ability.targetPlayerId) return null;
         const targetIdx = state.players.findIndex((p) => p.id === ability.targetPlayerId);
         if (targetIdx === -1 || targetIdx === playerIdx) return null;
         const targetHand = [...state.players[targetIdx].hand];
