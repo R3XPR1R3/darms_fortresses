@@ -157,8 +157,12 @@ function pickBestCompanion(
     return true;
   });
 
-  // Fallback: if nothing eligible, pick first available (will be rejected by server, but safe)
-  const candidates = eligible.length > 0 ? eligible : pool;
+  // Fallback: if nothing eligible, pick a special fallback companion (Investor/Trainer)
+  if (eligible.length === 0) {
+    return CompanionId.Investor;
+  }
+
+  const candidates = eligible;
 
   let bestId = candidates[0];
   let bestScore = -Infinity;

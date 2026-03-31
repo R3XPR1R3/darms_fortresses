@@ -1249,10 +1249,22 @@ function renderMyBoard() {
       }
 
       if (me.incomeOffer && me.incomeOffer.length > 0) {
-        const offerHtml = me.incomeOffer.map((c) =>
-          `<button class="btn btn-card income-pick" data-income-pick="${c.id}">🃏 ${tDistrict(c.name)} (${c.cost})</button>`,
-        ).join("");
-        buttons.push(`<div class="hint">Выбери 1 карту, вторая уйдёт наверх колоды:</div>${offerHtml}`);
+        const offerCards = me.incomeOffer.map((c) => {
+          const cs = colorStyle(c.colors);
+          const texUrl = buildingTextureUrl(c);
+          return `<div class="income-offer-card ${cs.cls}" style="${cs.style}" data-income-pick="${c.id}">
+            <img class="card-texture" src="${texUrl}" alt="" />
+            <div class="card-cost-badge">${c.cost}</div>
+            <div class="card-name">${tDistrict(c.name)}</div>
+            ${c.spellAbility ? `<div class="spell-badge">✦</div>` : ""}
+          </div>`;
+        }).join("");
+        buttons.push(`
+          <div class="income-offer-panel">
+            <div class="hint">${t("my.income_pick_hint")}</div>
+            <div class="income-offer-grid">${offerCards}</div>
+          </div>
+        `);
       } else if (!me.incomeTaken) {
         buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
         buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
