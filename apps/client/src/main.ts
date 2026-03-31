@@ -459,7 +459,6 @@ function getMyHand(): PlayerState["hand"] {
 function getDraft(): DraftView | null {
   if (mode === "online" && onlineState) return onlineState.draft;
   if (localState?.draft) {
-    const humanIdx = localState.players.findIndex((p) => p.id === HUMAN_ID);
     return {
       availableHeroes: localState.draft.availableHeroes,
       faceUpBans: localState.draft.faceUpBans,
@@ -1878,14 +1877,10 @@ function showCompanionModal(companionId: CompanionId) {
       title.textContent = `📋 ${companionLabel}`;
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
-      const myHero = me.hero;
-      const revealedHeroes = new Set(
-        players
-          .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
-          .filter((h): h is HeroId => h !== null),
-      );
+      // Show all heroes except face-up bans and Assassin.
+      // Some are in play, some in shadow ban — the gamble element.
       const targets = Object.values(HeroId).filter((h) =>
-        h !== myHero && !faceUpBans.includes(h) && !revealedHeroes.has(h),
+        h !== HeroId.Assassin && !faceUpBans.includes(h),
       );
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${companionHint}</p>

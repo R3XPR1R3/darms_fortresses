@@ -488,16 +488,12 @@ function pickCompanionAction(
     }
 
     case CompanionId.Contractor: {
-      if (!state.turnOrder) return null;
-      const unrevealed = state.players
-        .filter((p, i) => {
-          if (i === playerIdx || !p.hero || p.assassinated) return false;
-          const posInOrder = state.turnOrder!.indexOf(i);
-          return posInOrder === -1 || posInOrder > state.currentTurnIndex;
-        })
-        .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length);
-      if (unrevealed.length === 0) return null;
-      return { type: "use_companion", playerId: player.id, targetHeroId: unrevealed[0].hero! };
+      const faceUpBans = state.draft?.faceUpBans ?? [];
+      const targets = Object.values(HeroId).filter((h) =>
+        h !== HeroId.Assassin && !faceUpBans.includes(h),
+      );
+      if (targets.length === 0) return null;
+      return { type: "use_companion", playerId: player.id, targetHeroId: targets[Math.floor(Math.random() * targets.length)] };
     }
 
     case CompanionId.Investor:
