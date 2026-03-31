@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { GameState, GameAction } from "@darms/shared-types";
+import { CompanionId } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import type { LobbyPlayer, PlayerView, PlayerViewEntry, DraftView } from "./protocol.js";
 import type { WebSocket } from "ws";
@@ -186,14 +187,24 @@ function scheduleBotStep(room: Room) {
   // Determine delay: draft = 1.2s, end_turn = 5s, other actions = 1s
   const action = botAction(room.state, botInfo.botId);
   if (!action) {
-    // Bot has no action (shouldn't happen) — force end turn
-    const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
-    if (fallback) {
-      room.state = fallback;
-      if (room.state.phase === "draft" && !room.state.draft) {
-        room.state = startDraft(room.state);
+    // Bot has no action — try fallback based on phase
+    if (room.state.phase === "draft" && room.state.draft?.draftPhase === "companion") {
+      // Stuck on companion pick — try Investor fallback
+      const fallback = processAction(room.state, {
+        type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor,
+      });
+      if (fallback) {
+        room.state = fallback;
+        if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
+        room.broadcastState?.();
       }
-      room.broadcastState?.();
+    } else if (room.state.phase === "turns") {
+      const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
+      if (fallback) {
+        room.state = fallback;
+        if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
+        room.broadcastState?.();
+      }
     }
     scheduleBotStep(room);
     return;
@@ -221,13 +232,21 @@ function scheduleBotStep(room: Room) {
             room.broadcastState?.();
           }
         }
+      } else if (action.type === "companion_pick") {
+        // Companion pick failed — try Investor fallback
+        const fallback = processAction(room.state, {
+          type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor,
+        });
+        if (fallback) {
+          room.state = fallback;
+          if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
+          room.broadcastState?.();
+        }
       } else if (action.type !== "end_turn") {
         const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
         if (fallback) {
           room.state = fallback;
-          if (room.state.phase === "draft" && !room.state.draft) {
-            room.state = startDraft(room.state);
-          }
+          if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
           room.broadcastState?.();
         }
       }
