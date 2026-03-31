@@ -1877,10 +1877,14 @@ function showCompanionModal(companionId: CompanionId) {
       title.textContent = `📋 ${companionLabel}`;
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
-      // Show all heroes except face-up bans and Assassin.
-      // Some are in play, some in shadow ban — the gamble element.
+      // Exclude face-up bans, Assassin, and already-revealed heroes (already acted).
+      const revealedHeroes = new Set(
+        players
+          .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
+          .filter((h): h is HeroId => h !== null),
+      );
       const targets = Object.values(HeroId).filter((h) =>
-        h !== HeroId.Assassin && !faceUpBans.includes(h),
+        h !== HeroId.Assassin && !faceUpBans.includes(h) && !revealedHeroes.has(h),
       );
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${companionHint}</p>

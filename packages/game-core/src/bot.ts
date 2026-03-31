@@ -489,8 +489,18 @@ function pickCompanionAction(
 
     case CompanionId.Contractor: {
       const faceUpBans = state.draft?.faceUpBans ?? [];
+      const revealedHeroes = new Set(
+        state.players
+          .filter((_, i) => {
+            if (!state.turnOrder) return false;
+            const pos = state.turnOrder.indexOf(i);
+            return pos !== -1 && pos <= state.currentTurnIndex;
+          })
+          .map((p) => p.hero)
+          .filter((h): h is HeroId => h !== null),
+      );
       const targets = Object.values(HeroId).filter((h) =>
-        h !== HeroId.Assassin && !faceUpBans.includes(h),
+        h !== HeroId.Assassin && !faceUpBans.includes(h) && !revealedHeroes.has(h),
       );
       if (targets.length === 0) return null;
       return { type: "use_companion", playerId: player.id, targetHeroId: targets[Math.floor(Math.random() * targets.length)] };
