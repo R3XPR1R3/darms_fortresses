@@ -459,7 +459,6 @@ function getMyHand(): PlayerState["hand"] {
 function getDraft(): DraftView | null {
   if (mode === "online" && onlineState) return onlineState.draft;
   if (localState?.draft) {
-    const humanIdx = localState.players.findIndex((p) => p.id === HUMAN_ID);
     return {
       availableHeroes: localState.draft.availableHeroes,
       faceUpBans: localState.draft.faceUpBans,
@@ -1350,10 +1349,12 @@ function startDraftTimer(draft: DraftView) {
             const def = companionDef(cId);
             return !def?.heroColor || def.heroColor === myHeroClr;
           });
-          const pick = eligible.length > 0 ? eligible : currentDraft.companionPool;
-          if (pick.length > 0) {
-            const companionId = pick[Math.floor(Math.random() * pick.length)];
+          if (eligible.length > 0) {
+            const companionId = eligible[Math.floor(Math.random() * eligible.length)];
             dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
+          } else {
+            // No eligible — pick Investor (Trainer also valid, server accepts both)
+            dispatch({ type: "companion_pick", playerId: getMyId(), companionId: CompanionId.Investor });
           }
         } else if (currentDraft.availableHeroes.length > 0) {
           // Auto-pick a random hero
@@ -1878,14 +1879,14 @@ function showCompanionModal(companionId: CompanionId) {
       title.textContent = `📋 ${companionLabel}`;
       const draft = getDraft();
       const faceUpBans = draft?.faceUpBans ?? [];
-      const myHero = me.hero;
+      // Exclude face-up bans, Assassin, and already-revealed heroes (already acted).
       const revealedHeroes = new Set(
         players
           .map((p, i) => (isHeroRevealed(i) ? p.hero : null))
           .filter((h): h is HeroId => h !== null),
       );
       const targets = Object.values(HeroId).filter((h) =>
-        h !== myHero && !faceUpBans.includes(h) && !revealedHeroes.has(h),
+        h !== HeroId.Assassin && !faceUpBans.includes(h) && !revealedHeroes.has(h),
       );
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${companionHint}</p>

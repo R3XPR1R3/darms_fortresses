@@ -471,11 +471,21 @@ function useCompanion(
     }
 
     case CompanionId.Contractor: {
-      // Set assassin contract target hero for this day.
+      // Contractor names any hero except face-up bans, Assassin, and already-revealed heroes.
       if (!targetHeroId) return null;
-      if (targetHeroId === player.hero) return null;
+      if (targetHeroId === HeroId.Assassin) return null;
+      const faceUpBans = state.draft?.faceUpBans ?? [];
+      if (faceUpBans.includes(targetHeroId)) return null;
+      // Exclude heroes that already had their turn (revealed)
+      if (state.turnOrder) {
+        const targetPlayerIdx = state.players.findIndex((p) => p.hero === targetHeroId);
+        if (targetPlayerIdx !== -1) {
+          const posInOrder = state.turnOrder.indexOf(targetPlayerIdx);
+          if (posInOrder !== -1 && posInOrder <= state.currentTurnIndex) return null;
+        }
+      }
       newPlayers[playerIdx] = { ...player, contractorTargetHeroId: targetHeroId, companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — заказчик: цель назначена (${targetHeroId})`), rng: rng.getSeed() };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — заказчик: цель назначена`), rng: rng.getSeed() };
     }
 
     case CompanionId.Investor: {

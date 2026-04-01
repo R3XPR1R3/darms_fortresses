@@ -157,9 +157,14 @@ function pickBestCompanion(
     return true;
   });
 
-  // Fallback: if nothing eligible, pick a special fallback companion (Investor/Trainer)
+  // Fallback: if nothing eligible, choose between Investor and Trainer
   if (eligible.length === 0) {
-    return CompanionId.Investor;
+    return rng.next() > 0.5 ? CompanionId.Trainer : CompanionId.Investor;
+  }
+
+  // Only one option — pick it immediately
+  if (eligible.length === 1) {
+    return eligible[0];
   }
 
   const candidates = eligible;
@@ -488,16 +493,22 @@ function pickCompanionAction(
     }
 
     case CompanionId.Contractor: {
-      if (!state.turnOrder) return null;
-      const unrevealed = state.players
-        .filter((p, i) => {
-          if (i === playerIdx || !p.hero || p.assassinated) return false;
-          const posInOrder = state.turnOrder!.indexOf(i);
-          return posInOrder === -1 || posInOrder > state.currentTurnIndex;
-        })
-        .sort((a, b) => b.builtDistricts.length - a.builtDistricts.length);
-      if (unrevealed.length === 0) return null;
-      return { type: "use_companion", playerId: player.id, targetHeroId: unrevealed[0].hero! };
+      const faceUpBans = state.draft?.faceUpBans ?? [];
+      const revealedHeroes = new Set(
+        state.players
+          .filter((_, i) => {
+            if (!state.turnOrder) return false;
+            const pos = state.turnOrder.indexOf(i);
+            return pos !== -1 && pos <= state.currentTurnIndex;
+          })
+          .map((p) => p.hero)
+          .filter((h): h is HeroId => h !== null),
+      );
+      const targets = Object.values(HeroId).filter((h) =>
+        h !== HeroId.Assassin && !faceUpBans.includes(h) && !revealedHeroes.has(h),
+      );
+      if (targets.length === 0) return null;
+      return { type: "use_companion", playerId: player.id, targetHeroId: targets[Math.floor(Math.random() * targets.length)] };
     }
 
     case CompanionId.Investor:

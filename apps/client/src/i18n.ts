@@ -420,7 +420,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   unlucky_mage: { en: "All your districts turn into the chosen card! {kw:debuff}", ru: "Все ваши постройки превращаются в эту карту! {kw:debuff}" },
   sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}" },
   designer: { en: "Mark a district — it becomes a purple card next purple draft", ru: "Пометить квартал — станет фиолетовой картой в след. фиолетовом драфте" },
-  contractor: { en: "Name a hero. If Assassin {kw:kill}s them today → steal their purple cards", ru: "Назовите героя. Если Убийца совершит {kw:kill} → крадёте фиолетовые карты жертвы" },
+  contractor: { en: "Name a hero (not from open ban). If Assassin {kw:kill}s them → steal ALL their cards. Miss if hero is in shadow ban", ru: "Назовите героя (не из открытого бана). Если Убийца совершит {kw:kill} → все карты жертвы ваши. Промах если герой в скрытом бане" },
   night_shadow: { en: "2💰: {kw:kill} an unrevealed hero", ru: "За 2💰: {kw:kill} нераскрытого героя" },
   investor: { en: "+2💰", ru: "+2💰" },
   trainer: { en: "Random colorless ability (Assassin/Thief/Sorcerer/Architect)", ru: "Случайная бесцветная способность (Убийца/Вор/Стратег/Архитектор)" },

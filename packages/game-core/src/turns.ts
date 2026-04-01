@@ -148,7 +148,11 @@ export function takeIncome(
       gold: player.gold + 2,
       incomeTaken: true,
     };
-    return { ...state, players: newPlayers };
+    return {
+      ...state,
+      players: newPlayers,
+      log: [...state.log, { day: state.day, message: `💰 ${player.name} берёт +2 золота` }],
+    };
   }
 
   const offer = drawTwoOffer(state.deck);
@@ -157,7 +161,12 @@ export function takeIncome(
     ...player,
     incomeOffer: offer.drawn,
   };
-  return { ...state, players: newPlayers, deck: offer.newDeck };
+  return {
+    ...state,
+    players: newPlayers,
+    deck: offer.newDeck,
+    log: [...state.log, { day: state.day, message: `🃏 ${player.name} берёт 2 карты (выбирает 1)` }],
+  };
 }
 
 /** Resolve explicit income card choice from previously offered 2 cards. */
@@ -210,7 +219,7 @@ export function pickIncomeCard(
   }
 
   newPlayers[playerIdx] = updated;
-  return { ...state, players: newPlayers, deck: newDeck };
+  return { ...state, players: newPlayers, deck: newDeck, log: [...state.log, { day: state.day, message: `🃏 ${player.name} выбрал карту` }] };
 }
 
 /**
@@ -386,7 +395,7 @@ export function buildDistrict(
     buildsRemaining: player.buildsRemaining - 1,
   };
 
-  let newState = { ...state, players: newPlayers };
+  let newState = { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `🏗️ ${player.name} построил ${card.name}` }] };
   newState = checkWinCondition(newState);
   return newState;
 }

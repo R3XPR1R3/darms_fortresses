@@ -129,6 +129,71 @@ export function startGame(roomId: string, requesterId: string): string | null {
   return null; // success
 }
 
+/** Detailed server-side action logger (console only, for debugging stuck games) */
+function logAction(room: Room, action: GameAction, source: "human" | "bot") {
+  const state = room.state;
+  if (!state) return;
+  const player = state.players.find((p) => p.id === action.playerId);
+  const name = player?.name ?? action.playerId;
+  const tag = `[${room.id} D${state.day}]`;
+  const who = source === "bot" ? `🤖${name}` : `👤${name}`;
+
+  switch (action.type) {
+    case "draft_pick":
+      console.log(`${tag} ${who} picks hero: ${action.heroId}`);
+      break;
+    case "companion_pick":
+      console.log(`${tag} ${who} picks companion: ${action.companionId}`);
+      break;
+    case "purple_card_pick": {
+      const offers = state.purpleDraft?.offers[state.players.indexOf(player!)];
+      const cardName = offers && action.cardIndex >= 0 ? offers[action.cardIndex]?.name : "SKIP";
+      console.log(`${tag} ${who} purple pick: ${cardName} (idx ${action.cardIndex})`);
+      break;
+    }
+    case "income":
+      console.log(`${tag} ${who} income: ${action.choice}`);
+      break;
+    case "income_pick": {
+      const offer = player?.incomeOffer;
+      const picked = offer?.find((c) => c.id === action.cardId);
+      const returned = offer?.find((c) => c.id !== action.cardId);
+      console.log(`${tag} ${who} picks card [${picked?.name ?? "?"}], returns [${returned?.name ?? "?"}] to deck`);
+      break;
+    }
+    case "build": {
+      const card = player?.hand.find((c) => c.id === action.cardId);
+      console.log(`${tag} ${who} builds: ${card?.name ?? "?"} (cost ${card?.cost ?? "?"})`);
+      break;
+    }
+    case "ability": {
+      const ab = action.ability;
+      if (ab.hero === "assassin") console.log(`${tag} ${who} ASSASSINATE → ${ab.targetHeroId}`);
+      else if (ab.hero === "thief") console.log(`${tag} ${who} ROB → ${ab.targetHeroId}`);
+      else if (ab.hero === "sorcerer" && ab.mode === "draw") console.log(`${tag} ${who} sorcerer: discard 2, draw 3`);
+      else if (ab.hero === "sorcerer" && ab.mode === "swap") console.log(`${tag} ${who} sorcerer: swap hands → ${ab.targetPlayerId}`);
+      else if (ab.hero === "general") console.log(`${tag} ${who} DESTROY → card ${ab.cardId} of ${ab.targetPlayerId}`);
+      else console.log(`${tag} ${who} ability: ${ab.hero}`);
+      break;
+    }
+    case "use_companion": {
+      const comp = player?.companion;
+      console.log(`${tag} ${who} uses companion ${comp}${action.targetPlayerId ? ` → player ${action.targetPlayerId}` : ""}${action.targetCardId ? ` → card ${action.targetCardId}` : ""}${action.targetHeroId ? ` → hero ${action.targetHeroId}` : ""}`);
+      break;
+    }
+    case "activate_building": {
+      const building = player?.builtDistricts.find((d) => d.id === action.cardId);
+      console.log(`${tag} ${who} activates building: ${building?.name ?? action.cardId}`);
+      break;
+    }
+    case "end_turn":
+      console.log(`${tag} ${who} END TURN`);
+      break;
+    default:
+      console.log(`${tag} ${who} action: ${(action as GameAction).type}`);
+  }
+}
+
 export function handleAction(roomId: string, playerId: string, action: GameAction): string | null {
   const room = rooms.get(roomId);
   if (!room || !room.state) return "Игра не найдена";
@@ -138,8 +203,14 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
     return "Нельзя делать ход за другого игрока";
   }
 
+  const isBot = room.players.find((p) => p.id === playerId)?.isBot ?? false;
+  logAction(room, action, isBot ? "bot" : "human");
+
   const next = processAction(room.state, action);
-  if (!next) return "Недопустимое действие";
+  if (!next) {
+    console.log(`[${room.id}] ❌ Action REJECTED: ${action.type} by ${playerId}`);
+    return "Недопустимое действие";
+  }
   room.state = next;
 
   // If draft ended and no draft state, start new draft
@@ -155,15 +226,17 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
     saveMatchSummary(summary).catch((err) => console.error("[match-log] Error:", err));
   }
 
-  // Schedule async bot actions after human action
-  scheduleBotStep(room);
+  // Schedule bot actions only after human action (avoid recursive scheduling)
+  if (!isBot) {
+    scheduleBotStep(room);
+  }
 
   return null; // success
 }
 
 /**
  * Schedule a single bot action step with appropriate delay.
- * After executing, broadcasts state and schedules the next step.
+ * Bot actions go through the same handleAction() path as human players.
  */
 function scheduleBotStep(room: Room) {
   // Clear any existing timer
@@ -184,28 +257,25 @@ function scheduleBotStep(room: Room) {
   const botInfo = getBotTurn(room);
   if (!botInfo) return; // Human's turn — stop scheduling
 
-  // Determine delay: draft = 1.2s, end_turn = 5s, other actions = 1s
   const action = botAction(room.state, botInfo.botId);
   if (!action) {
-    // Bot has no action — try fallback based on phase
+    const botName = room.state.players.find((p) => p.id === botInfo.botId)?.name ?? botInfo.botId;
+    console.log(`[${room.id}] ⚠️ Bot ${botName} returned NULL action (phase=${room.state.phase}, draftPhase=${room.state.draft?.draftPhase ?? "none"})`);
+    // Fallback actions — also go through handleAction
+    const fallbacks: GameAction[] = [];
     if (room.state.phase === "draft" && room.state.draft?.draftPhase === "companion") {
-      // Stuck on companion pick — try Investor fallback
-      const fallback = processAction(room.state, {
-        type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor,
-      });
-      if (fallback) {
-        room.state = fallback;
-        if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
-        room.broadcastState?.();
-      }
+      fallbacks.push(
+        { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor },
+        { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Trainer },
+      );
     } else if (room.state.phase === "turns") {
-      const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
-      if (fallback) {
-        room.state = fallback;
-        if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
-        room.broadcastState?.();
-      }
+      fallbacks.push({ type: "end_turn", playerId: botInfo.botId });
     }
+    for (const fb of fallbacks) {
+      const err = handleAction(room.id, botInfo.botId, fb);
+      if (!err) break;
+    }
+    room.broadcastState?.();
     scheduleBotStep(room);
     return;
   }
@@ -216,56 +286,28 @@ function scheduleBotStep(room: Room) {
     room.botTimer = null;
     if (!room.state || room.state.phase === "end") return;
 
-    const next = processAction(room.state, action);
-    if (!next) {
-      // Action failed — try fallback to unstick the bot
+    const err = handleAction(room.id, botInfo.botId, action);
+    if (err) {
+      console.log(`[${room.id}] ❌ Bot action REJECTED: ${action.type} — ${err}`);
+      // Fallback attempts — same handleAction path
+      const fallbacks: GameAction[] = [];
       if (action.type === "purple_card_pick") {
-        // Purple draft failed — try picking a random card (0), or decline (-1)
-        const randomPick = processAction(room.state, { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: 0 });
-        if (randomPick) {
-          room.state = randomPick;
-          room.broadcastState?.();
-        } else {
-          const decline = processAction(room.state, { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: -1 });
-          if (decline) {
-            room.state = decline;
-            room.broadcastState?.();
-          }
-        }
+        fallbacks.push(
+          { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: 0 },
+          { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: -1 },
+        );
       } else if (action.type === "companion_pick") {
-        // Companion pick failed — try Investor fallback
-        const fallback = processAction(room.state, {
-          type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor,
-        });
-        if (fallback) {
-          room.state = fallback;
-          if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
-          room.broadcastState?.();
-        }
+        fallbacks.push(
+          { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor },
+          { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Trainer },
+        );
       } else if (action.type !== "end_turn") {
-        const fallback = processAction(room.state, { type: "end_turn", playerId: botInfo.botId });
-        if (fallback) {
-          room.state = fallback;
-          if (room.state.phase === "draft" && !room.state.draft) room.state = startDraft(room.state);
-          room.broadcastState?.();
-        }
+        fallbacks.push({ type: "end_turn", playerId: botInfo.botId });
       }
-      scheduleBotStep(room);
-      return;
-    }
-    room.state = next;
-
-    // Start new draft if day transition happened
-    if (room.state.phase === "draft" && !room.state.draft) {
-      room.state = startDraft(room.state);
-    }
-
-    // Log match if game ended
-    if (room.state.phase === "end" && !room.matchLogged) {
-      room.matchLogged = true;
-      const botIds = new Set(room.players.filter((p) => p.isBot).map((p) => p.id));
-      const summary = generateMatchSummary(room.state, room.id, room.startedAt ?? new Date(), botIds);
-      saveMatchSummary(summary).catch((err) => console.error("[match-log] Error:", err));
+      for (const fb of fallbacks) {
+        const fbErr = handleAction(room.id, botInfo.botId, fb);
+        if (!fbErr) break;
+      }
     }
 
     // Broadcast updated state
