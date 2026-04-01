@@ -1,63 +1,34 @@
 import type { DistrictCard, CardColor } from "@darms/shared-types";
+import { ALL_DISTRICTS, ALL_PURPLE_BASIC, ALL_SPELLS } from "@darms/shared-types";
+import type { DistrictDef, PurpleBasicDef, SpellDef } from "@darms/shared-types";
 
+/** Unified template used for deck generation */
 interface CardTemplate {
   name: string;
   cost: number;
   colors: CardColor[];
   count: number;
-  spellAbility?: "ignite" | "gold_rain" | "holy_day" | "flood" | "plague";
+  spellAbility?: string;
 }
 
-const TEMPLATES: CardTemplate[] = [
-  // Yellow — nobility (10 cards)
-  { name: "Сторожевая башня", cost: 1, colors: ["yellow"], count: 3 },
-  { name: "Тронный зал", cost: 3, colors: ["yellow"], count: 2 },
-  { name: "Дворец", cost: 5, colors: ["yellow"], count: 1 },
-  { name: "Казармы стражи", cost: 2, colors: ["yellow"], count: 2 },
-  { name: "Королевский сад", cost: 4, colors: ["yellow"], count: 2 },
+/** Build TEMPLATES from the card registry (single source of truth) */
+function buildTemplates(): CardTemplate[] {
+  const templates: CardTemplate[] = [];
 
-  // Blue — clergy (10 cards)
-  { name: "Храм", cost: 1, colors: ["blue"], count: 3 },
-  { name: "Часовня", cost: 2, colors: ["blue"], count: 2 },
-  { name: "Монастырь", cost: 3, colors: ["blue"], count: 2 },
-  { name: "Собор", cost: 5, colors: ["blue"], count: 1 },
-  { name: "Святилище", cost: 4, colors: ["blue"], count: 2 },
+  for (const d of ALL_DISTRICTS as readonly DistrictDef[]) {
+    templates.push({ name: d.name.ru, cost: d.cost, colors: d.colors, count: d.count });
+  }
+  for (const p of ALL_PURPLE_BASIC as readonly PurpleBasicDef[]) {
+    templates.push({ name: p.name.ru, cost: p.cost, colors: p.colors, count: p.count });
+  }
+  for (const s of ALL_SPELLS as readonly SpellDef[]) {
+    templates.push({ name: s.name.ru, cost: s.cost, colors: ["purple"], count: s.count, spellAbility: s.ability });
+  }
 
-  // Green — trade (10 cards)
-  { name: "Таверна", cost: 1, colors: ["green"], count: 3 },
-  { name: "Рынок", cost: 2, colors: ["green"], count: 2 },
-  { name: "Торговый пост", cost: 3, colors: ["green"], count: 2 },
-  { name: "Порт", cost: 4, colors: ["green"], count: 2 },
-  { name: "Ратуша", cost: 5, colors: ["green"], count: 1 },
+  return templates;
+}
 
-  // Red — military (10 cards)
-  { name: "Застава", cost: 1, colors: ["red"], count: 3 },
-  { name: "Тюрьма", cost: 2, colors: ["red"], count: 2 },
-  { name: "Крепость", cost: 3, colors: ["red"], count: 2 },
-  { name: "Арсенал", cost: 4, colors: ["red"], count: 2 },
-  { name: "Цитадель", cost: 5, colors: ["red"], count: 1 },
-
-  // Multi-color cards
-  { name: "Торговая палата", cost: 3, colors: ["blue", "green"], count: 2 },
-  { name: "Военный совет", cost: 3, colors: ["yellow", "red"], count: 2 },
-
-  // Purple — special (unique cards, not dealt in starting hand)
-  { name: "Обсерватория", cost: 5, colors: ["purple"], count: 1 },
-  { name: "Лаборатория", cost: 5, colors: ["purple"], count: 1 },
-  { name: "Кузница", cost: 5, colors: ["purple"], count: 1 },
-  { name: "Библиотека", cost: 6, colors: ["purple"], count: 1 },
-
-  // Multi-color with purple (noble-specific abilities in future)
-  { name: "Королевская библиотека", cost: 4, colors: ["yellow", "purple"], count: 1 },
-  { name: "Священная роща", cost: 4, colors: ["blue", "purple"], count: 1 },
-
-  // Spells
-  { name: "Поджигание", cost: 1, colors: ["purple"], count: 2, spellAbility: "ignite" },
-  { name: "Золотой дождь", cost: 0, colors: ["purple"], count: 2, spellAbility: "gold_rain" },
-  { name: "Священный день", cost: 1, colors: ["purple"], count: 2, spellAbility: "holy_day" },
-  { name: "Потоп", cost: 0, colors: ["purple"], count: 2, spellAbility: "flood" },
-  { name: "Чума", cost: 2, colors: ["purple"], count: 2, spellAbility: "plague" },
-];
+const TEMPLATES = buildTemplates();
 
 let _nextId = 0;
 
@@ -72,9 +43,9 @@ export function createBaseDeck(): DistrictCard[] {
         cost: t.cost,
         originalCost: t.cost,
         hp: t.cost,
-        colors: t.colors,
-        baseColors: t.colors,
-        spellAbility: t.spellAbility,
+        colors: t.colors as CardColor[],
+        baseColors: t.colors as CardColor[],
+        spellAbility: t.spellAbility as DistrictCard["spellAbility"],
       });
     }
   }
@@ -121,7 +92,7 @@ export function generateRandomCard(cost: number, rng: { int: (a: number, b: numb
 
 /** Add a random second color to a card (for Druid) */
 export function addRandomColor(card: DistrictCard, rng: { int: (a: number, b: number) => number }): DistrictCard {
-  if (card.colors.length >= 2) return card; // already multi-color
+  if (card.colors.length >= 2) return card;
   const available = BASE_COLORS.filter((c) => !card.colors.includes(c));
   if (available.length === 0) return card;
   const extra = available[rng.int(0, available.length - 1)];
@@ -136,7 +107,6 @@ export function generateDifferentColorCard(
 ): DistrictCard {
   const available = BASE_COLORS.filter((c) => !excludeColors.includes(c));
   if (available.length === 0) {
-    // Fallback: use any color
     return generateRandomCard(cost, rng);
   }
   const color = available[rng.int(0, available.length - 1)];
