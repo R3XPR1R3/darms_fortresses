@@ -682,8 +682,9 @@ function activateBuilding(
       return { ...addLog({ ...state, players: newPlayers, discardPile }, msg), rng: rng.getSeed() };
     }
     case "cult": {
-      // Can be used only by Cleric. Replaces a random district of a random opponent with cult.
+      // Can be used only by Cleric. Once per turn.
       if (player.hero !== HeroId.Cleric) return null;
+      if (player.activatedBuildings?.includes(card.id)) return null;
       const opponents = state.players
         .map((p, i) => ({ p, i }))
         .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0);
@@ -698,6 +699,10 @@ function activateBuilding(
         id: `cult-copy-${Date.now()}-${rng.int(0, 9999)}`,
       };
       newPlayers[opp.i] = { ...target, builtDistricts: newOppDistricts };
+      newPlayers[playerIdx] = {
+        ...newPlayers[playerIdx] ?? player,
+        activatedBuildings: [...(player.activatedBuildings ?? []), card.id],
+      };
       return {
         ...addLog(
           { ...state, players: newPlayers },

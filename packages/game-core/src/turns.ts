@@ -49,6 +49,7 @@ export function buildTurnOrder(state: GameState, rng: Rng): GameState {
     abilityUsed: false,
     companionUsed: false,
     contractorTargetHeroId: null,
+    activatedBuildings: [],
   }));
 
   let log = state.log;

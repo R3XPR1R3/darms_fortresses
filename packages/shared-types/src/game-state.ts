@@ -107,6 +107,8 @@ export interface PlayerState {
   designerMarkedCardId: string | null;
   /** Contractor: contracted hero target for assassin kill reward */
   contractorTargetHeroId?: HeroId | null;
+  /** Building IDs activated this turn (limits once-per-turn buildings like Cult) */
+  activatedBuildings?: string[];
 }
 
 /** State tracking the hero draft within a day */
