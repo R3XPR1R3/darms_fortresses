@@ -76,6 +76,80 @@ interface LobbyPlayer {
   isHost: boolean;
 }
 
+// ---- Auth state ----
+interface AuthUser {
+  id: number;
+  nickname: string;
+  email: string | null;
+  avatarUrl: string | null;
+}
+
+let authToken: string | null = localStorage.getItem("darms_token");
+let authUser: AuthUser | null = null;
+let googleClientId = "";
+
+async function fetchAuthConfig() {
+  try {
+    const res = await fetch("/auth/config");
+    const data = await res.json();
+    googleClientId = data.googleClientId ?? "";
+  } catch { /* auth not available */ }
+}
+
+async function handleGoogleCredential(response: { credential: string }) {
+  try {
+    const res = await fetch("/auth/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken: response.credential }),
+    });
+    if (!res.ok) throw new Error("Auth failed");
+    const data = await res.json();
+    authToken = data.token;
+    authUser = data.user;
+    localStorage.setItem("darms_token", data.token);
+    renderMenu();
+  } catch (e) {
+    console.error("Google login error:", e);
+  }
+}
+
+async function loadAuthUser() {
+  if (!authToken) return;
+  try {
+    const res = await fetch("/auth/me", {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) { authToken = null; localStorage.removeItem("darms_token"); return; }
+    authUser = await res.json();
+  } catch { /* server not available */ }
+}
+
+function logout() {
+  authToken = null;
+  authUser = null;
+  localStorage.removeItem("darms_token");
+  renderMenu();
+}
+
+async function changeNickname() {
+  if (!authToken || !authUser) return;
+  const newNick = prompt("Новый никнейм:", authUser.nickname);
+  if (!newNick || newNick.trim().length === 0) return;
+  try {
+    await fetch("/auth/nickname", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ nickname: newNick.trim() }),
+    });
+    authUser.nickname = newNick.trim();
+    renderMenu();
+  } catch { /* ignore */ }
+}
+
+// Expose callback for Google GSI
+(window as any).handleGoogleCredential = handleGoogleCredential;
+
 // ---- Game mode ----
 type GameMode = "menu" | "local" | "lobby" | "online";
 
@@ -624,12 +698,33 @@ function renderMenu() {
   stopDraftTimer();
 
   const app = document.getElementById("app")!;
+
+  // Auth section
+  let authHtml = "";
+  if (authUser) {
+    const avatar = authUser.avatarUrl
+      ? `<img class="auth-avatar" src="${authUser.avatarUrl}" alt="" referrerpolicy="no-referrer"/>`
+      : "";
+    authHtml = `
+      <div class="auth-bar">
+        ${avatar}
+        <span class="auth-nickname" id="auth-nickname" title="Сменить никнейм">${authUser.nickname}</span>
+        <button class="auth-logout" id="auth-logout">выйти</button>
+      </div>
+    `;
+  } else if (googleClientId) {
+    authHtml = `<div id="google-signin-btn"></div>`;
+  }
+
+  const defaultName = authUser?.nickname ?? t("menu.default_name");
+
   app.innerHTML = `
     <h1>⚔ Darms: Fortresses</h1>
     <div class="menu-screen">
+      ${authHtml}
       <div class="menu-title">${t("menu.subtitle")}</div>
       <button class="btn btn-secondary btn-small" id="btn-lang">${t("lang.toggle")}</button>
-      <input type="text" id="player-name" placeholder="${t("menu.name_placeholder")}" value="${t("menu.default_name")}" class="menu-input" maxlength="20"/>
+      <input type="text" id="player-name" placeholder="${t("menu.name_placeholder")}" value="${defaultName}" class="menu-input" maxlength="20"/>
       <button class="btn btn-primary btn-large" id="btn-local">🎮 ${t("menu.local")}</button>
       <button class="btn btn-secondary btn-large" id="btn-card-pool">📚 ${t("menu.card_pool")}</button>
       <div class="menu-divider">${t("menu.online_divider")}</div>
@@ -637,6 +732,28 @@ function renderMenu() {
       <button class="btn btn-secondary btn-large" id="btn-join">🔗 ${t("menu.join_room")}</button>
     </div>
   `;
+
+  // Render Google Sign-In button
+  if (!authUser && googleClientId && (window as any).google?.accounts?.id) {
+    const g = (window as any).google.accounts.id;
+    g.initialize({
+      client_id: googleClientId,
+      callback: handleGoogleCredential,
+    });
+    const btnContainer = document.getElementById("google-signin-btn");
+    if (btnContainer) {
+      g.renderButton(btnContainer, {
+        theme: "filled_black",
+        size: "medium",
+        shape: "pill",
+        text: "signin_with",
+      });
+    }
+  }
+
+  // Auth event listeners
+  document.getElementById("auth-nickname")?.addEventListener("click", changeNickname);
+  document.getElementById("auth-logout")?.addEventListener("click", logout);
 
   document.getElementById("btn-lang")!.addEventListener("click", () => {
     const next = getLang() === "en" ? "ru" : getLang() === "ru" ? "id" : "en";
@@ -2128,5 +2245,9 @@ function renderWinner() {
   }
 }
 
-// Start!
-showMenu();
+// Start! Load auth config, then show menu.
+(async () => {
+  await fetchAuthConfig();
+  await loadAuthUser();
+  showMenu();
+})();

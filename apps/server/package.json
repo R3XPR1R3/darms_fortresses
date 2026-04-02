@@ -13,9 +13,14 @@
   "dependencies": {
     "@darms/game-core": "workspace:*",
     "@darms/shared-types": "workspace:*",
+    "google-auth-library": "^10.6.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.20.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.20.0",
     "@types/ws": "^8.5.13",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
