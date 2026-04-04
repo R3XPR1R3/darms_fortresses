@@ -298,11 +298,12 @@ export function buildDistrict(
     return null;
   }
 
-  // Duplicate check — Official (red hero) allows duplicates
+  // Duplicate check — Official (red hero) allows duplicates; altar_darkness always allows duplicates
   const allowDuplicates =
-    player.companion === CompanionId.Official
-    && !player.companionDisabled
-    && heroColor === "red";
+    card.purpleAbility === "altar_darkness"
+    || (player.companion === CompanionId.Official
+      && !player.companionDisabled
+      && heroColor === "red");
 
   if (!allowDuplicates && player.builtDistricts.some((d) => d.name === card.name)) return null;
 

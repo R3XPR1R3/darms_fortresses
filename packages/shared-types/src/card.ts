@@ -31,8 +31,5 @@ export type PurpleAbility =
   | "crypt"        // 4g, purple. On destroy: 2 random purple cards. Self-destroy for 2g
   | "tnt_storage"  // 2g, purple-red. Self-destroy for 2g, destroys 2 random districts per player
   | "mine"         // 3g, purple-green. +1g end of day (merchant: end of turn)
-  | "cult"         // 2g, purple-blue. Blue hero can activate: replaces random district of random player
-  | "altar_power"
-  | "altar_health"
-  | "altar_intellect"
-  | "altar_stamina";
+  | "cult"            // 2g, purple-blue. Blue hero can activate: replaces random district of random player
+  | "altar_darkness"; // 2g, purple. Build 4 for alt-win. Duplicates allowed

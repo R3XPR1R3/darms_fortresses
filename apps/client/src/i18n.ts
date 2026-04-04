@@ -36,7 +36,7 @@ export const KEYWORDS: KeywordDef[] = [
   { id: "passive", name: { en: "Passive", ru: "Пассивно" }, description: { en: "Effect triggers automatically — no action needed.", ru: "Эффект срабатывает автоматически — действие не нужно." }, color: "#bdc3c7" },
   { id: "activate", name: { en: "Activate", ru: "Активация" }, description: { en: "Click on the building on your board to trigger its effect.", ru: "Кликните на постройку на вашем поле для активации эффекта." }, color: "#e67e22" },
   { id: "spell", name: { en: "Spell", ru: "Заклинание" }, description: { en: "One-time card played from hand. Does not stay on the board.", ru: "Одноразовая карта, разыгрывается из руки. Не остаётся на столе." }, color: "#8e44ad" },
-  { id: "altar", name: { en: "Altar", ru: "Алтарь" }, description: { en: "Alternative win condition: build 3 different altars to win instantly.", ru: "Альтернативная победа: постройте 3 разных алтаря и победите." }, color: "#d4ac0d" },
+  { id: "altar", name: { en: "Altar", ru: "Алтарь" }, description: { en: "Alternative win condition: build 4 Altars of Darkness to win.", ru: "Альтернативная победа: постройте 4 алтаря тьмы и победите." }, color: "#d4ac0d" },
 ];
 
 /** Get keyword name in current language */
@@ -464,7 +464,7 @@ export function getGuideHtml(): string {
 const GUIDE_RU = `
 <div class="guide-section">
   <h4>Цель игры</h4>
-  <p>Постройте <b>8 кварталов</b> раньше всех (или <b>3 разных алтаря</b>). Игра длится до 12 дней. Побеждает игрок с наибольшим количеством очков.</p>
+  <p>Постройте <b>8 кварталов</b> раньше всех (или <b>4 алтаря тьмы</b>). Игра длится до 12 дней. Побеждает игрок с наибольшим количеством очков.</p>
 </div>
 <div class="guide-section">
   <h4>Структура дня</h4>
@@ -512,7 +512,7 @@ const GUIDE_RU = `
 const GUIDE_EN = `
 <div class="guide-section">
   <h4>Goal</h4>
-  <p>Build <b>8 districts</b> before anyone else (or <b>3 different altars</b>). The game lasts up to 12 days. The player with the most points wins.</p>
+  <p>Build <b>8 districts</b> before anyone else (or <b>4 Altars of Darkness</b>). The game lasts up to 12 days. The player with the most points wins.</p>
 </div>
 <div class="guide-section">
   <h4>Day Structure</h4>

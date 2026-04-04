@@ -51,10 +51,7 @@ export { crypt } from "./purple/crypt/index.js";
 export { tntStorage } from "./purple/tnt_storage/index.js";
 export { mine } from "./purple/mine/index.js";
 export { cult } from "./purple/cult/index.js";
-export { altarPower } from "./purple/altar_power/index.js";
-export { altarHealth } from "./purple/altar_health/index.js";
-export { altarIntellect } from "./purple/altar_intellect/index.js";
-export { altarStamina } from "./purple/altar_stamina/index.js";
+export { altarDarkness } from "./purple/altar_darkness/index.js";
 
 // ---- Spells ----
 export { ignite } from "./spells/ignite/index.js";
@@ -103,10 +100,7 @@ import { crypt } from "./purple/crypt/index.js";
 import { tntStorage } from "./purple/tnt_storage/index.js";
 import { mine } from "./purple/mine/index.js";
 import { cult } from "./purple/cult/index.js";
-import { altarPower } from "./purple/altar_power/index.js";
-import { altarHealth } from "./purple/altar_health/index.js";
-import { altarIntellect } from "./purple/altar_intellect/index.js";
-import { altarStamina } from "./purple/altar_stamina/index.js";
+import { altarDarkness } from "./purple/altar_darkness/index.js";
 import { ignite } from "./spells/ignite/index.js";
 import { goldRain } from "./spells/gold_rain/index.js";
 import { holyDay } from "./spells/holy_day/index.js";
@@ -130,8 +124,7 @@ export const ALL_PURPLE_BASIC: readonly PurpleBasicDef[] = [
 
 export const ALL_PURPLE_SPECIAL: readonly PurpleSpecialDef[] = [
   cannon, fort, stronghold, monument, highway, cityGates,
-  crypt, tntStorage, mine, cult,
-  altarPower, altarHealth, altarIntellect, altarStamina,
+  crypt, tntStorage, mine, cult, altarDarkness,
 ];
 
 export const ALL_SPELLS: readonly SpellDef[] = [
