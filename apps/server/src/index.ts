@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
 import {
@@ -13,24 +13,131 @@ import {
   getLobbyPlayers,
   createPlayerView,
 } from "./room.js";
+import { initDb } from "./db.js";
+import { loginWithGoogle, verifyToken } from "./auth.js";
+import { updateNickname, updateSettings } from "./db.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
 
-const httpServer = createServer((_req, res) => {
-  res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-  res.end(JSON.stringify({ status: "ok", service: "darms-server" }));
+// ---- HTTP helpers ----
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
+}
+
+function json(res: ServerResponse, status: number, data: unknown) {
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+  });
+  res.end(JSON.stringify(data));
+}
+
+// ---- HTTP Router ----
+async function handleHttp(req: IncomingMessage, res: ServerResponse) {
+  const url = req.url ?? "/";
+  const method = req.method ?? "GET";
+
+  // CORS preflight
+  if (method === "OPTIONS") {
+    json(res, 204, null);
+    return;
+  }
+
+  // Health check
+  if (url === "/" || url === "/health") {
+    json(res, 200, { status: "ok", service: "darms-server" });
+    return;
+  }
+
+  // Google OAuth login
+  if (url === "/auth/google" && method === "POST") {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const idToken = body.idToken;
+      if (!idToken) { json(res, 400, { error: "Missing idToken" }); return; }
+      const result = await loginWithGoogle(idToken);
+      json(res, 200, result);
+    } catch (e: any) {
+      console.error("[auth] Google login error:", e.message);
+      json(res, 401, { error: "Authentication failed" });
+    }
+    return;
+  }
+
+  // Get current user profile
+  if (url === "/auth/me" && method === "GET") {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) { json(res, 401, { error: "No token" }); return; }
+    const user = await verifyToken(token);
+    if (!user) { json(res, 401, { error: "Invalid token" }); return; }
+    json(res, 200, {
+      id: user.id,
+      nickname: user.nickname,
+      email: user.email,
+      avatarUrl: user.avatar_url,
+      settings: user.settings,
+    });
+    return;
+  }
+
+  // Update nickname
+  if (url === "/auth/nickname" && method === "PUT") {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) { json(res, 401, { error: "No token" }); return; }
+    const user = await verifyToken(token);
+    if (!user) { json(res, 401, { error: "Invalid token" }); return; }
+    const body = JSON.parse(await readBody(req));
+    const nickname = String(body.nickname ?? "").trim().slice(0, 30);
+    if (!nickname) { json(res, 400, { error: "Nickname required" }); return; }
+    await updateNickname(user.id, nickname);
+    json(res, 200, { nickname });
+    return;
+  }
+
+  // Update settings
+  if (url === "/auth/settings" && method === "PUT") {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) { json(res, 401, { error: "No token" }); return; }
+    const user = await verifyToken(token);
+    if (!user) { json(res, 401, { error: "Invalid token" }); return; }
+    const body = JSON.parse(await readBody(req));
+    await updateSettings(user.id, body.settings ?? {});
+    json(res, 200, { ok: true });
+    return;
+  }
+
+  // Google Client ID (public — needed by client GSI)
+  if (url === "/auth/config") {
+    json(res, 200, { googleClientId: GOOGLE_CLIENT_ID });
+    return;
+  }
+
+  json(res, 404, { error: "Not found" });
+}
+
+const httpServer = createServer((req, res) => {
+  handleHttp(req, res).catch((e) => {
+    console.error("[http] Unhandled error:", e);
+    json(res, 500, { error: "Internal error" });
+  });
 });
 
-const MAX_MESSAGE_SIZE = 16 * 1024; // 16 KB
-const RATE_LIMIT_WINDOW = 1000; // 1 second
-const RATE_LIMIT_MAX = 15; // max 15 messages per second
+// ---- WebSocket ----
+const MAX_MESSAGE_SIZE = 16 * 1024;
+const RATE_LIMIT_WINDOW = 1000;
+const RATE_LIMIT_MAX = 15;
 
 const wss = new WebSocketServer({ server: httpServer, maxPayload: MAX_MESSAGE_SIZE });
 
-// Track which room/player each socket belongs to
 const socketMeta = new WeakMap<WebSocket, { roomId: string; playerId: string }>();
-
-// Rate-limiter state per socket
 const rateLimiter = new WeakMap<WebSocket, number[]>();
 
 function send(ws: WebSocket, msg: ServerMessage) {
@@ -59,7 +166,6 @@ function broadcastState(roomId: string) {
   }
 }
 
-/** Set the broadcastState callback on the room so async bot steps can broadcast */
 function ensureBroadcast(roomId: string) {
   const room = getRoom(roomId);
   if (room && !room.broadcastState) {
@@ -69,11 +175,9 @@ function ensureBroadcast(roomId: string) {
 
 wss.on("connection", (ws) => {
   ws.on("message", (raw) => {
-    // Rate limiting
     const now = Date.now();
     let timestamps = rateLimiter.get(ws);
     if (!timestamps) { timestamps = []; rateLimiter.set(ws, timestamps); }
-    // Prune old timestamps
     while (timestamps.length > 0 && now - timestamps[0] > RATE_LIMIT_WINDOW) timestamps.shift();
     if (timestamps.length >= RATE_LIMIT_MAX) {
       send(ws, { type: "error", message: "Too many requests" });
@@ -181,6 +285,17 @@ wss.on("connection", (ws) => {
   });
 });
 
-httpServer.listen(PORT, "0.0.0.0", () => {
-  console.log(`[darms-server] listening on :${PORT}`);
-});
+// ---- Startup ----
+async function main() {
+  try {
+    await initDb();
+  } catch (e) {
+    console.warn("[db] PostgreSQL not available — auth disabled. Error:", (e as Error).message);
+  }
+
+  httpServer.listen(PORT, "0.0.0.0", () => {
+    console.log(`[darms-server] listening on :${PORT}`);
+  });
+}
+
+main();

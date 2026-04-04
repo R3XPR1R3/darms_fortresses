@@ -1,5 +1,7 @@
 // ---- Internationalization module ----
 
+import { findCardByName, findPurpleByAbility, findSpellByAbility } from "@darms/shared-types";
+
 export type Lang = "en" | "ru" | "id";
 
 const LANGS: Lang[] = ["en", "ru", "id"];
@@ -34,7 +36,7 @@ export const KEYWORDS: KeywordDef[] = [
   { id: "passive", name: { en: "Passive", ru: "Пассивно" }, description: { en: "Effect triggers automatically — no action needed.", ru: "Эффект срабатывает автоматически — действие не нужно." }, color: "#bdc3c7" },
   { id: "activate", name: { en: "Activate", ru: "Активация" }, description: { en: "Click on the building on your board to trigger its effect.", ru: "Кликните на постройку на вашем поле для активации эффекта." }, color: "#e67e22" },
   { id: "spell", name: { en: "Spell", ru: "Заклинание" }, description: { en: "One-time card played from hand. Does not stay on the board.", ru: "Одноразовая карта, разыгрывается из руки. Не остаётся на столе." }, color: "#8e44ad" },
-  { id: "altar", name: { en: "Altar", ru: "Алтарь" }, description: { en: "Alternative win condition: build 3 different altars to win instantly.", ru: "Альтернативная победа: постройте 3 разных алтаря и победите." }, color: "#d4ac0d" },
+  { id: "altar", name: { en: "Altar", ru: "Алтарь" }, description: { en: "Alternative win condition: build 4 Altars of Darkness to win.", ru: "Альтернативная победа: постройте 4 алтаря тьмы и победите." }, color: "#d4ac0d" },
 ];
 
 /** Get keyword name in current language */
@@ -271,69 +273,12 @@ export function tHero(heroId: string): string {
 }
 
 // ---- District name translations ----
-const DISTRICT_NAMES: Record<string, TranslationEntry> = {
-  // Yellow
-  "Сторожевая башня": { en: "Watchtower", ru: "Сторожевая башня" },
-  "Тронный зал":      { en: "Throne Room", ru: "Тронный зал" },
-  "Дворец":           { en: "Palace", ru: "Дворец" },
-  "Казармы стражи":   { en: "Guard Barracks", ru: "Казармы стражи" },
-  "Королевский сад":  { en: "Royal Garden", ru: "Королевский сад" },
-  // Blue
-  "Храм":       { en: "Temple", ru: "Храм" },
-  "Часовня":    { en: "Chapel", ru: "Часовня" },
-  "Монастырь":  { en: "Monastery", ru: "Монастырь" },
-  "Собор":      { en: "Cathedral", ru: "Собор" },
-  "Святилище":  { en: "Sanctuary", ru: "Святилище" },
-  // Green
-  "Таверна":       { en: "Tavern", ru: "Таверна" },
-  "Рынок":         { en: "Market", ru: "Рынок" },
-  "Торговый пост": { en: "Trading Post", ru: "Торговый пост" },
-  "Порт":          { en: "Harbor", ru: "Порт" },
-  "Ратуша":        { en: "Town Hall", ru: "Ратуша" },
-  // Red
-  "Застава":  { en: "Outpost", ru: "Застава" },
-  "Тюрьма":   { en: "Prison", ru: "Тюрьма" },
-  "Крепость": { en: "Fortress", ru: "Крепость" },
-  "Арсенал":  { en: "Arsenal", ru: "Арсенал" },
-  "Цитадель": { en: "Citadel", ru: "Цитадель" },
-  // Multi-color
-  "Торговая палата": { en: "Trade Chamber", ru: "Торговая палата" },
-  "Военный совет":   { en: "War Council", ru: "Военный совет" },
-  // Purple (basic)
-  "Обсерватория": { en: "Observatory", ru: "Обсерватория" },
-  "Лаборатория":  { en: "Laboratory", ru: "Лаборатория" },
-  "Кузница":      { en: "Smithy", ru: "Кузница" },
-  "Библиотека":   { en: "Library", ru: "Библиотека" },
-  "Королевская библиотека": { en: "Royal Library", ru: "Королевская библиотека" },
-  "Священная роща":         { en: "Sacred Grove", ru: "Священная роща" },
-  // Purple (special)
-  "Пушка":                { en: "Cannon", ru: "Пушка" },
-  "Оборонительный форт":  { en: "Defensive Fort", ru: "Оборонительный форт" },
-  "Укрепрайон":           { en: "Stronghold", ru: "Укрепрайон" },
-  "Памятник":             { en: "Monument", ru: "Памятник" },
-  "Магистраль":           { en: "Highway", ru: "Магистраль" },
-  "Врата в город":        { en: "City Gates", ru: "Врата в город" },
-  "Склеп":                { en: "Crypt", ru: "Склеп" },
-  "Склад тротила":        { en: "TNT Storage", ru: "Склад тротила" },
-  "Шахта":                { en: "Mine", ru: "Шахта" },
-  "Секта":                { en: "Cult", ru: "Секта" },
-  "Алтарь силы":          { en: "Altar of Power", ru: "Алтарь силы" },
-  "Алтарь здоровья":      { en: "Altar of Health", ru: "Алтарь здоровья" },
-  "Алтарь интеллекта":    { en: "Altar of Intellect", ru: "Алтарь интеллекта" },
-  "Алтарь выносливости":  { en: "Altar of Stamina", ru: "Алтарь выносливости" },
-  // Spells
-  "Поджигание":     { en: "Ignite", ru: "Поджигание" },
-  "Золотой дождь":  { en: "Gold Rain", ru: "Золотой дождь" },
-  "Священный день":  { en: "Holy Day", ru: "Священный день" },
-  "Потоп":          { en: "Flood", ru: "Потоп" },
-  "Чума":           { en: "Plague", ru: "Чума" },
-  "🔥 Пламя":       { en: "🔥 Flame", ru: "🔥 Пламя" },
-};
-
+/** Translate any card name (districts, purple, spells) via card registry */
 export function tDistrict(name: string): string {
-  const entry = DISTRICT_NAMES[name];
-  if (!entry) return name;
-  return entry[currentLang] ?? entry.en;
+  if (currentLang === "ru") return name; // names stored in Russian
+  const def = findCardByName(name);
+  if (!def) return name;
+  return def.name[currentLang as "en"] ?? def.name.en;
 }
 
 // ---- Bot name translations ----
@@ -488,80 +433,26 @@ export function expandKw(text: string): string {
   return text.replace(/\{kw:(\w+)\}/g, (_, id) => kwHtml(id));
 }
 
-// ---- Spell translations ----
-const SPELL_NAMES: Record<string, TranslationEntry> = {
-  "Поджигание": { en: "Ignite", ru: "Поджигание" },
-  "Золотой дождь": { en: "Gold Rain", ru: "Золотой дождь" },
-  "Священный день": { en: "Holy Day", ru: "Священный день" },
-  "Потоп": { en: "Flood", ru: "Потоп" },
-  "Чума": { en: "Plague", ru: "Чума" },
-};
-
-const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
-  ignite: { en: "{kw:spell} Replace a random card in opponent's hand with 🔥 Flame", ru: "{kw:spell} Заменяет случайную карту в руке противника на 🔥 Пламя" },
-  gold_rain: { en: "{kw:spell} All players gain +1💰", ru: "{kw:spell} Все игроки получают +1💰" },
-  holy_day: { en: "{kw:spell} All districts temporarily become 🔵 blue until end of day", ru: "{kw:spell} Все кварталы временно становятся 🔵 синими до конца дня" },
-  flood: { en: "{kw:spell} Up to 4 random districts per player return to hand", ru: "{kw:spell} До 4 случайных кварталов у каждого возвращаются в руку" },
-  plague: { en: "{kw:spell} 3-day effect: each day a random player loses gold, a random district takes damage", ru: "{kw:spell} Эффект 3 дня: каждый день случайный игрок теряет золото, случайный квартал получает урон" },
-};
-
+// ---- Spell translations (from card registry) ----
 export function tSpellName(name: string): string {
-  const entry = SPELL_NAMES[name];
-  if (!entry) return tDistrict(name);
-  return entry[currentLang] ?? entry.en;
+  return tDistrict(name);
 }
 
 export function tSpellDesc(ability: string): string {
-  const entry = SPELL_DESCRIPTIONS[ability];
-  if (!entry) return ability;
-  return entry[currentLang] ?? entry.en;
+  const def = findSpellByAbility(ability);
+  if (!def) return ability;
+  return def.description[currentLang as "en" | "ru"] ?? def.description.en;
 }
 
-// ---- Purple card translations ----
-const PURPLE_NAMES: Record<string, TranslationEntry> = {
-  "Пушка": { en: "Cannon", ru: "Пушка" },
-  "Оборонительный форт": { en: "Defensive Fort", ru: "Оборонительный форт" },
-  "Укрепрайон": { en: "Stronghold", ru: "Укрепрайон" },
-  "Памятник": { en: "Monument", ru: "Памятник" },
-  "Магистраль": { en: "Highway", ru: "Магистраль" },
-  "Врата в город": { en: "City Gates", ru: "Врата в город" },
-  "Склеп": { en: "Crypt", ru: "Склеп" },
-  "Склад тротила": { en: "TNT Storage", ru: "Склад тротила" },
-  "Шахта": { en: "Mine", ru: "Шахта" },
-  "Секта": { en: "Cult", ru: "Секта" },
-  "Алтарь силы": { en: "Altar of Power", ru: "Алтарь силы" },
-  "Алтарь здоровья": { en: "Altar of Health", ru: "Алтарь здоровья" },
-  "Алтарь интеллекта": { en: "Altar of Intellect", ru: "Алтарь интеллекта" },
-  "Алтарь выносливости": { en: "Altar of Stamina", ru: "Алтарь выносливости" },
-};
-
-const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
-  cannon: { en: "{kw:activate} 1💰: deal 1 damage to random enemy district (unlimited uses)", ru: "{kw:activate} За 1💰: −1 HP случайному кварталу противника (без ограничений)" },
-  fort: { en: "Other districts get −1 HP. Refund gold when destroyed", ru: "Другие постройки −1 HP. При разрушении получаете золото" },
-  stronghold: { en: "{kw:protect}: cannot be destroyed or damaged", ru: "{kw:protect}: нельзя разрушить или повредить" },
-  monument: { en: "In hand: costs 3💰 to build. On board: always 5💰/5 HP", ru: "В руке: стоит 3💰. На столе: всегда 5💰/5 HP" },
-  highway: { en: "Your hero's speed −1 (act earlier)", ru: "Скорость вашего героя −1 (ходите раньше)" },
-  city_gates: { en: "In hand: cost −2 each turn. Leader auto-builds it free", ru: "В руке: цена −2 каждый ход. Лидер строит автоматически и бесплатно" },
-  crypt: { en: "{kw:activate} Self-destroy for 2💰. On any destroy: +2 random purple cards", ru: "{kw:activate} Самоуничтожение за 2💰. При любом разрушении: +2 случайные фиолетовые карты" },
-  tnt_storage: { en: "{kw:activate} Self-destroy for 2💰: {kw:destroy} 2 random districts per player", ru: "{kw:activate} Самоуничтожение за 2💰: {kw:destroy} 2 случайных квартала у каждого" },
-  mine: { en: "+1💰 at end of day for everyone. Treasurer also gets +1💰 at end of each turn", ru: "+1💰 в конце дня для всех. Казначей также получает +1💰 в конце каждого хода" },
-  cult: { en: "Cleric only: {kw:activate} replace random district of random player", ru: "Только Клерик: {kw:activate} заменяет случайный квартал случайного игрока" },
-  altar_power: { en: "{kw:altar}: build 3 different altars to win", ru: "{kw:altar}: постройте 3 разных алтаря для победы" },
-  altar_health: { en: "{kw:altar}: build 3 different altars to win", ru: "{kw:altar}: постройте 3 разных алтаря для победы" },
-  altar_intellect: { en: "{kw:altar}: build 3 different altars to win", ru: "{kw:altar}: постройте 3 разных алтаря для победы" },
-  altar_stamina: { en: "{kw:altar}: build 3 different altars to win", ru: "{kw:altar}: постройте 3 разных алтаря для победы" },
-};
-
+// ---- Purple card translations (from card registry) ----
 export function tPurpleName(name: string): string {
-  const entry = PURPLE_NAMES[name];
-  if (!entry) return tDistrict(name);
-  return entry[currentLang] ?? entry.en;
+  return tDistrict(name);
 }
 
 export function tPurpleDesc(ability: string): string {
-  const entry = PURPLE_DESCRIPTIONS[ability];
-  if (!entry) return ability;
-  return entry[currentLang] ?? entry.en;
+  const def = findPurpleByAbility(ability);
+  if (!def) return ability;
+  return def.description[currentLang as "en" | "ru"] ?? def.description.en;
 }
 
 // ---- Game Guide content ----
@@ -573,7 +464,7 @@ export function getGuideHtml(): string {
 const GUIDE_RU = `
 <div class="guide-section">
   <h4>Цель игры</h4>
-  <p>Постройте <b>8 кварталов</b> раньше всех (или <b>3 разных алтаря</b>). Игра длится до 12 дней. Побеждает игрок с наибольшим количеством очков.</p>
+  <p>Постройте <b>8 кварталов</b> раньше всех (или <b>4 алтаря тьмы</b>). Игра длится до 12 дней. Побеждает игрок с наибольшим количеством очков.</p>
 </div>
 <div class="guide-section">
   <h4>Структура дня</h4>
@@ -621,7 +512,7 @@ const GUIDE_RU = `
 const GUIDE_EN = `
 <div class="guide-section">
   <h4>Goal</h4>
-  <p>Build <b>8 districts</b> before anyone else (or <b>3 different altars</b>). The game lasts up to 12 days. The player with the most points wins.</p>
+  <p>Build <b>8 districts</b> before anyone else (or <b>4 Altars of Darkness</b>). The game lasts up to 12 days. The player with the most points wins.</p>
 </div>
 <div class="guide-section">
   <h4>Day Structure</h4>

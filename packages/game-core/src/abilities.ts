@@ -398,18 +398,15 @@ export function checkWinCondition(state: GameState): GameState {
   for (let i = 0; i < state.players.length; i++) {
     const p = state.players[i];
     const altarCount = p.builtDistricts.filter((d) =>
-      d.purpleAbility === "altar_power"
-      || d.purpleAbility === "altar_health"
-      || d.purpleAbility === "altar_intellect"
-      || d.purpleAbility === "altar_stamina"
+      d.purpleAbility === "altar_darkness"
     ).length;
-    if (altarCount >= 3 && !p.finishedFirst) {
+    if (altarCount >= 4 && !p.finishedFirst) {
       const newPlayers = [...state.players];
       newPlayers[i] = { ...p, finishedFirst: true };
       return {
         ...state,
         players: newPlayers,
-        log: addLog(state, `${p.name} построил 3 алтаря! Последний день.`),
+        log: addLog(state, `${p.name} построил 4 алтаря тьмы! Последний день.`),
       };
     }
     if (p.builtDistricts.length >= WIN_DISTRICTS && !p.finishedFirst) {

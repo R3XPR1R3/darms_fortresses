@@ -1,6 +1,7 @@
-import type { HeroId } from "./hero.js";
+import type { HeroId, CardColor } from "./hero.js";
 import type { DistrictCard, PurpleAbility } from "./card.js";
 import type { CompanionId } from "./companion.js";
+import { ALL_PURPLE_SPECIAL } from "./cards/index.js";
 
 export const WIN_DISTRICTS = 8;
 
@@ -46,28 +47,21 @@ export const PURPLE_DRAFT_DAYS = [3, 6, 9, 12];
 export interface PurpleCardTemplate {
   name: string;
   cost: number;
-  colors: ("purple" | "red" | "yellow" | "blue" | "green")[];
+  colors: CardColor[];
   ability: PurpleAbility;
   description: string;
   emoji: string;
 }
 
-export const PURPLE_CARD_TEMPLATES: PurpleCardTemplate[] = [
-  { name: "Пушка", cost: 2, colors: ["purple", "red"], ability: "cannon", emoji: "💣", description: "За 1💰: −1 HP случайному кварталу противника (∞)" },
-  { name: "Оборонительный форт", cost: 1, colors: ["purple"], ability: "fort", emoji: "🏰", description: "Другие постройки −1 HP, но при разрушении вы получаете золото" },
-  { name: "Укрепрайон", cost: 4, colors: ["purple"], ability: "stronghold", emoji: "🧱", description: "Эту постройку нельзя разрушить или повредить" },
-  { name: "Памятник", cost: 3, colors: ["purple"], ability: "monument", emoji: "🗿", description: "В руке: стоит 3💰. На столе: стоимость и HP всегда 5" },
-  { name: "Магистраль", cost: 4, colors: ["purple"], ability: "highway", emoji: "🛤️", description: "Скорость героя −1" },
-  { name: "Врата в город", cost: 8, colors: ["purple", "yellow"], ability: "city_gates", emoji: "🚪", description: "Пока в руке: цена уменьшается на 2 каждый ход. На столе не удешевляются" },
-  { name: "Склеп", cost: 4, colors: ["purple"], ability: "crypt", emoji: "⚰️", description: "При разрушении: +2 фиолетовые карты. Самоуничтожение за 2💰" },
-  { name: "Склад тротила", cost: 2, colors: ["purple"], ability: "tnt_storage", emoji: "🧨", description: "Уничтожьте за 2💰: −2 случайных квартала каждому" },
-  { name: "Шахта", cost: 3, colors: ["purple", "green"], ability: "mine", emoji: "⛏️", description: "+1💰 в конце дня (у Торговца — в конце каждого хода)" },
-  { name: "Секта", cost: 2, colors: ["purple", "blue"], ability: "cult", emoji: "🕯️", description: "Активируется только Клериком: заменяет случайный квартал случайного игрока" },
-  { name: "Алтарь силы", cost: 1, colors: ["purple"], ability: "altar_power", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
-  { name: "Алтарь здоровья", cost: 1, colors: ["purple"], ability: "altar_health", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
-  { name: "Алтарь интеллекта", cost: 1, colors: ["purple"], ability: "altar_intellect", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
-  { name: "Алтарь выносливости", cost: 1, colors: ["purple"], ability: "altar_stamina", emoji: "🛐", description: "Альтернативная победа: постройте 3 любых алтаря" },
-];
+/** Built from card registry (single source of truth) */
+export const PURPLE_CARD_TEMPLATES: PurpleCardTemplate[] = ALL_PURPLE_SPECIAL.map((c) => ({
+  name: c.name.ru,
+  cost: c.cost,
+  colors: c.colors,
+  ability: c.ability,
+  description: c.description.ru,
+  emoji: c.emoji,
+}));
 
 export interface LogEntry {
   day: number;
@@ -113,6 +107,8 @@ export interface PlayerState {
   designerMarkedCardId: string | null;
   /** Contractor: contracted hero target for assassin kill reward */
   contractorTargetHeroId?: HeroId | null;
+  /** Building IDs activated this turn (limits once-per-turn buildings like Cult) */
+  activatedBuildings?: string[];
 }
 
 /** State tracking the hero draft within a day */
