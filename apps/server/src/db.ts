@@ -24,6 +24,11 @@ export async function initDb(): Promise<void> {
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS gold INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS diamonds INTEGER NOT NULL DEFAULT 0;
+  `);
   console.log("[db] Tables initialized");
 }
 
@@ -35,6 +40,8 @@ export interface UserRow {
   avatar_url: string | null;
   nickname: string;
   settings: Record<string, unknown>;
+  gold: number;
+  diamonds: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -89,6 +96,23 @@ export async function updateSettings(userId: number, settings: Record<string, un
   await pool.query(
     "UPDATE users SET settings = $1, updated_at = NOW() WHERE id = $2",
     [JSON.stringify(settings), userId],
+  );
+}
+
+/** Get user wallet */
+export async function getWallet(userId: number): Promise<{ gold: number; diamonds: number } | null> {
+  const result = await pool.query<{ gold: number; diamonds: number }>(
+    "SELECT gold, diamonds FROM users WHERE id = $1",
+    [userId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/** Update wallet absolute values */
+export async function updateWallet(userId: number, gold: number, diamonds: number): Promise<void> {
+  await pool.query(
+    "UPDATE users SET gold = $1, diamonds = $2, updated_at = NOW() WHERE id = $3",
+    [gold, diamonds, userId],
   );
 }
 

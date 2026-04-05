@@ -74,6 +74,17 @@ const dict: Record<string, TranslationEntry> = {
   "menu.create_room": { en: "Create room", ru: "Создать комнату" },
   "menu.join_room": { en: "Join by code", ru: "Войти по коду" },
   "menu.card_pool": { en: "Card pool", ru: "Пул карт", id: "Pool kartu" },
+  "menu.gold": { en: "Gold", ru: "Золото" },
+  "menu.diamonds": { en: "Diamonds", ru: "Бриллианты" },
+  "menu.store": { en: "Store", ru: "Магазин" },
+  "menu.store_empty": { en: "Store is empty for now.", ru: "Магазин пока пуст." },
+  "menu.campaign": { en: "Campaign", ru: "Компания" },
+  "menu.coming_soon": { en: "Coming soon", ru: "Скоро" },
+  "menu.treasury": { en: "Treasury", ru: "Казна" },
+  "menu.treasury_resources": { en: "Resources", ru: "Ресурсы" },
+  "menu.treasury_covers": { en: "Covers", ru: "Обложки" },
+  "menu.treasury_cards": { en: "Cards", ru: "Карты" },
+  "menu.empty": { en: "Empty for now.", ru: "Пока пусто." },
 
   // Lobby
   "lobby.host": { en: "(host)", ru: "(хост)" },
@@ -156,8 +167,8 @@ const dict: Record<string, TranslationEntry> = {
     ru: "Выбери героя — {kw:rob}: забираешь всё золото в начале его хода.",
   },
   "ability_desc.sorcerer": {
-    en: "Discard 2 cards and draw 3, or swap your hand with another player.",
-    ru: "Сбросить 2 карты и взять 3 из колоды, или обменяться рукой с любым игроком.",
+    en: "Discard 2 cards and draw 2, or swap your hand with another player.",
+    ru: "Сбросить 2 карты и взять 2 из колоды, или обменяться рукой с любым игроком.",
   },
   "ability_desc.king": {
     en: "{kw:crown}: first pick next round. {kw:income}: +1💰 per 🟡 district.",
@@ -193,10 +204,10 @@ const dict: Record<string, TranslationEntry> = {
   },
   "modal.sorcerer_title": { en: "Sorcerer Ability", ru: "Способность Стратега" },
   "modal.sorcerer_hint": {
-    en: "Discard 2 random cards and draw 3 from the deck, or swap hands with any player.",
-    ru: "Сбросить 2 случайные карты и взять 3 из колоды, или обменяться рукой с любым игроком.",
+    en: "Discard 2 random cards and draw 2 from the deck, or swap hands with any player.",
+    ru: "Сбросить 2 случайные карты и взять 2 из колоды, или обменяться рукой с любым игроком.",
   },
-  "modal.sorcerer_draw": { en: "Discard 2, draw 3", ru: "Сбросить 2, взять 3" },
+  "modal.sorcerer_draw": { en: "Discard 2, draw 2", ru: "Сбросить 2, взять 2" },
   "modal.sorcerer_cards": { en: "cards", ru: "карт" },
   "modal.general_title": { en: "Destroy a district", ru: "Разрушить квартал" },
   "modal.general_hint": {

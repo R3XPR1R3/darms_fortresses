@@ -1,5 +1,5 @@
 import type { GameState, DistrictCard, CardColor } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME, MAX_HAND_CARDS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
 import { addRandomColor } from "./deck.js";
@@ -156,6 +156,10 @@ export function takeIncome(
     };
   }
 
+  if (choice === "card" && player.hand.length >= MAX_HAND_CARDS) {
+    return null;
+  }
+
   const offer = drawTwoOffer(state.deck);
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
@@ -189,9 +193,13 @@ export function pickIncomeCard(
   if (other) newDeck.unshift(other);
 
   const newPlayers = [...state.players];
+  const freeSlots = Math.max(0, MAX_HAND_CARDS - player.hand.length);
+  const accepted = freeSlots > 0 ? [picked] : [];
+  const overflow = accepted.length === 0 ? 1 : 0;
+
   let updated = {
     ...player,
-    hand: [...player.hand, picked],
+    hand: [...player.hand, ...accepted],
     incomeOffer: null,
     incomeTaken: true,
   };
@@ -220,7 +228,11 @@ export function pickIncomeCard(
   }
 
   newPlayers[playerIdx] = updated;
-  return { ...state, players: newPlayers, deck: newDeck, log: [...state.log, { day: state.day, message: `🃏 ${player.name} выбрал карту` }] };
+  const log = [...state.log, { day: state.day, message: `🃏 ${player.name} выбрал карту` }];
+  if (overflow > 0) {
+    log.push({ day: state.day, message: `💥 ${player.name}: 1 карт(ы) рассыпались (лимит руки ${MAX_HAND_CARDS})` });
+  }
+  return { ...state, players: newPlayers, deck: newDeck, log };
 }
 
 /**
@@ -363,7 +375,13 @@ export function buildDistrict(
           returned.push(districts[pick]);
           districts.splice(pick, 1);
         }
-        newPlayers[i] = { ...owner, builtDistricts: districts, hand: [...owner.hand, ...returned] };
+        const freeSlots = Math.max(0, MAX_HAND_CARDS - owner.hand.length);
+        const accepted = returned.slice(0, freeSlots);
+        const overflow = returned.length - accepted.length;
+        newPlayers[i] = { ...owner, builtDistricts: districts, hand: [...owner.hand, ...accepted] };
+        if (overflow > 0) {
+          log = [...log, { day: state.day, message: `💥 ${owner.name}: ${overflow} карт(ы) рассыпались (лимит руки ${MAX_HAND_CARDS})` }];
+        }
       }
       log = [...log, { day: state.day, message: `🌊 ${player.name} применил Потоп: до 4 случайных кварталов у каждого вернулись в руку` }];
     } else if (card.spellAbility === "plague") {
