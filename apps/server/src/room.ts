@@ -5,6 +5,7 @@ import { createRng, createMatch, createBaseDeck, processAction, startDraft, botA
 import type { LobbyPlayer, PlayerView, PlayerViewEntry, DraftView } from "./protocol.js";
 import type { WebSocket } from "ws";
 import { generateMatchSummary, saveMatchSummary } from "./match-log.js";
+import { addGold } from "./db.js";
 
 export interface Room {
   id: string;
@@ -24,6 +25,7 @@ export interface RoomPlayer {
   id: string;
   name: string;
   isBot: boolean;
+  userId: number | null;
   ws: WebSocket | null; // null for bots
   disconnectTimer: ReturnType<typeof setTimeout> | null;
 }
@@ -51,13 +53,13 @@ function sanitizeName(name: string): string {
   return name.replace(/[\x00-\x1f]/g, "").trim().slice(0, 30) || "Player";
 }
 
-export function createRoom(hostName: string, ws: WebSocket): { roomId: string; playerId: string } {
+export function createRoom(hostName: string, ws: WebSocket, userId: number | null = null): { roomId: string; playerId: string } {
   const roomId = generateRoomId();
   const playerId = generatePlayerId();
   const room: Room = {
     id: roomId,
     hostId: playerId,
-    players: [{ id: playerId, name: sanitizeName(hostName), isBot: false, ws, disconnectTimer: null }],
+    players: [{ id: playerId, name: sanitizeName(hostName), isBot: false, userId, ws, disconnectTimer: null }],
     state: null,
     started: false,
     startedAt: null,
@@ -69,14 +71,14 @@ export function createRoom(hostName: string, ws: WebSocket): { roomId: string; p
   return { roomId, playerId };
 }
 
-export function joinRoom(roomId: string, playerName: string, ws: WebSocket): { playerId: string; players: LobbyPlayer[] } | string {
+export function joinRoom(roomId: string, playerName: string, ws: WebSocket, userId: number | null = null): { playerId: string; players: LobbyPlayer[] } | string {
   const room = rooms.get(roomId);
   if (!room) return "Комната не найдена";
   if (room.started) return "Игра уже началась";
   if (room.players.length >= 4) return "Комната заполнена (макс. 4)";
 
   const playerId = generatePlayerId();
-  room.players.push({ id: playerId, name: sanitizeName(playerName), isBot: false, ws, disconnectTimer: null });
+  room.players.push({ id: playerId, name: sanitizeName(playerName), isBot: false, userId, ws, disconnectTimer: null });
   return { playerId, players: getLobbyPlayers(room) };
 }
 
@@ -103,7 +105,7 @@ export function addBot(roomId: string, requesterId: string): LobbyPlayer[] | str
   const botName = BOT_NAMES[botCounter % BOT_NAMES.length];
   botCounter++;
   const botId = "bot-" + Math.random().toString(36).slice(2, 8);
-  room.players.push({ id: botId, name: botName, isBot: true, ws: null, disconnectTimer: null });
+  room.players.push({ id: botId, name: botName, isBot: true, userId: null, ws: null, disconnectTimer: null });
   return getLobbyPlayers(room);
 }
 
@@ -170,7 +172,7 @@ function logAction(room: Room, action: GameAction, source: "human" | "bot") {
       const ab = action.ability;
       if (ab.hero === "assassin") console.log(`${tag} ${who} ASSASSINATE → ${ab.targetHeroId}`);
       else if (ab.hero === "thief") console.log(`${tag} ${who} ROB → ${ab.targetHeroId}`);
-      else if (ab.hero === "sorcerer" && ab.mode === "draw") console.log(`${tag} ${who} sorcerer: discard 2, draw 3`);
+      else if (ab.hero === "sorcerer" && ab.mode === "draw") console.log(`${tag} ${who} sorcerer: discard 2, draw 2`);
       else if (ab.hero === "sorcerer" && ab.mode === "swap") console.log(`${tag} ${who} sorcerer: swap hands → ${ab.targetPlayerId}`);
       else if (ab.hero === "general") console.log(`${tag} ${who} DESTROY → card ${ab.cardId} of ${ab.targetPlayerId}`);
       else console.log(`${tag} ${who} ability: ${ab.hero}`);
@@ -224,6 +226,7 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
     const botIds = new Set(room.players.filter((p) => p.isBot).map((p) => p.id));
     const summary = generateMatchSummary(room.state, room.id, room.startedAt ?? new Date(), botIds);
     saveMatchSummary(summary).catch((err) => console.error("[match-log] Error:", err));
+    rewardPlayersByPlacement(room, room.state).catch((err) => console.error("[rewards] Error:", err));
   }
 
   // Schedule bot actions only after human action (avoid recursive scheduling)
@@ -232,6 +235,65 @@ export function handleAction(roomId: string, playerId: string, action: GameActio
   }
 
   return null; // success
+}
+
+function sumDistrictCosts(state: GameState, playerIdx: number): number {
+  return state.players[playerIdx].builtDistricts.reduce((acc, d) => acc + d.cost, 0);
+}
+
+function altarCount(state: GameState, playerIdx: number): number {
+  return state.players[playerIdx].builtDistricts.filter((d) => d.purpleAbility === "altar_darkness").length;
+}
+
+function randomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function rewardPlayersByPlacement(room: Room, state: GameState): Promise<void> {
+  const humanPlayers = room.players
+    .map((rp) => ({ rp, idx: state.players.findIndex((p) => p.id === rp.id) }))
+    .filter((x) => !x.rp.isBot && x.rp.userId && x.idx >= 0);
+  if (humanPlayers.length === 0) return;
+
+  const altarWinners = humanPlayers.filter(({ idx }) => altarCount(state, idx) >= 4);
+  const rewards = new Map<number, number>(); // userId -> gold
+  const addReward = (userId: number, amount: number) => rewards.set(userId, (rewards.get(userId) ?? 0) + amount);
+
+  if (altarWinners.length >= 2) {
+    for (const w of altarWinners) addReward(w.rp.userId!, 50);
+  } else if (altarWinners.length === 1) {
+    addReward(altarWinners[0].rp.userId!, 50);
+    const others = humanPlayers.filter((x) => x.rp.id !== altarWinners[0].rp.id);
+    if (others.length > 0) {
+      const maxCost = Math.max(...others.map((x) => sumDistrictCosts(state, x.idx)));
+      for (const p of others.filter((x) => sumDistrictCosts(state, x.idx) === maxCost)) addReward(p.rp.userId!, 15);
+    }
+  } else {
+    const maxCost = Math.max(...humanPlayers.map((x) => sumDistrictCosts(state, x.idx)));
+    const firstGroup = humanPlayers.filter((x) => sumDistrictCosts(state, x.idx) === maxCost);
+    if (firstGroup.length > 1) {
+      for (const p of firstGroup) addReward(p.rp.userId!, 50);
+      const secondPool = humanPlayers.filter((x) => sumDistrictCosts(state, x.idx) < maxCost);
+      if (secondPool.length > 0) {
+        const secondCost = Math.max(...secondPool.map((x) => sumDistrictCosts(state, x.idx)));
+        for (const p of secondPool.filter((x) => sumDistrictCosts(state, x.idx) === secondCost)) addReward(p.rp.userId!, 15);
+      }
+    } else {
+      addReward(firstGroup[0].rp.userId!, randomInt(75, 100));
+      const secondPool = humanPlayers.filter((x) => sumDistrictCosts(state, x.idx) < maxCost);
+      if (secondPool.length > 0) {
+        const secondCost = Math.max(...secondPool.map((x) => sumDistrictCosts(state, x.idx)));
+        const secondReward = randomInt(10, 30);
+        for (const p of secondPool.filter((x) => sumDistrictCosts(state, x.idx) === secondCost)) {
+          addReward(p.rp.userId!, secondReward);
+        }
+      }
+    }
+  }
+
+  for (const [userId, amount] of rewards.entries()) {
+    await addGold(userId, amount);
+  }
 }
 
 /**
