@@ -206,7 +206,7 @@ function ensureBroadcast(roomId: string) {
 }
 
 wss.on("connection", (ws) => {
-  ws.on("message", (raw) => {
+  ws.on("message", async (raw) => {
     const now = Date.now();
     let timestamps = rateLimiter.get(ws);
     if (!timestamps) { timestamps = []; rateLimiter.set(ws, timestamps); }
@@ -227,14 +227,24 @@ wss.on("connection", (ws) => {
 
     switch (msg.type) {
       case "create_room": {
-        const { roomId, playerId } = createRoom(msg.playerName, ws);
+        let userId: number | null = null;
+        if (msg.authToken) {
+          const user = await verifyToken(msg.authToken);
+          userId = user?.id ?? null;
+        }
+        const { roomId, playerId } = createRoom(msg.playerName, ws, userId);
         socketMeta.set(ws, { roomId, playerId });
         send(ws, { type: "room_created", roomId, playerId });
         break;
       }
 
       case "join_room": {
-        const result = joinRoom(msg.roomId.toUpperCase(), msg.playerName, ws);
+        let userId: number | null = null;
+        if (msg.authToken) {
+          const user = await verifyToken(msg.authToken);
+          userId = user?.id ?? null;
+        }
+        const result = joinRoom(msg.roomId.toUpperCase(), msg.playerName, ws, userId);
         if (typeof result === "string") {
           send(ws, { type: "error", message: result });
         } else {

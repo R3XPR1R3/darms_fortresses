@@ -664,7 +664,10 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     let playersCheck = [...state.players];
     let flagCleared = false;
     for (let i = 0; i < playersCheck.length; i++) {
-      if (playersCheck[i].finishedFirst && playersCheck[i].builtDistricts.length < WIN_DISTRICTS) {
+      const altarCount = playersCheck[i].builtDistricts.filter((d) => d.purpleAbility === "altar_darkness").length;
+      const qualifiesByDistricts = playersCheck[i].builtDistricts.length >= WIN_DISTRICTS;
+      const qualifiesByAltars = altarCount >= 4;
+      if (playersCheck[i].finishedFirst && !qualifiesByDistricts && !qualifiesByAltars) {
         playersCheck[i] = { ...playersCheck[i], finishedFirst: false };
         flagCleared = true;
       }
@@ -673,7 +676,10 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
       state = { ...state, players: playersCheck };
     }
 
-    const someoneFinished = state.players.some((p) => p.finishedFirst && p.builtDistricts.length >= WIN_DISTRICTS);
+    const someoneFinished = state.players.some((p) => {
+      const altarCount = p.builtDistricts.filter((d) => d.purpleAbility === "altar_darkness").length;
+      return p.finishedFirst && (p.builtDistricts.length >= WIN_DISTRICTS || altarCount >= 4);
+    });
     if (someoneFinished) {
       return calculateScores({ ...state, log: state.log });
     }

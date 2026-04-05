@@ -116,4 +116,12 @@ export async function updateWallet(userId: number, gold: number, diamonds: numbe
   );
 }
 
+/** Increment gold balance (can be negative if needed) */
+export async function addGold(userId: number, goldDelta: number): Promise<void> {
+  await pool.query(
+    "UPDATE users SET gold = GREATEST(0, gold + $1), updated_at = NOW() WHERE id = $2",
+    [goldDelta, userId],
+  );
+}
+
 export { pool };

@@ -261,9 +261,9 @@ function connectWS(playerName: string, roomId: string | null, reconnect = false)
       return;
     }
     if (roomId) {
-      ws!.send(JSON.stringify({ type: "join_room", roomId, playerName }));
+      ws!.send(JSON.stringify({ type: "join_room", roomId, playerName, authToken: authToken ?? undefined }));
     } else {
-      ws!.send(JSON.stringify({ type: "create_room", playerName }));
+      ws!.send(JSON.stringify({ type: "create_room", playerName, authToken: authToken ?? undefined }));
     }
   };
 
