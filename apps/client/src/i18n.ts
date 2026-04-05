@@ -85,6 +85,8 @@ const dict: Record<string, TranslationEntry> = {
   "menu.treasury_covers": { en: "Covers", ru: "Обложки" },
   "menu.treasury_cards": { en: "Cards", ru: "Карты" },
   "menu.empty": { en: "Empty for now.", ru: "Пока пусто." },
+  "menu.wallet_custom": { en: "Set values", ru: "Задать значения" },
+  "menu.login_for_wallet": { en: "Login to edit wallet.", ru: "Войдите, чтобы менять баланс." },
 
   // Lobby
   "lobby.host": { en: "(host)", ru: "(хост)" },

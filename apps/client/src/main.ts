@@ -158,6 +158,19 @@ async function changeNickname() {
   } catch { /* ignore */ }
 }
 
+async function updateWallet(nextGold: number, nextDiamonds: number) {
+  if (!authToken || !authUser) return;
+  const res = await fetch("/auth/wallet", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+    body: JSON.stringify({ gold: nextGold, diamonds: nextDiamonds }),
+  });
+  if (!res.ok) throw new Error("Wallet update failed");
+  const data = await res.json();
+  authUser.gold = Number(data.gold ?? authUser.gold);
+  authUser.diamonds = Number(data.diamonds ?? authUser.diamonds);
+}
+
 // Expose callback for Google GSI
 (window as any).handleGoogleCredential = handleGoogleCredential;
 
@@ -748,6 +761,21 @@ function renderMenu() {
       <div class="menu-feature-text">${t("menu.coming_soon")}</div>
     </div>
   `;
+  const treasuryContent =
+    treasuryTab === "resources"
+      ? (authUser
+        ? `
+        <div class="menu-feature-text">💰 ${t("menu.gold")}: <b>${menuGold}</b></div>
+        <div class="menu-feature-text">♦ ${t("menu.diamonds")}: <b>${menuDiamonds}</b></div>
+        <div class="menu-wallet-actions">
+          <button class="btn btn-secondary btn-small" id="btn-wallet-gold">+10 ${t("menu.gold")}</button>
+          <button class="btn btn-secondary btn-small" id="btn-wallet-diamond">+1 ${t("menu.diamonds")}</button>
+          <button class="btn btn-secondary btn-small" id="btn-wallet-custom">${t("menu.wallet_custom")}</button>
+        </div>
+      `
+        : `<div class="menu-feature-text">${t("menu.login_for_wallet")}</div>`)
+      : `<div class="menu-feature-text">${t("menu.empty")}</div>`;
+
   const treasuryPanel = `
     <div class="menu-feature-card">
       <div class="menu-feature-title">🏦 ${t("menu.treasury")}</div>
@@ -756,7 +784,7 @@ function renderMenu() {
         <button class="btn btn-secondary btn-small menu-tab ${treasuryTab === "covers" ? "active" : ""}" data-treasury-tab="covers">${t("menu.treasury_covers")}</button>
         <button class="btn btn-secondary btn-small menu-tab ${treasuryTab === "cards" ? "active" : ""}" data-treasury-tab="cards">${t("menu.treasury_cards")}</button>
       </div>
-      <div class="menu-feature-text">${t("menu.empty")}</div>
+      ${treasuryContent}
     </div>
   `;
   const activePanelHtml =
@@ -833,6 +861,43 @@ function renderMenu() {
       menuPanel = "treasury";
       renderMenu();
     });
+  });
+  document.getElementById("btn-wallet-gold")?.addEventListener("click", async () => {
+    if (!authUser) return;
+    try {
+      await updateWallet(authUser.gold + 10, authUser.diamonds);
+      renderMenu();
+    } catch {
+      alert("Не удалось обновить баланс");
+    }
+  });
+  document.getElementById("btn-wallet-diamond")?.addEventListener("click", async () => {
+    if (!authUser) return;
+    try {
+      await updateWallet(authUser.gold, authUser.diamonds + 1);
+      renderMenu();
+    } catch {
+      alert("Не удалось обновить баланс");
+    }
+  });
+  document.getElementById("btn-wallet-custom")?.addEventListener("click", async () => {
+    if (!authUser) return;
+    const goldRaw = prompt("Новое значение золота:", String(authUser.gold));
+    if (goldRaw === null) return;
+    const diamondsRaw = prompt("Новое значение бриллиантов:", String(authUser.diamonds));
+    if (diamondsRaw === null) return;
+    const gold = Number(goldRaw);
+    const diamonds = Number(diamondsRaw);
+    if (!Number.isFinite(gold) || !Number.isFinite(diamonds) || gold < 0 || diamonds < 0) {
+      alert("Некорректные значения");
+      return;
+    }
+    try {
+      await updateWallet(Math.floor(gold), Math.floor(diamonds));
+      renderMenu();
+    } catch {
+      alert("Не удалось обновить баланс");
+    }
   });
   document.getElementById("btn-create")!.addEventListener("click", () => showLobbyScreen("create"));
   document.getElementById("btn-join")!.addEventListener("click", () => showLobbyScreen("join"));
