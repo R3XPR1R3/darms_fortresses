@@ -63,6 +63,9 @@ sudo ./svc.sh status
 # Ручной деплой
 cd /opt/darms-fortresses
 bash infra/deploy.sh
+
+# Центр управления проектом (настройки, логи, кампании, обновление, PR helper)
+bash infra/control-center.sh
 ```
 
 После деплоя в логах появится URL вида `https://xxx-yyy-zzz.trycloudflare.com` — по нему можно играть из интернета.

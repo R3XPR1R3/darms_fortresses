@@ -79,6 +79,32 @@ cd apps/client && pnpm dev    # client at http://localhost:3000
 cd apps/server && pnpm dev    # server at ws://localhost:4000
 ```
 
+### Raspberry Pi Control Center
+
+For Raspberry deployment and live operations, use the built-in control center:
+
+```bash
+bash infra/control-center.sh
+```
+
+It provides:
+- persistent config storage (Google OAuth / JWT / deploy env) that survives updates
+- start/stop/rebuild actions for docker stack
+- live server logs + match history + live latest match tail
+- campaign JSON skeleton generation + custom art registration
+- helper flow for committing/pushing changes into a PR branch
+
+### Wallet admin (console)
+
+Player resources can be managed from terminal:
+
+```bash
+pnpm run wallet:admin -- list
+pnpm run wallet:admin -- get 1
+pnpm run wallet:admin -- set 1 250 10
+pnpm run wallet:admin -- add-gold 1 75
+```
+
 ### Docker
 
 ```bash
