@@ -1,5 +1,10 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@darms/shared-types": ["packages/shared-types/src/index.ts"],
+      "@darms/game-core": ["packages/game-core/src/index.ts"]
+    },
     "target": "ES2022",
     "module": "Node16",
     "moduleResolution": "Node16",
