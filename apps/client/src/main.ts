@@ -1,8 +1,8 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, COMPANIONS, isPassiveCompanion, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, MAX_HAND_CARDS, CompanionId, COMPANIONS, isPassiveCompanion, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
-import { animateChanges, resetAnimState } from "./anim.js";
+import { animateCardShatter, animateChanges, resetAnimState } from "./anim.js";
 import { t, tHero, tDistrict, tLog, tName, tCompanionName, tCompanionDescription, getLang, setLang, KEYWORDS, kwHtml, expandKw, tSpellName, tSpellDesc, tPurpleName, tPurpleDesc, getGuideHtml } from "./i18n.js";
 
 /** Get companion emoji for indicator circles */
@@ -82,11 +82,14 @@ interface AuthUser {
   nickname: string;
   email: string | null;
   avatarUrl: string | null;
+  gold: number;
+  diamonds: number;
 }
 
 let authToken: string | null = localStorage.getItem("darms_token");
 let authUser: AuthUser | null = null;
 let googleClientId = "";
+let guestMode = false;
 
 async function fetchAuthConfig() {
   try {
@@ -106,7 +109,12 @@ async function handleGoogleCredential(response: { credential: string }) {
     if (!res.ok) throw new Error("Auth failed");
     const data = await res.json();
     authToken = data.token;
-    authUser = data.user;
+    guestMode = false;
+    authUser = {
+      ...data.user,
+      gold: Number(data.user?.gold ?? 0),
+      diamonds: Number(data.user?.diamonds ?? 0),
+    };
     localStorage.setItem("darms_token", data.token);
     renderMenu();
   } catch (e) {
@@ -121,13 +129,19 @@ async function loadAuthUser() {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     if (!res.ok) { authToken = null; localStorage.removeItem("darms_token"); return; }
-    authUser = await res.json();
+    const user = await res.json();
+    authUser = {
+      ...user,
+      gold: Number(user?.gold ?? 0),
+      diamonds: Number(user?.diamonds ?? 0),
+    };
   } catch { /* server not available */ }
 }
 
 function logout() {
   authToken = null;
   authUser = null;
+  guestMode = false;
   localStorage.removeItem("darms_token");
   renderMenu();
 }
@@ -174,6 +188,9 @@ function getLocalPlayers() {
 
 let localState: GameState | null = null;
 let onlineState: PlayerView | null = null;
+let seenLogCount = 0;
+let menuPanel: "none" | "store" | "campaign" | "treasury" = "none";
+let treasuryTab: "resources" | "covers" | "cards" = "resources";
 
 // ---- Draft timer ----
 const DRAFT_TIMER_SECONDS = 60;
@@ -192,6 +209,7 @@ function showMenu() {
   mode = "menu";
   localState = null;
   onlineState = null;
+  seenLogCount = 0;
   stopDraftTimer();
   stopTurnTimer();
   myPlayerId = "";
@@ -204,6 +222,7 @@ function showMenu() {
 function startLocal() {
   mode = "local";
   resetAnimState();
+  seenLogCount = 0;
   const seed = Date.now();
   const rng = createRng(seed);
   const deck = createBaseDeck();
@@ -245,9 +264,9 @@ function connectWS(playerName: string, roomId: string | null, reconnect = false)
       return;
     }
     if (roomId) {
-      ws!.send(JSON.stringify({ type: "join_room", roomId, playerName }));
+      ws!.send(JSON.stringify({ type: "join_room", roomId, playerName, authToken: authToken ?? undefined }));
     } else {
-      ws!.send(JSON.stringify({ type: "create_room", playerName }));
+      ws!.send(JSON.stringify({ type: "create_room", playerName, authToken: authToken ?? undefined }));
     }
   };
 
@@ -712,11 +731,47 @@ function renderMenu() {
         <button class="auth-logout" id="auth-logout">выйти</button>
       </div>
     `;
-  } else if (googleClientId) {
-    authHtml = `<div id="google-signin-btn"></div>`;
+  } else if (googleClientId && !guestMode) {
+    authHtml = `
+      <div id="google-signin-btn"></div>
+      <button class="btn btn-secondary btn-small" id="btn-guest-login">${t("menu.guest_login")}</button>
+    `;
+  } else if (guestMode) {
+    authHtml = `<div class="hint">${t("menu.guest_mode")}</div>`;
   }
 
   const defaultName = authUser?.nickname ?? t("menu.default_name");
+  const menuGold = authUser?.gold ?? 0;
+  const menuDiamonds = authUser?.diamonds ?? 0;
+
+  const storePanel = `
+    <div class="menu-feature-card">
+      <div class="menu-feature-title">🛒 ${t("menu.store")}</div>
+      <div class="menu-feature-text">${t("menu.store_empty")}</div>
+    </div>
+  `;
+  const campaignPanel = `
+    <div class="menu-feature-card">
+      <div class="menu-feature-title">📖 ${t("menu.campaign")}</div>
+      <div class="menu-feature-text">${t("menu.coming_soon")}</div>
+    </div>
+  `;
+  const treasuryPanel = `
+    <div class="menu-feature-card">
+      <div class="menu-feature-title">🏦 ${t("menu.treasury")}</div>
+      <div class="menu-tabs">
+        <button class="btn btn-secondary btn-small menu-tab ${treasuryTab === "resources" ? "active" : ""}" data-treasury-tab="resources">${t("menu.treasury_resources")}</button>
+        <button class="btn btn-secondary btn-small menu-tab ${treasuryTab === "covers" ? "active" : ""}" data-treasury-tab="covers">${t("menu.treasury_covers")}</button>
+        <button class="btn btn-secondary btn-small menu-tab ${treasuryTab === "cards" ? "active" : ""}" data-treasury-tab="cards">${t("menu.treasury_cards")}</button>
+      </div>
+      <div class="menu-feature-text">${t("menu.empty")}</div>
+    </div>
+  `;
+  const activePanelHtml =
+    menuPanel === "store" ? storePanel
+      : menuPanel === "campaign" ? campaignPanel
+        : menuPanel === "treasury" ? treasuryPanel
+          : "";
 
   app.innerHTML = `
     <h1>⚔ Darms: Fortresses</h1>
@@ -724,9 +779,14 @@ function renderMenu() {
       ${authHtml}
       <div class="menu-title">${t("menu.subtitle")}</div>
       <button class="btn btn-secondary btn-small" id="btn-lang">${t("lang.toggle")}</button>
+      <div class="menu-resources">💰 ${t("menu.gold")}: <b>${menuGold}</b> &nbsp; ♦ ${t("menu.diamonds")}: <b>${menuDiamonds}</b></div>
       <input type="text" id="player-name" placeholder="${t("menu.name_placeholder")}" value="${defaultName}" class="menu-input" maxlength="20"/>
       <button class="btn btn-primary btn-large" id="btn-local">🎮 ${t("menu.local")}</button>
       <button class="btn btn-secondary btn-large" id="btn-card-pool">📚 ${t("menu.card_pool")}</button>
+      <button class="btn btn-secondary btn-large" id="btn-store">🛒 ${t("menu.store")}</button>
+      <button class="btn btn-secondary btn-large" id="btn-campaign">📖 ${t("menu.campaign")}</button>
+      <button class="btn btn-secondary btn-large" id="btn-treasury">🏦 ${t("menu.treasury")}</button>
+      ${activePanelHtml ? `<div id="menu-feature-panel">${activePanelHtml}</div>` : ""}
       <div class="menu-divider">${t("menu.online_divider")}</div>
       <button class="btn btn-secondary btn-large" id="btn-create">🌐 ${t("menu.create_room")}</button>
       <button class="btn btn-secondary btn-large" id="btn-join">🔗 ${t("menu.join_room")}</button>
@@ -754,6 +814,10 @@ function renderMenu() {
   // Auth event listeners
   document.getElementById("auth-nickname")?.addEventListener("click", changeNickname);
   document.getElementById("auth-logout")?.addEventListener("click", logout);
+  document.getElementById("btn-guest-login")?.addEventListener("click", () => {
+    guestMode = true;
+    renderMenu();
+  });
 
   document.getElementById("btn-lang")!.addEventListener("click", () => {
     const next = getLang() === "en" ? "ru" : getLang() === "ru" ? "id" : "en";
@@ -762,6 +826,26 @@ function renderMenu() {
   });
   document.getElementById("btn-local")!.addEventListener("click", startLocal);
   document.getElementById("btn-card-pool")!.addEventListener("click", showCardPoolModal);
+  document.getElementById("btn-store")?.addEventListener("click", () => {
+    menuPanel = "store";
+    renderMenu();
+  });
+  document.getElementById("btn-campaign")?.addEventListener("click", () => {
+    menuPanel = "campaign";
+    renderMenu();
+  });
+  document.getElementById("btn-treasury")?.addEventListener("click", () => {
+    menuPanel = "treasury";
+    renderMenu();
+  });
+  document.querySelectorAll("[data-treasury-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = (btn as HTMLElement).dataset.treasuryTab as "resources" | "covers" | "cards";
+      treasuryTab = tab;
+      menuPanel = "treasury";
+      renderMenu();
+    });
+  });
   document.getElementById("btn-create")!.addEventListener("click", () => showLobbyScreen("create"));
   document.getElementById("btn-join")!.addEventListener("click", () => showLobbyScreen("join"));
 }
@@ -990,6 +1074,14 @@ function render() {
   renderBanList();
   renderLog();
   renderWinner();
+
+  const allLogs = getLog();
+  if (allLogs.length < seenLogCount) seenLogCount = 0;
+  const newEntries = allLogs.slice(seenLogCount);
+  if (newEntries.some((e) => e.message.includes("рассыпались"))) {
+    animateCardShatter();
+  }
+  seenLogCount = allLogs.length;
 
   // Diff-based animations: compare current state to previous, animate only changes
   const players = getPlayers();
@@ -1295,7 +1387,7 @@ function renderMyBoard() {
     companionHtml = `
       <div class="my-companion">
         <span class="companion-name">${companionEmoji(me.companion)} ${tCompanionName(me.companion, cDef?.name ?? me.companion)}${me.companionDisabled ? " ❌" : ""}</span>
-        <span style="font-size:9px;color:#888">${tCompanionDescription(me.companion, cDef?.description ?? "")}</span>
+        <span style="font-size:9px;color:#888">${expandKw(tCompanionDescription(me.companion, cDef?.description ?? ""))}</span>
       </div>
     `;
   }
@@ -1307,7 +1399,7 @@ function renderMyBoard() {
     const tpl = d.purpleAbility ? PURPLE_CARD_TEMPLATES.find((t) => t.ability === d.purpleAbility) : null;
     const clickClass = isClickable ? "purple-clickable" : "";
     const clickAttr = isClickable ? `data-activate="${d.id}"` : "";
-    const tooltipHtml = tpl ? `<div class="purple-tooltip">${tpl.emoji} ${tpl.description}</div>` : "";
+    const tooltipHtml = tpl ? `<div class="purple-tooltip">${tpl.emoji} ${expandKw(tPurpleDesc(tpl.ability))}</div>` : "";
     return `<div class="district-wrapper ${clickClass}" ${clickAttr}>${districtCardHtml(d)}${tooltipHtml}</div>`;
   }).join("");
   const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
@@ -1382,8 +1474,9 @@ function renderMyBoard() {
           </div>
         `);
       } else if (!me.incomeTaken) {
+        const handIsFull = hand.length >= MAX_HAND_CARDS;
         buttons.push(`<button class="btn btn-gold" id="btn-gold">💰 ${t("my.gold_income")}</button>`);
-        buttons.push(`<button class="btn btn-card" id="btn-draw">🃏 ${t("my.draw_card")}</button>`);
+        buttons.push(`<button class="btn btn-card" id="btn-draw" ${handIsFull ? "disabled" : ""} title="${handIsFull ? "Лимит руки: 10 карт" : ""}">🃏 ${t("my.draw_card")}</button>`);
       }
 
       buttons.push(`<button class="btn btn-primary" id="btn-end">${t("my.end_turn")} ➡</button>`);
@@ -1639,7 +1732,8 @@ function renderDraft() {
       return !(def?.heroColor && def.heroColor !== myHeroColor);
     });
     if (!hasEligibleBase) {
-      unique = [...unique, CompanionId.Investor, CompanionId.Trainer];
+      const emergency = ((getDay() + getMyIndex()) % 2 === 0) ? CompanionId.Investor : CompanionId.Trainer;
+      unique = [...unique, emergency];
     }
 
     const companionCards = unique.map((cId) => {
@@ -1654,7 +1748,7 @@ function renderDraft() {
           <div class="companion-card-portrait">${def?.emoji ?? "?"}</div>
           <div class="companion-card-body">
             <div class="companion-card-name">${def ? tCompanionName(cId, def.name) : cId} ${passiveTag}</div>
-            <div class="companion-card-desc">${def ? tCompanionDescription(cId, def.description) : ""}</div>
+            <div class="companion-card-desc">${def ? expandKw(tCompanionDescription(cId, def.description)) : ""}</div>
             ${restricted ? `<div style="font-size:8px;color:#e04050">⛔ ${t("companion.only_color")} ${def.heroColor === "yellow" ? "🟡" : def.heroColor === "blue" ? "🔵" : def.heroColor === "green" ? "🟢" : "🔴"}</div>` : ""}
           </div>
         </button>`;
@@ -1767,7 +1861,7 @@ function showCompanionModal(companionId: CompanionId) {
 
   const cDef = companionDef(companionId);
   const companionLabel = cDef ? tCompanionName(companionId, cDef.name) : companionId;
-  const companionHint = cDef ? tCompanionDescription(companionId, cDef.description) : "";
+  const companionHint = cDef ? expandKw(tCompanionDescription(companionId, cDef.description)) : "";
   const players = getPlayers();
   const myIdx = getMyIndex();
   const me = players[myIdx];

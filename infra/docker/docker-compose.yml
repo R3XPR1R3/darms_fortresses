@@ -27,8 +27,8 @@ services:
       - match-logs:/data/match-logs
     environment:
       - LOGS_DIR=/data/match-logs
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - JWT_SECRET=${JWT_SECRET:-change-me}
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
