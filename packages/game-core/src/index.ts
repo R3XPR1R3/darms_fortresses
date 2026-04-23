@@ -1,13 +1,17 @@
 export { createRng, type Rng } from "./rng.js";
-export { createMatch } from "./setup.js";
+export { createMatch, createPurplePlaceholder, createPurpleFromAbility, materialiseBuildPurplePool } from "./setup.js";
 export { createBaseDeck, isPurpleCard, generateRandomCard, generateDifferentColorCard, addRandomColor } from "./deck.js";
-export { initDraft, draftPick, companionPick, purpleCardPick, currentDrafter, isPurpleDraftDay, initPurpleDraft } from "./draft.js";
+export { initDraft, draftPick, companionPick, companionSkip, currentDrafter, getAvailableCompanionIds } from "./draft.js";
+export { playPurplePlaceholder, pickFromPurpleOffer } from "./placeholder.js";
 export {
   buildTurnOrder,
   takeIncome,
   buildDistrict,
   advanceTurn,
   currentPlayer,
+  canAddDistrict,
+  pushBuiltDistrict,
+  markCompanionGone,
 } from "./turns.js";
 export {
   applyPassiveAbility,

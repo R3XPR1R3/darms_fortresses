@@ -16,6 +16,17 @@ export function pushBuiltDistrict(player: PlayerState, card: DistrictCard): Play
 }
 
 /**
+ * Mark a companion slot in the given player's personal pool as permanently "gone"
+ * (for leavesPool companions after use, and Sniper targets). Idempotent.
+ */
+export function markCompanionGone(player: PlayerState, companionId: CompanionId): PlayerState {
+  const companionDeck = player.companionDeck.map((s) =>
+    s.id === companionId ? { ...s, state: "gone" as const } : s,
+  );
+  return { ...player, companionDeck };
+}
+
+/**
  * Build the turn order for the current day based on hero speeds.
  * Lower speed = goes first. Ties broken randomly.
  * Courier companion: hero speed -2.
@@ -266,6 +277,9 @@ export function buildDistrict(
   if (cardIdx === -1) return null;
 
   const card = player.hand[cardIdx];
+
+  // Placeholders are not buildable — they must be played via the dedicated action.
+  if (card.placeholder === "purple") return null;
 
   // Flame cards can be "played away" for 2 gold (discarded, not built).
   if (card.name === FLAME_CARD_NAME) {
@@ -668,6 +682,17 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     // End of day — apply end-of-day effects
     state = applyTreasurerEndOfDay(state, rng);
     state = applyRoyalGuardEndOfDay(state);
+
+    // Wake all sleeping companions back to available for next day.
+    {
+      const wakePlayers = state.players.map((p) => ({
+        ...p,
+        companionDeck: p.companionDeck.map((s) =>
+          s.state === "sleeping" ? { ...s, state: "available" as const } : s,
+        ),
+      }));
+      state = { ...state, players: wakePlayers };
+    }
 
     // Re-check: if a player was marked finishedFirst but districts were destroyed
     // below the threshold, clear the flag — the game continues

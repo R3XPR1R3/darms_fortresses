@@ -5,7 +5,9 @@ import type { CompanionId } from "./companion.js";
 export type GameAction =
   | DraftPickAction
   | CompanionPickAction
-  | PurpleCardPickAction
+  | CompanionSkipAction
+  | PurplePlaceholderPlayAction
+  | PurplePlaceholderPickAction
   | IncomeAction
   | IncomePickAction
   | BuildAction
@@ -79,11 +81,26 @@ export interface UseCompanionAction {
   targetHeroId?: HeroId;
 }
 
-/** Player picks a purple card during purple draft */
-export interface PurpleCardPickAction {
-  type: "purple_card_pick";
+/** Player plays a purple placeholder stub from hand — opens the pick offer. */
+export interface PurplePlaceholderPlayAction {
+  type: "purple_placeholder_play";
   playerId: string;
-  cardIndex: number; // index in offered choices
+  /** ID of the placeholder card in hand. */
+  cardId: string;
+}
+
+/** Player picks one purple card from the pending placeholder offer. */
+export interface PurplePlaceholderPickAction {
+  type: "purple_placeholder_pick";
+  playerId: string;
+  /** Index into pendingPurpleOffer (0-based). */
+  offerIndex: number;
+}
+
+/** Player declines to pick a companion (personal pool exhausted). */
+export interface CompanionSkipAction {
+  type: "companion_skip";
+  playerId: string;
 }
 
 /** Player activates a built purple building */

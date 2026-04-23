@@ -16,6 +16,8 @@ export interface DistrictCard {
   purpleAbility?: PurpleAbility;
   /** One-shot spell ability (cast from hand, does not stay on table) */
   spellAbility?: SpellAbility;
+  /** Placeholder card: when played, lets the owner pick a real purple card from their pool. */
+  placeholder?: "purple";
 }
 
 export type SpellAbility = "ignite" | "gold_rain" | "holy_day" | "flood" | "plague";
