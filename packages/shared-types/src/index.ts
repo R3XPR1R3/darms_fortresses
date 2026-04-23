@@ -3,6 +3,7 @@ export type { DistrictCard, PurpleAbility, SpellAbility } from "./card.js";
 export { CompanionId, type CompanionDefinition, COMPANIONS, isPassiveCompanion, FLAME_CARD_NAME } from "./companion.js";
 export {
   WIN_DISTRICTS,
+  MAX_HAND_CARDS,
   PURPLE_DRAFT_DAYS,
   PURPLE_CARD_TEMPLATES,
   type GameState,
