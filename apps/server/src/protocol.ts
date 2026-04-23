@@ -3,8 +3,8 @@ import type { GameAction, GameState, PlayerState, DraftState, CompanionId, Distr
 // ---- Client → Server ----
 
 export type ClientMessage =
-  | { type: "create_room"; playerName: string }
-  | { type: "join_room"; roomId: string; playerName: string }
+  | { type: "create_room"; playerName: string; authToken?: string }
+  | { type: "join_room"; roomId: string; playerName: string; authToken?: string }
   | { type: "reconnect_room"; roomId: string; playerId: string }
   | { type: "start_game" }
   | { type: "add_bot" }

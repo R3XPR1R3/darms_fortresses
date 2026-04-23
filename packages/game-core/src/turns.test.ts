@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createRng } from "./rng.js";
 import { createMatch } from "./setup.js";
 import { initDraft, draftPick } from "./draft.js";
-import { buildTurnOrder, takeIncome, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
+import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
 import type { DistrictCard } from "@darms/shared-types";
 import { HeroId, FLAME_CARD_NAME } from "@darms/shared-types";
 
@@ -48,7 +48,7 @@ describe("turn phase", () => {
     expect(ordered.turnOrder!.length).toBe(4);
   });
 
-  it("take gold income adds 1 gold", () => {
+  it("take gold income adds 2 gold", () => {
     const { state, rng } = draftAll(42);
     const ordered = buildTurnOrder(state, rng);
     const playerIdx = currentPlayer(ordered)!;
@@ -56,21 +56,27 @@ describe("turn phase", () => {
 
     const result = takeIncome(ordered, player.id, "gold")!;
     expect(result).not.toBeNull();
-    expect(result.players[playerIdx].gold).toBe(player.gold + 1);
+    expect(result.players[playerIdx].gold).toBe(player.gold + 2);
     expect(result.players[playerIdx].incomeTaken).toBe(true);
   });
 
-  it("take card income draws from deck", () => {
+  it("take card income creates 2-card offer and resolves to +1 hand card", () => {
     const { state, rng } = draftAll(42);
     const ordered = buildTurnOrder(state, rng);
     const playerIdx = currentPlayer(ordered)!;
     const player = ordered.players[playerIdx];
     const deckSize = ordered.deck.length;
 
-    const result = takeIncome(ordered, player.id, "card")!;
+    const afterIncome = takeIncome(ordered, player.id, "card")!;
+    expect(afterIncome).not.toBeNull();
+    expect(afterIncome.players[playerIdx].incomeOffer).toHaveLength(2);
+    expect(afterIncome.deck.length).toBe(deckSize - 2);
+
+    const pickedId = afterIncome.players[playerIdx].incomeOffer![0].id;
+    const result = pickIncomeCard(afterIncome, player.id, pickedId)!;
     expect(result).not.toBeNull();
     expect(result.players[playerIdx].hand.length).toBe(player.hand.length + 1);
-    expect(result.deck.length).toBe(deckSize - 1);
+    expect(result.players[playerIdx].incomeTaken).toBe(true);
   });
 
   it("rejects double income", () => {
@@ -102,7 +108,7 @@ describe("turn phase", () => {
     const result = buildDistrict(withGold, player.id, card.id)!;
     expect(result).not.toBeNull();
     expect(result.players[playerIdx].gold).toBe(10 - card.cost);
-    expect(result.players[playerIdx].builtDistricts).toContainEqual(card);
+    expect(result.players[playerIdx].builtDistricts).toContainEqual(expect.objectContaining(card));
     expect(result.players[playerIdx].hand).not.toContainEqual(card);
   });
 
@@ -121,6 +127,34 @@ describe("turn phase", () => {
 
     const card = player.hand[0];
     const result = buildDistrict(broke, player.id, card.id);
+    expect(result).toBeNull();
+  });
+
+  it("rejects building when player already has 8 districts", () => {
+    const { state, rng } = draftAll(42);
+    const ordered = buildTurnOrder(state, rng);
+    const playerIdx = currentPlayer(ordered)!;
+    const player = ordered.players[playerIdx];
+    const card = player.hand[0];
+
+    const withFullCity = {
+      ...ordered,
+      players: ordered.players.map((p, i) => (i === playerIdx
+        ? {
+          ...p,
+          gold: 10,
+          builtDistricts: Array.from({ length: 8 }, (_, n) => ({
+            id: `full-${n}`,
+            name: `Full ${n}`,
+            cost: 1,
+            hp: 1,
+            colors: ["yellow"] as DistrictCard["colors"],
+          })),
+        }
+        : p)),
+    };
+
+    const result = buildDistrict(withFullCity, player.id, card.id);
     expect(result).toBeNull();
   });
 
@@ -145,7 +179,7 @@ describe("turn phase", () => {
     expect(ordered.day).toBe(2);
   });
 
-  it("monument uses hand-based build cost and becomes fixed 3/3 on table", () => {
+  it("monument costs 3 from hand and becomes fixed 5/5 on table", () => {
     const { state, rng } = draftAll(42);
     const ordered = buildTurnOrder(state, rng);
     const playerIdx = currentPlayer(ordered)!;
@@ -167,14 +201,13 @@ describe("turn phase", () => {
     };
 
     const result = buildDistrict(withMonument, player.id, monument.id)!;
-    // 6 cards in hand incl. monument => pay 5
-    expect(result.players[playerIdx].gold).toBe(5);
+    expect(result.players[playerIdx].gold).toBe(7);
     const built = result.players[playerIdx].builtDistricts.find((d) => d.id === monument.id)!;
-    expect(built.cost).toBe(3);
-    expect(built.hp).toBe(3);
+    expect(built.cost).toBe(5);
+    expect(built.hp).toBe(5);
   });
 
-  it("city gates discount only in hand and stop changing on table", () => {
+  it("city gates can be built by king and keep base stats on table", () => {
     const { state, rng } = draftAll(42);
     const ordered = buildTurnOrder(state, rng);
     const playerIdx = currentPlayer(ordered)!;
@@ -191,23 +224,23 @@ describe("turn phase", () => {
 
     let s = {
       ...ordered,
-      players: ordered.players.map((p, i) => i === playerIdx ? { ...p, hand: [...p.hand, gates], gold: 20 } : p),
+      players: ordered.players.map((p, i) => i === playerIdx
+        ? { ...p, hero: HeroId.King, hand: [...p.hand, gates], gold: 20 }
+        : p),
     };
-
-    s = advanceTurn(s, rng);
-    const discounted = s.players[playerIdx].hand.find((c) => c.id === "gate-1")!;
-    expect(discounted.cost).toBe(6);
+    const inHand = s.players[playerIdx].hand.find((c) => c.id === "gate-1")!;
+    expect(inHand.cost).toBe(8);
 
     s = buildDistrict(s, player.id, "gate-1")!;
     const onTable = s.players[playerIdx].builtDistricts.find((d) => d.id === "gate-1")!;
-    expect(onTable.cost).toBe(6);
-    expect(onTable.hp).toBe(6);
+    expect(onTable.cost).toBe(8);
+    expect(onTable.hp).toBe(8);
 
     // advance one more turn: hand discounts continue, table gates unchanged
     s = advanceTurn(s, rng);
     const onTableAfter = s.players[playerIdx].builtDistricts.find((d) => d.id === "gate-1")!;
-    expect(onTableAfter.cost).toBe(6);
-    expect(onTableAfter.hp).toBe(6);
+    expect(onTableAfter.cost).toBe(8);
+    expect(onTableAfter.hp).toBe(8);
   });
 
   it("flame burns two cards at end of turn, then gets replaced by new flames", () => {
@@ -272,13 +305,13 @@ describe("turn phase", () => {
 });
 
 describe("setup", () => {
-  it("deals 5 cards to each player with no purple", () => {
+  it("deals 4 cards to each player with no purple", () => {
     const deck = makeDeck(40);
     const rng = createRng(42);
     const state = createMatch(PLAYERS, deck, rng);
 
     for (const p of state.players) {
-      expect(p.hand).toHaveLength(5);
+      expect(p.hand).toHaveLength(4);
       for (const card of p.hand) {
         expect(card.colors.includes("purple")).toBe(false);
       }
@@ -300,6 +333,6 @@ describe("setup", () => {
     const rng = createRng(42);
     const state = createMatch(PLAYERS, deck, rng);
 
-    expect(state.deck.length).toBe(20);
+    expect(state.deck.length).toBe(24);
   });
 });
