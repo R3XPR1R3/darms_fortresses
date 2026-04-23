@@ -213,7 +213,7 @@ export function pickIncomeCard(
   }
 
   // Leader auto-builds City Gates if picked into hand.
-  if (updated.hero === HeroId.King) {
+  if (updated.hero === HeroId.King && updated.builtDistricts.length < WIN_DISTRICTS) {
     const gateIdx = updated.hand.findIndex((d) => d.purpleAbility === "city_gates");
     if (gateIdx !== -1) {
       const hand = [...updated.hand];
@@ -252,6 +252,7 @@ export function buildDistrict(
   const player = state.players[playerIdx];
   if (player.assassinated) return null;
   if (player.buildsRemaining <= 0) return null;
+  if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
 
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
   if (cardIdx === -1) return null;

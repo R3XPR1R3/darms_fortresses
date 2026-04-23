@@ -130,6 +130,34 @@ describe("turn phase", () => {
     expect(result).toBeNull();
   });
 
+  it("rejects building when player already has 8 districts", () => {
+    const { state, rng } = draftAll(42);
+    const ordered = buildTurnOrder(state, rng);
+    const playerIdx = currentPlayer(ordered)!;
+    const player = ordered.players[playerIdx];
+    const card = player.hand[0];
+
+    const withFullCity = {
+      ...ordered,
+      players: ordered.players.map((p, i) => (i === playerIdx
+        ? {
+          ...p,
+          gold: 10,
+          builtDistricts: Array.from({ length: 8 }, (_, n) => ({
+            id: `full-${n}`,
+            name: `Full ${n}`,
+            cost: 1,
+            hp: 1,
+            colors: ["yellow"] as DistrictCard["colors"],
+          })),
+        }
+        : p)),
+    };
+
+    const result = buildDistrict(withFullCity, player.id, card.id);
+    expect(result).toBeNull();
+  });
+
   it("advance turn moves to next player", () => {
     const { state, rng } = draftAll(42);
     const ordered = buildTurnOrder(state, rng);

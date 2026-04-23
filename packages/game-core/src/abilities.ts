@@ -52,7 +52,7 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
       newCrownHolder = playerIdx;
       // City Gates: King auto-builds gates for free at start of their turn.
       const gateIdx = newPlayers[playerIdx].hand.findIndex((d) => d.purpleAbility === "city_gates");
-      if (gateIdx !== -1) {
+      if (gateIdx !== -1 && newPlayers[playerIdx].builtDistricts.length < WIN_DISTRICTS) {
         const hand = [...newPlayers[playerIdx].hand];
         const card = hand[gateIdx];
         hand.splice(gateIdx, 1);

@@ -1,5 +1,5 @@
 import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
-import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS } from "@darms/shared-types";
+import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, purpleCardPick } from "./draft.js";
 import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
@@ -242,6 +242,7 @@ function useCompanion(
     case CompanionId.Reconstructor: {
       // For 2 gold, builds a destroyed district from discard pile. Leaves pool.
       if (player.gold < 2) return null;
+      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
       if (state.discardPile.length === 0) return null;
       const pile = [...state.discardPile];
       const pickIdx = rng.int(0, pile.length - 1);
@@ -277,6 +278,7 @@ function useCompanion(
     case CompanionId.SorcererApprentice: {
       // For 2 gold, builds a random discarded district
       if (player.gold < 2) return null;
+      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
       if (state.discardPile.length === 0) return null;
       const pile = [...state.discardPile];
       const pickIdx = rng.int(0, pile.length - 1);
@@ -389,6 +391,7 @@ function useCompanion(
     case CompanionId.Fisherman: {
       // For 1 gold, builds a random cost-2 district (allows duplicates)
       if (player.gold < 1) return null;
+      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
       const newCard = generateRandomCard(2, rng);
       newCard.hp = 2;
       newPlayers[playerIdx] = {
