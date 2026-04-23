@@ -1,8 +1,19 @@
-import type { GameState, DistrictCard, CardColor } from "@darms/shared-types";
+import type { GameState, DistrictCard, CardColor, PlayerState } from "@darms/shared-types";
 import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME, MAX_HAND_CARDS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
 import { addRandomColor } from "./deck.js";
+
+/** Hard cap: true iff this player can add one more district. */
+export function canAddDistrict(player: PlayerState): boolean {
+  return player.builtDistricts.length < WIN_DISTRICTS;
+}
+
+/** Safely add a district. No-op if at cap. */
+export function pushBuiltDistrict(player: PlayerState, card: DistrictCard): PlayerState {
+  if (!canAddDistrict(player)) return player;
+  return { ...player, builtDistricts: [...player.builtDistricts, card] };
+}
 
 /**
  * Build the turn order for the current day based on hero speeds.
@@ -197,7 +208,7 @@ export function pickIncomeCard(
   const accepted = freeSlots > 0 ? [picked] : [];
   const overflow = accepted.length === 0 ? 1 : 0;
 
-  let updated = {
+  let updated: PlayerState = {
     ...player,
     hand: [...player.hand, ...accepted],
     incomeOffer: null,
@@ -212,18 +223,15 @@ export function pickIncomeCard(
     updated = { ...updated, incomeTaken: false };
   }
 
-  // Leader auto-builds City Gates if picked into hand.
-  if (updated.hero === HeroId.King && updated.builtDistricts.length < WIN_DISTRICTS) {
+  // Leader auto-builds City Gates if picked into hand (hard-capped at WIN_DISTRICTS).
+  if (updated.hero === HeroId.King && canAddDistrict(updated)) {
     const gateIdx = updated.hand.findIndex((d) => d.purpleAbility === "city_gates");
     if (gateIdx !== -1) {
       const hand = [...updated.hand];
       const gate = hand[gateIdx];
       hand.splice(gateIdx, 1);
-      updated = {
-        ...updated,
-        hand,
-        builtDistricts: [...updated.builtDistricts, { ...gate, cost: 8, originalCost: 8, hp: 8 }],
-      };
+      const builtGate = { ...gate, cost: 8, originalCost: 8, hp: 8 };
+      updated = pushBuiltDistrict({ ...updated, hand }, builtGate);
     }
   }
 
@@ -252,7 +260,7 @@ export function buildDistrict(
   const player = state.players[playerIdx];
   if (player.assassinated) return null;
   if (player.buildsRemaining <= 0) return null;
-  if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
+  if (!canAddDistrict(player)) return null;
 
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
   if (cardIdx === -1) return null;
@@ -408,13 +416,14 @@ export function buildDistrict(
   // (Fort effect is passive — applied when checking HP, not on build)
 
   const newPlayers = [...state.players];
-  newPlayers[playerIdx] = {
+  const afterGoldHand = {
     ...player,
     gold: player.gold - effectiveCost,
     hand: newHand,
-    builtDistricts: [...player.builtDistricts, builtCard],
     buildsRemaining: player.buildsRemaining - 1,
   };
+  // Defensive: pushBuiltDistrict no-ops if somehow at cap.
+  newPlayers[playerIdx] = pushBuiltDistrict(afterGoldHand, builtCard);
 
   let newState = { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `🏗️ ${player.name} построил ${card.name}` }] };
   newState = checkWinCondition(newState);

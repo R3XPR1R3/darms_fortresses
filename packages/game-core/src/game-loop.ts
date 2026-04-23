@@ -2,7 +2,7 @@ import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
 import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, purpleCardPick } from "./draft.js";
-import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
+import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer, canAddDistrict, pushBuiltDistrict } from "./turns.js";
 import { useAbility, checkWinCondition } from "./abilities.js";
 import { generateRandomCard, generateDifferentColorCard, generateCard } from "./deck.js";
 
@@ -242,18 +242,16 @@ function useCompanion(
     case CompanionId.Reconstructor: {
       // For 2 gold, builds a destroyed district from discard pile. Leaves pool.
       if (player.gold < 2) return null;
-      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
+      if (!canAddDistrict(player)) return null;
       if (state.discardPile.length === 0) return null;
       const pile = [...state.discardPile];
       const pickIdx = rng.int(0, pile.length - 1);
       const rebuilt = { ...pile[pickIdx], hp: pile[pickIdx].cost };
       pile.splice(pickIdx, 1);
-      newPlayers[playerIdx] = {
-        ...player,
-        gold: player.gold - 2,
-        builtDistricts: [...player.builtDistricts, rebuilt],
-        companionUsed: true,
-      };
+      newPlayers[playerIdx] = pushBuiltDistrict(
+        { ...player, gold: player.gold - 2, companionUsed: true },
+        rebuilt,
+      );
       let s = addLog({ ...state, players: newPlayers, discardPile: pile }, `${player.name} — реконструктор: восстановил ${rebuilt.name}!`);
       s = { ...s, bannedCompanions: [...s.bannedCompanions, CompanionId.Reconstructor], rng: rng.getSeed() };
       return checkWinCondition(s);
@@ -278,18 +276,16 @@ function useCompanion(
     case CompanionId.SorcererApprentice: {
       // For 2 gold, builds a random discarded district
       if (player.gold < 2) return null;
-      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
+      if (!canAddDistrict(player)) return null;
       if (state.discardPile.length === 0) return null;
       const pile = [...state.discardPile];
       const pickIdx = rng.int(0, pile.length - 1);
       const built = { ...pile[pickIdx], hp: pile[pickIdx].cost };
       pile.splice(pickIdx, 1);
-      newPlayers[playerIdx] = {
-        ...player,
-        gold: player.gold - 2,
-        builtDistricts: [...player.builtDistricts, built],
-        companionUsed: true,
-      };
+      newPlayers[playerIdx] = pushBuiltDistrict(
+        { ...player, gold: player.gold - 2, companionUsed: true },
+        built,
+      );
       let s = addLog({ ...state, players: newPlayers, discardPile: pile }, `${player.name} — ученик чародея: построил ${built.name} из сброса`);
       s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);
@@ -391,15 +387,13 @@ function useCompanion(
     case CompanionId.Fisherman: {
       // For 1 gold, builds a random cost-2 district (allows duplicates)
       if (player.gold < 1) return null;
-      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
+      if (!canAddDistrict(player)) return null;
       const newCard = generateRandomCard(2, rng);
       newCard.hp = 2;
-      newPlayers[playerIdx] = {
-        ...player,
-        gold: player.gold - 1,
-        builtDistricts: [...player.builtDistricts, newCard],
-        companionUsed: true,
-      };
+      newPlayers[playerIdx] = pushBuiltDistrict(
+        { ...player, gold: player.gold - 1, companionUsed: true },
+        newCard,
+      );
       let s = addLog({ ...state, players: newPlayers }, `${player.name} — рыбак: построил ${newCard.name} (2💰)`);
       s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);

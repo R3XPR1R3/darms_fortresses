@@ -50,16 +50,22 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
         log = addLog({ ...state, log }, `${p.name} (Король) +${yellowCount} золота за жёлтые кварталы`);
       }
       newCrownHolder = playerIdx;
-      // City Gates: King auto-builds gates for free at start of their turn.
-      const gateIdx = newPlayers[playerIdx].hand.findIndex((d) => d.purpleAbility === "city_gates");
-      if (gateIdx !== -1 && newPlayers[playerIdx].builtDistricts.length < WIN_DISTRICTS) {
-        const hand = [...newPlayers[playerIdx].hand];
+      // City Gates: King auto-builds gates for free at start of their turn (hard-capped).
+      const kingPlayer = newPlayers[playerIdx];
+      const gateIdx = kingPlayer.hand.findIndex((d) => d.purpleAbility === "city_gates");
+      if (gateIdx !== -1 && kingPlayer.builtDistricts.length < WIN_DISTRICTS) {
+        const hand = [...kingPlayer.hand];
         const card = hand[gateIdx];
         hand.splice(gateIdx, 1);
         const built = { ...card, cost: 8, originalCost: 8, hp: 8 };
-        const builtDistricts = [...newPlayers[playerIdx].builtDistricts, built];
-        newPlayers[playerIdx] = { ...newPlayers[playerIdx], hand, builtDistricts };
-        log = addLog({ ...state, log }, `${p.name} (Лидер) автоматически выставил Врата в город`);
+        const next = { ...kingPlayer, hand };
+        // Guard: only add if still under cap.
+        if (next.builtDistricts.length < WIN_DISTRICTS) {
+          newPlayers[playerIdx] = { ...next, builtDistricts: [...next.builtDistricts, built] };
+          log = addLog({ ...state, log }, `${p.name} (Лидер) автоматически выставил Врата в город`);
+        } else {
+          newPlayers[playerIdx] = next;
+        }
       }
       break;
     }
