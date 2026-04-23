@@ -165,6 +165,43 @@ export function animateChanges(cur: Snapshot) {
   prev = { ...cur };
 }
 
+export function animateCardShatter() {
+  const host = document.getElementById("my-board");
+  if (!host) return;
+
+  const burst = document.createElement("div");
+  burst.style.position = "absolute";
+  burst.style.left = "50%";
+  burst.style.top = "62%";
+  burst.style.width = "0";
+  burst.style.height = "0";
+  burst.style.pointerEvents = "none";
+  burst.style.zIndex = "999";
+  host.appendChild(burst);
+
+  const pieces = Array.from({ length: 8 }).map(() => {
+    const p = document.createElement("div");
+    p.style.position = "absolute";
+    p.style.width = "10px";
+    p.style.height = "14px";
+    p.style.borderRadius = "3px";
+    p.style.background = "linear-gradient(135deg, #ffd166, #ef476f)";
+    burst.appendChild(p);
+    return p;
+  });
+
+  animate(pieces, {
+    translateX: () => (Math.random() - 0.5) * 120,
+    translateY: () => (Math.random() - 0.5) * 90,
+    rotate: () => (Math.random() - 0.5) * 360,
+    opacity: [1, 0],
+    scale: [1, 0.2],
+    duration: 650,
+    ease: "outExpo",
+    complete: () => burst.remove(),
+  });
+}
+
 /** Reset snapshot (call when entering a new game) */
 export function resetAnimState() {
   prev = {

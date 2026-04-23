@@ -81,7 +81,7 @@ describe("hero abilities", () => {
     expect(result).toBeNull();
   });
 
-  it("sorcerer discards 2 random cards and draws 3", () => {
+  it("sorcerer discards 2 random cards and draws 2", () => {
     const rng = createRng(1);
     let state = makeTestState();
     state = assignHeroes(state, [HeroId.Sorcerer, HeroId.King, HeroId.Merchant, HeroId.General]);
@@ -90,9 +90,9 @@ describe("hero abilities", () => {
 
     const result = useAbility(state, "p1", { hero: "sorcerer", mode: "draw" }, rng);
     expect(result).not.toBeNull();
-    // hand = handBefore - 2 discarded + 3 drawn = handBefore + 1
-    expect(result!.players[0].hand.length).toBe(handBefore + 1);
-    expect(result!.deck.length).toBe(deckBefore - 3);
+    // hand = handBefore - 2 discarded + 2 drawn = handBefore
+    expect(result!.players[0].hand.length).toBe(handBefore);
+    expect(result!.deck.length).toBe(deckBefore - 2);
   });
 
   it("sorcerer swaps hands", () => {

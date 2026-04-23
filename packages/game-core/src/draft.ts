@@ -118,6 +118,10 @@ function canPickCompanion(companionId: CompanionId, heroColor: string | null): b
   return def.heroColor === heroColor;
 }
 
+function getEmergencyCompanion(state: GameState, playerIdx: number): CompanionId {
+  return (state.day + playerIdx) % 2 === 0 ? CompanionId.Investor : CompanionId.Trainer;
+}
+
 /**
  * Generate a shared pool of 3 companion choices for the sequential draft.
  * Shuffles all 16 companions and picks 3 unique ones.
@@ -290,10 +294,11 @@ export function companionPick(
   // Check hero color restriction
   const heroColor = getPlayerHeroColor(state, expectedPlayerIdx);
   const hasEligibleInPool = pool.some((id) => canPickCompanion(id, heroColor));
-  const isFallbackSpecial = companionId === CompanionId.Investor || companionId === CompanionId.Trainer;
-  if (!isFallbackSpecial && !pool.includes(companionId)) return null;
-  if (!isFallbackSpecial && !canPickCompanion(companionId, heroColor)) return null;
-  if (isFallbackSpecial && hasEligibleInPool) return null; // specials only when all offered are locked
+  const emergencyCompanion = getEmergencyCompanion(state, expectedPlayerIdx);
+  const isEmergencyPick = companionId === emergencyCompanion;
+  if (!isEmergencyPick && !pool.includes(companionId)) return null;
+  if (!isEmergencyPick && !canPickCompanion(companionId, heroColor)) return null;
+  if (isEmergencyPick && hasEligibleInPool) return null; // fallback only when all 3 are locked
 
   // Collect already-picked companions (for replacement exclusion)
   const alreadyPicked = state.players
@@ -305,9 +310,12 @@ export function companionPick(
   newPlayers[expectedPlayerIdx] = { ...newPlayers[expectedPlayerIdx], companion: companionId };
 
   // Remove picked companion from pool and add a replacement
-  let newPool = pool.filter((c) => c !== companionId);
-  const replacement = pickReplacementCompanion(newPool, alreadyPicked, rng, state.bannedCompanions);
-  if (replacement) newPool.push(replacement);
+  let newPool = [...pool];
+  if (!isEmergencyPick) {
+    newPool = pool.filter((c) => c !== companionId);
+    const replacement = pickReplacementCompanion(newPool, alreadyPicked, rng, state.bannedCompanions);
+    if (replacement) newPool.push(replacement);
+  }
 
   const nextStep = draft.currentStep + 1;
   const allPicked = nextStep >= draft.draftOrder.length;
