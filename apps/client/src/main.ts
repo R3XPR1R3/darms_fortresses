@@ -933,7 +933,6 @@ function openDeckBuilderModal() {
   if (!overlay) {
     overlay = document.createElement("div");
     overlay.id = "deck-builder-modal";
-    overlay.className = "modal deck-builder-modal";
     document.body.appendChild(overlay);
   }
   overlay.classList.add("show");
@@ -1061,8 +1060,6 @@ function openDeckBuilderModal() {
       });
     });
 
-    overlay!.querySelector(".db-close")?.addEventListener("click", close);
-
     document.getElementById("db-clear")?.addEventListener("click", () => {
       draftPurple = Array(DECK_BUILD_PURPLE_SIZE).fill(null);
       draftCompanions = Array(DECK_BUILD_COMPANION_SIZE).fill(null);
@@ -1091,7 +1088,13 @@ function openDeckBuilderModal() {
   };
 
   render();
-  overlay!.onclick = (e) => { if (e.target === overlay) close(); };
+  // Delegated click handler — survives any inner re-renders and catches both
+  // the backdrop click and the ✕ button click (anywhere inside .db-close).
+  overlay!.onclick = (e) => {
+    const target = e.target as HTMLElement;
+    if (target === overlay) { close(); return; }
+    if (target.closest(".db-close")) { close(); return; }
+  };
 }
 
 function showCardPoolModal() {
