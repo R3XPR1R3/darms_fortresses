@@ -70,7 +70,10 @@ tests/          — unit/integration/simulation tests
 pnpm install
 pnpm run build        # build all packages
 pnpm run test         # run tests
+npm run build         # npm wrapper (calls pnpm workspace build)
 ```
+
+> Note: if `npm` prints `Unknown env config "http-proxy"`, this is an environment-level npm warning, not a project build error.
 
 ### Local development
 

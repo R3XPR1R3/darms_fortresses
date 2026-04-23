@@ -89,6 +89,7 @@ interface AuthUser {
 let authToken: string | null = localStorage.getItem("darms_token");
 let authUser: AuthUser | null = null;
 let googleClientId = "";
+let guestMode = false;
 
 async function fetchAuthConfig() {
   try {
@@ -108,6 +109,7 @@ async function handleGoogleCredential(response: { credential: string }) {
     if (!res.ok) throw new Error("Auth failed");
     const data = await res.json();
     authToken = data.token;
+    guestMode = false;
     authUser = {
       ...data.user,
       gold: Number(data.user?.gold ?? 0),
@@ -139,6 +141,7 @@ async function loadAuthUser() {
 function logout() {
   authToken = null;
   authUser = null;
+  guestMode = false;
   localStorage.removeItem("darms_token");
   renderMenu();
 }
@@ -728,8 +731,13 @@ function renderMenu() {
         <button class="auth-logout" id="auth-logout">выйти</button>
       </div>
     `;
-  } else if (googleClientId) {
-    authHtml = `<div id="google-signin-btn"></div>`;
+  } else if (googleClientId && !guestMode) {
+    authHtml = `
+      <div id="google-signin-btn"></div>
+      <button class="btn btn-secondary btn-small" id="btn-guest-login">${t("menu.guest_login")}</button>
+    `;
+  } else if (guestMode) {
+    authHtml = `<div class="hint">${t("menu.guest_mode")}</div>`;
   }
 
   const defaultName = authUser?.nickname ?? t("menu.default_name");
@@ -806,6 +814,10 @@ function renderMenu() {
   // Auth event listeners
   document.getElementById("auth-nickname")?.addEventListener("click", changeNickname);
   document.getElementById("auth-logout")?.addEventListener("click", logout);
+  document.getElementById("btn-guest-login")?.addEventListener("click", () => {
+    guestMode = true;
+    renderMenu();
+  });
 
   document.getElementById("btn-lang")!.addEventListener("click", () => {
     const next = getLang() === "en" ? "ru" : getLang() === "ru" ? "id" : "en";
@@ -1375,7 +1387,7 @@ function renderMyBoard() {
     companionHtml = `
       <div class="my-companion">
         <span class="companion-name">${companionEmoji(me.companion)} ${tCompanionName(me.companion, cDef?.name ?? me.companion)}${me.companionDisabled ? " ❌" : ""}</span>
-        <span style="font-size:9px;color:#888">${tCompanionDescription(me.companion, cDef?.description ?? "")}</span>
+        <span style="font-size:9px;color:#888">${expandKw(tCompanionDescription(me.companion, cDef?.description ?? ""))}</span>
       </div>
     `;
   }
@@ -1387,7 +1399,7 @@ function renderMyBoard() {
     const tpl = d.purpleAbility ? PURPLE_CARD_TEMPLATES.find((t) => t.ability === d.purpleAbility) : null;
     const clickClass = isClickable ? "purple-clickable" : "";
     const clickAttr = isClickable ? `data-activate="${d.id}"` : "";
-    const tooltipHtml = tpl ? `<div class="purple-tooltip">${tpl.emoji} ${tpl.description}</div>` : "";
+    const tooltipHtml = tpl ? `<div class="purple-tooltip">${tpl.emoji} ${expandKw(tPurpleDesc(tpl.ability))}</div>` : "";
     return `<div class="district-wrapper ${clickClass}" ${clickAttr}>${districtCardHtml(d)}${tooltipHtml}</div>`;
   }).join("");
   const districtsSection = districts ? `<div class="my-districts">${districts}</div>` : "";
@@ -1720,7 +1732,8 @@ function renderDraft() {
       return !(def?.heroColor && def.heroColor !== myHeroColor);
     });
     if (!hasEligibleBase) {
-      unique = [...unique, CompanionId.Investor, CompanionId.Trainer];
+      const emergency = ((getDay() + getMyIndex()) % 2 === 0) ? CompanionId.Investor : CompanionId.Trainer;
+      unique = [...unique, emergency];
     }
 
     const companionCards = unique.map((cId) => {
@@ -1735,7 +1748,7 @@ function renderDraft() {
           <div class="companion-card-portrait">${def?.emoji ?? "?"}</div>
           <div class="companion-card-body">
             <div class="companion-card-name">${def ? tCompanionName(cId, def.name) : cId} ${passiveTag}</div>
-            <div class="companion-card-desc">${def ? tCompanionDescription(cId, def.description) : ""}</div>
+            <div class="companion-card-desc">${def ? expandKw(tCompanionDescription(cId, def.description)) : ""}</div>
             ${restricted ? `<div style="font-size:8px;color:#e04050">⛔ ${t("companion.only_color")} ${def.heroColor === "yellow" ? "🟡" : def.heroColor === "blue" ? "🔵" : def.heroColor === "green" ? "🟢" : "🔴"}</div>` : ""}
           </div>
         </button>`;
@@ -1848,7 +1861,7 @@ function showCompanionModal(companionId: CompanionId) {
 
   const cDef = companionDef(companionId);
   const companionLabel = cDef ? tCompanionName(companionId, cDef.name) : companionId;
-  const companionHint = cDef ? tCompanionDescription(companionId, cDef.description) : "";
+  const companionHint = cDef ? expandKw(tCompanionDescription(companionId, cDef.description)) : "";
   const players = getPlayers();
   const myIdx = getMyIndex();
   const me = players[myIdx];

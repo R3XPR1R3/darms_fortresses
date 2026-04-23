@@ -57,11 +57,15 @@ sudo ./svc.sh start
 ## 3. Проверяем
 
 ```bash
+# Подготовка env (иначе docker compose будет ругаться на пустые переменные)
+cp .env.example .env
+
 # Статус раннера
 sudo ./svc.sh status
 
 # Ручной деплой
 cd /opt/darms-fortresses
+# (если есть .env, deploy/start автоматически подхватят его через --env-file)
 bash infra/deploy.sh
 
 # Центр управления проектом (настройки, логи, кампании, обновление, PR helper)
