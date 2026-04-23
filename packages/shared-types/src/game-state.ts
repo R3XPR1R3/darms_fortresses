@@ -4,6 +4,7 @@ import type { CompanionId } from "./companion.js";
 import { ALL_PURPLE_SPECIAL } from "./cards/index.js";
 
 export const WIN_DISTRICTS = 8;
+export const MAX_HAND_CARDS = 10;
 
 /** Top-level game state — single source of truth */
 export interface GameState {

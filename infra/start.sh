@@ -7,7 +7,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-COMPOSE="docker compose -f $REPO_DIR/infra/docker/docker-compose.yml"
+ENV_FILE="$REPO_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  COMPOSE="docker compose --env-file $ENV_FILE -f $REPO_DIR/infra/docker/docker-compose.yml"
+else
+  COMPOSE="docker compose -f $REPO_DIR/infra/docker/docker-compose.yml"
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
