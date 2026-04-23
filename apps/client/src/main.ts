@@ -933,7 +933,6 @@ function openDeckBuilderModal() {
   if (!overlay) {
     overlay = document.createElement("div");
     overlay.id = "deck-builder-modal";
-    overlay.className = "modal deck-builder-modal";
     document.body.appendChild(overlay);
   }
   overlay.classList.add("show");
