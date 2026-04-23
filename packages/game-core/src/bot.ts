@@ -72,13 +72,19 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
     // Step 2: Take income if not taken
     if (!player.incomeTaken) {
       const canBuild = player.hand.some(
-        (c) => c.cost <= player.gold + 1 && !player.builtDistricts.some((d) => d.name === c.name),
+        (c) => c.cost <= player.gold + 1 && !player.builtDistricts.some((d) => d.name === c.name) && c.placeholder !== "purple",
       );
       return {
         type: "income",
         playerId: botPlayerId,
         choice: canBuild ? "gold" : "card",
       };
+    }
+
+    // Step 2.2: Play a purple placeholder if present — it's free and fetches a purple card.
+    const placeholder = player.hand.find((c) => c.placeholder === "purple");
+    if (placeholder && player.purplePool.length > 0) {
+      return { type: "purple_placeholder_play", playerId: botPlayerId, cardId: placeholder.id };
     }
 
     // Step 2.5: Use active companion after income
@@ -660,6 +666,17 @@ function scoreDraftPick(
 
   const faceUpBans = state.draft?.faceUpBans ?? [];
 
+  // Bias towards heroes whose color matches the bot's build: any companion in
+  // the bot's personal deck with a hero-colour lock implies that build expects
+  // that color (e.g., SunPriestess → blue → Cleric).
+  const buildColorBias: Record<string, number> = {};
+  for (const slot of player.companionDeck) {
+    const def = COMPANIONS.find((c) => c.id === slot.id);
+    if (def?.heroColor) {
+      buildColorBias[def.heroColor] = (buildColorBias[def.heroColor] ?? 0) + 1;
+    }
+  }
+
   let bestHero = available[0];
   let bestScore = -Infinity;
 
@@ -672,6 +689,8 @@ function scoreDraftPick(
       const handCount = handColorCounts[hColor] || 0;
       score += builtCount * 2;
       score += handCount * 1;
+      // Build bias: each color-matched companion adds a small pull.
+      score += (buildColorBias[hColor] ?? 0) * 2.5;
     }
 
     if (threatLevel > 0) {

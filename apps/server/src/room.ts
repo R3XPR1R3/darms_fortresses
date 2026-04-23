@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { GameState, GameAction } from "@darms/shared-types";
-import { CompanionId } from "@darms/shared-types";
+import type { GameState, GameAction, MatchDeckBuild } from "@darms/shared-types";
+import { CompanionId, BOT_BUILDS, DECK_BUILD_PURPLE_SIZE, DECK_BUILD_COMPANION_SIZE } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import type { LobbyPlayer, PlayerView, PlayerViewEntry, DraftView } from "./protocol.js";
 import type { WebSocket } from "ws";
@@ -28,6 +28,10 @@ export interface RoomPlayer {
   userId: number | null;
   ws: WebSocket | null; // null for bots
   disconnectTimer: ReturnType<typeof setTimeout> | null;
+  /** Submitted deck-build. For humans: set via set_deck_build. For bots: pre-assigned from BOT_BUILDS. */
+  build: MatchDeckBuild | null;
+  /** Display label for the bot's archetype (shown in lobby). */
+  buildLabel?: string;
 }
 
 const rooms = new Map<string, Room>();
@@ -59,7 +63,7 @@ export function createRoom(hostName: string, ws: WebSocket, userId: number | nul
   const room: Room = {
     id: roomId,
     hostId: playerId,
-    players: [{ id: playerId, name: sanitizeName(hostName), isBot: false, userId, ws, disconnectTimer: null }],
+    players: [{ id: playerId, name: sanitizeName(hostName), isBot: false, userId, ws, disconnectTimer: null, build: null }],
     state: null,
     started: false,
     startedAt: null,
@@ -78,7 +82,7 @@ export function joinRoom(roomId: string, playerName: string, ws: WebSocket, user
   if (room.players.length >= 4) return "Комната заполнена (макс. 4)";
 
   const playerId = generatePlayerId();
-  room.players.push({ id: playerId, name: sanitizeName(playerName), isBot: false, userId, ws, disconnectTimer: null });
+  room.players.push({ id: playerId, name: sanitizeName(playerName), isBot: false, userId, ws, disconnectTimer: null, build: null });
   return { playerId, players: getLobbyPlayers(room) };
 }
 
@@ -105,8 +109,44 @@ export function addBot(roomId: string, requesterId: string): LobbyPlayer[] | str
   const botName = BOT_NAMES[botCounter % BOT_NAMES.length];
   botCounter++;
   const botId = "bot-" + Math.random().toString(36).slice(2, 8);
-  room.players.push({ id: botId, name: botName, isBot: true, userId: null, ws: null, disconnectTimer: null });
+  // Assign a random pre-built archetype so the bot has a ready deck-build.
+  const archetype = BOT_BUILDS[Math.floor(Math.random() * BOT_BUILDS.length)];
+  room.players.push({
+    id: botId,
+    name: botName,
+    isBot: true,
+    userId: null,
+    ws: null,
+    disconnectTimer: null,
+    build: { purple: [...archetype.build.purple], companions: [...archetype.build.companions] },
+    buildLabel: archetype.name,
+  });
   return getLobbyPlayers(room);
+}
+
+/** Validate a deck-build submitted by a client. */
+function validateBuild(build: MatchDeckBuild | null): build is MatchDeckBuild {
+  if (!build) return false;
+  if (!Array.isArray(build.purple) || build.purple.length !== DECK_BUILD_PURPLE_SIZE) return false;
+  if (!Array.isArray(build.companions) || build.companions.length !== DECK_BUILD_COMPANION_SIZE) return false;
+  const uniqueCompanions = new Set(build.companions);
+  if (uniqueCompanions.size !== DECK_BUILD_COMPANION_SIZE) return false;
+  return true;
+}
+
+export function setDeckBuild(roomId: string, playerId: string, build: MatchDeckBuild | null): string | null {
+  const room = rooms.get(roomId);
+  if (!room) return "Комната не найдена";
+  if (room.started) return "Игра уже началась";
+  const player = room.players.find((p) => p.id === playerId && !p.isBot);
+  if (!player) return "Игрок не найден";
+  if (build === null) {
+    player.build = null;
+    return null;
+  }
+  if (!validateBuild(build)) return "Некорректный билд";
+  player.build = { purple: [...build.purple], companions: [...build.companions] };
+  return null;
 }
 
 export function startGame(roomId: string, requesterId: string): string | null {
@@ -116,10 +156,15 @@ export function startGame(roomId: string, requesterId: string): string | null {
   if (room.started) return "Игра уже запущена";
   if (room.players.length < 4) return "Нужно минимум 4 игрока";
 
+  // Gate: every human must have submitted a valid deck-build.
+  for (const p of room.players) {
+    if (!p.build) return `Игрок ${p.name} не собрал колоду`;
+  }
+
   const seed = randomBytes(4).readUInt32BE(0);
   const rng = createRng(seed);
   const deck = createBaseDeck();
-  const playerDescs = room.players.map((p) => ({ id: p.id, name: p.name }));
+  const playerDescs = room.players.map((p) => ({ id: p.id, name: p.name, build: p.build! }));
   room.state = createMatch(playerDescs, deck, rng);
   room.state = startDraft(room.state);
   room.started = true;
@@ -147,10 +192,16 @@ function logAction(room: Room, action: GameAction, source: "human" | "bot") {
     case "companion_pick":
       console.log(`${tag} ${who} picks companion: ${action.companionId}`);
       break;
-    case "purple_card_pick": {
-      const offers = state.purpleDraft?.offers[state.players.indexOf(player!)];
-      const cardName = offers && action.cardIndex >= 0 ? offers[action.cardIndex]?.name : "SKIP";
-      console.log(`${tag} ${who} purple pick: ${cardName} (idx ${action.cardIndex})`);
+    case "companion_skip":
+      console.log(`${tag} ${who} skips companion (pool locked)`);
+      break;
+    case "purple_placeholder_play":
+      console.log(`${tag} ${who} plays purple placeholder`);
+      break;
+    case "purple_placeholder_pick": {
+      const offer = player?.pendingPurpleOffer;
+      const cardName = offer?.[action.offerIndex]?.name ?? "?";
+      console.log(`${tag} ${who} picks purple: ${cardName} (offerIdx ${action.offerIndex})`);
       break;
     }
     case "income":
@@ -326,10 +377,7 @@ function scheduleBotStep(room: Room) {
     // Fallback actions — also go through handleAction
     const fallbacks: GameAction[] = [];
     if (room.state.phase === "draft" && room.state.draft?.draftPhase === "companion") {
-      fallbacks.push(
-        { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor },
-        { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Trainer },
-      );
+      fallbacks.push({ type: "companion_skip", playerId: botInfo.botId });
     } else if (room.state.phase === "turns") {
       fallbacks.push({ type: "end_turn", playerId: botInfo.botId });
     }
@@ -353,16 +401,10 @@ function scheduleBotStep(room: Room) {
       console.log(`[${room.id}] ❌ Bot action REJECTED: ${action.type} — ${err}`);
       // Fallback attempts — same handleAction path
       const fallbacks: GameAction[] = [];
-      if (action.type === "purple_card_pick") {
-        fallbacks.push(
-          { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: 0 },
-          { type: "purple_card_pick", playerId: botInfo.botId, cardIndex: -1 },
-        );
+      if (action.type === "purple_placeholder_pick") {
+        fallbacks.push({ type: "purple_placeholder_pick", playerId: botInfo.botId, offerIndex: 0 });
       } else if (action.type === "companion_pick") {
-        fallbacks.push(
-          { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Investor },
-          { type: "companion_pick", playerId: botInfo.botId, companionId: CompanionId.Trainer },
-        );
+        fallbacks.push({ type: "companion_skip", playerId: botInfo.botId });
       } else if (action.type !== "end_turn") {
         fallbacks.push({ type: "end_turn", playerId: botInfo.botId });
       }
@@ -384,14 +426,12 @@ function scheduleBotStep(room: Room) {
 function getBotTurn(room: Room): { botId: string } | null {
   if (!room.state) return null;
 
-  // Purple card draft — all bots that haven't picked yet need to act
-  if (room.state.purpleDraft) {
-    for (let i = 0; i < room.state.players.length; i++) {
-      if (room.state.purpleDraft.picked[i]) continue;
-      const player = room.state.players[i];
-      const rp = room.players.find((p) => p.id === player.id);
-      if (rp?.isBot) return { botId: player.id };
-    }
+  // Any bot with a pending purple offer takes priority.
+  for (let i = 0; i < room.state.players.length; i++) {
+    const p = room.state.players[i];
+    if (!p.pendingPurpleOffer || p.pendingPurpleOffer.length === 0) continue;
+    const rp = room.players.find((rp) => rp.id === p.id);
+    if (rp?.isBot) return { botId: p.id };
   }
 
   if (room.state.phase === "draft") {
@@ -453,6 +493,8 @@ export function getLobbyPlayers(room: Room): LobbyPlayer[] {
     name: p.name,
     isBot: p.isBot,
     isHost: p.id === room.hostId,
+    deckReady: !!p.build,
+    buildLabel: p.buildLabel,
   }));
 }
 
@@ -491,6 +533,8 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
       companionUsed: p.companionUsed,
       companionDisabled: p.companionDisabled,
       designerMarkedCardId: p.designerMarkedCardId,
+      companionDeck: p.companionDeck,
+      purplePoolSize: p.purplePool.length,
     };
   });
 
@@ -507,16 +551,8 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
     };
   }
 
-  // Purple draft: only show the current player's offers
-  let purpleDraft: any = null;
-  if (state.purpleDraft) {
-    purpleDraft = {
-      offers: state.purpleDraft.offers.map((cards, i) =>
-        i === myIndex ? cards : null,
-      ),
-      picked: state.purpleDraft.picked,
-    };
-  }
+  const me = state.players[myIndex];
+  const pendingPurpleOffer = me?.pendingPurpleOffer ?? null;
 
   return {
     phase: state.phase,
@@ -530,6 +566,6 @@ export function createPlayerView(state: GameState, playerId: string): PlayerView
     winner: state.winner,
     log: state.log,
     myIndex,
-    purpleDraft,
+    pendingPurpleOffer,
   };
 }

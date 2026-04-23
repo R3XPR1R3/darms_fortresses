@@ -102,7 +102,7 @@ export const BOT_BUILDS: readonly BotBuild[] = [
     id: "universal",
     name: "Универсал",
     build: {
-      purple: ["cannon", "tnt_storage", "fort", "mine", "cult", "altar_darkness"],
+      purple: ["cannon", "tnt_storage", "fort", "mine", "cult", "gold_rain"],
       companions: [CompanionId.Designer, CompanionId.Alchemist, CompanionId.Innkeeper],
     },
     preferredHeroes: [HeroId.Architect, HeroId.Sorcerer],
