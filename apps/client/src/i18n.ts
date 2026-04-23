@@ -86,6 +86,7 @@ const dict: Record<string, TranslationEntry> = {
   "menu.treasury_covers": { en: "Covers", ru: "Обложки" },
   "menu.treasury_cards": { en: "Cards", ru: "Карты" },
   "menu.empty": { en: "Empty for now.", ru: "Пока пусто." },
+  "menu.deck_required": { en: "Build a deck to play", ru: "Соберите колоду, чтобы играть" },
 
   // Lobby
   "lobby.host": { en: "(host)", ru: "(хост)" },
@@ -99,6 +100,25 @@ const dict: Record<string, TranslationEntry> = {
   "lobby.enter_code": { en: "Enter room code:", ru: "Введи код комнаты:" },
   "lobby.connecting": { en: "Connecting...", ru: "Подключение..." },
   "lobby.you": { en: "You", ru: "Ты" },
+  "lobby.deck_ready": { en: "deck ready", ru: "колода готова" },
+  "lobby.deck_pending": { en: "deck pending", ru: "колода не собрана" },
+  "lobby.build_deck": { en: "Build deck", ru: "Собрать колоду" },
+  "lobby.edit_deck": { en: "Edit deck", ru: "Изменить колоду" },
+  "lobby.need_four": { en: "Need 4 players", ru: "Нужно 4 игрока" },
+  "lobby.wait_decks": { en: "Waiting for all decks", ru: "Ждём пока все соберут колоду" },
+
+  // Deck builder
+  "deck.title": { en: "Deck Builder", ru: "Деклбилдинг" },
+  "deck.companions": { en: "Companions", ru: "Компаньоны" },
+  "deck.companions_hint": { en: "3 unique", ru: "3 разных" },
+  "deck.purple": { en: "Purple cards", ru: "Фиолетовые карты" },
+  "deck.purple_hint": { en: "duplicates allowed", ru: "повторы разрешены" },
+  "deck.save": { en: "Save", ru: "Сохранить" },
+  "deck.clear": { en: "Clear", ru: "Очистить" },
+  "deck.preset": { en: "Preset build", ru: "Готовый билд" },
+
+  // Draft / companion skip
+  "draft.skip_companion": { en: "Skip companion", ru: "Пропустить выбор" },
 
   // Draft
   "draft.title": { en: "Hero Draft", ru: "Драфт героев" },
