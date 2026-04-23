@@ -1,5 +1,5 @@
 import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
-import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
+import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, purpleCardPick } from "./draft.js";
 import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
@@ -8,6 +8,28 @@ import { generateRandomCard, generateDifferentColorCard, generateCard } from "./
 
 function addLog(state: GameState, message: string): GameState {
   return { ...state, log: [...state.log, { day: state.day, message }] };
+}
+
+function enforceHandLimit(state: GameState): GameState {
+  let changed = false;
+  const players = state.players.map((p) => {
+    if (p.hand.length <= MAX_HAND_CARDS) return p;
+    changed = true;
+    const overflow = p.hand.length - MAX_HAND_CARDS;
+    return { ...p, hand: p.hand.slice(0, MAX_HAND_CARDS), __overflow: overflow } as typeof p & { __overflow?: number };
+  });
+  if (!changed) return state;
+
+  let log = state.log;
+  const normalized = players.map((p) => {
+    const overflow = (p as { __overflow?: number }).__overflow ?? 0;
+    if (overflow > 0) {
+      log = [...log, { day: state.day, message: `💥 ${p.name}: ${overflow} карт(ы) рассыпались (лимит руки ${MAX_HAND_CARDS})` }];
+    }
+    const { __overflow, ...plain } = p as typeof p & { __overflow?: number };
+    return plain;
+  });
+  return { ...state, players: normalized, log };
 }
 
 /** Check if a companion is functional (not disabled by Saboteur) */
@@ -220,6 +242,7 @@ function useCompanion(
     case CompanionId.Reconstructor: {
       // For 2 gold, builds a destroyed district from discard pile. Leaves pool.
       if (player.gold < 2) return null;
+      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
       if (state.discardPile.length === 0) return null;
       const pile = [...state.discardPile];
       const pickIdx = rng.int(0, pile.length - 1);
@@ -255,6 +278,7 @@ function useCompanion(
     case CompanionId.SorcererApprentice: {
       // For 2 gold, builds a random discarded district
       if (player.gold < 2) return null;
+      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
       if (state.discardPile.length === 0) return null;
       const pile = [...state.discardPile];
       const pickIdx = rng.int(0, pile.length - 1);
@@ -367,6 +391,7 @@ function useCompanion(
     case CompanionId.Fisherman: {
       // For 1 gold, builds a random cost-2 district (allows duplicates)
       if (player.gold < 1) return null;
+      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
       const newCard = generateRandomCard(2, rng);
       newCard.hp = 2;
       newPlayers[playerIdx] = {
@@ -527,9 +552,9 @@ function useCompanion(
           const idx = rng.int(0, hand.length - 1);
           hand.splice(idx, 1);
         }
-        const drawn = newDeck.splice(0, Math.min(3, newDeck.length));
+        const drawn = newDeck.splice(0, Math.min(2, newDeck.length));
         newPlayers[playerIdx] = { ...newPlayers[playerIdx], hand: [...hand, ...drawn], companionUsed: true };
-        return { ...addLog({ ...state, players: newPlayers, deck: newDeck }, `${player.name} — тренер: получена способность чародея`), rng: rng.getSeed() };
+        return { ...addLog({ ...state, players: newPlayers, deck: newDeck }, `${player.name} — тренер: получена способность чародея (сброс 2, добор 2)`), rng: rng.getSeed() };
       } else {
         newPlayers[playerIdx] = { ...newPlayers[playerIdx], buildsRemaining: player.buildsRemaining + 2, companionUsed: true };
         return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: получена способность архитектора`), rng: rng.getSeed() };
@@ -566,6 +591,10 @@ function useCompanion(
  */
 export function processAction(state: GameState, action: GameAction): GameState | null {
   const rng = createRng(state.rng);
+  const finish = (next: GameState | null): GameState | null => {
+    if (!next) return null;
+    return enforceHandLimit(next);
+  };
 
   switch (action.type) {
     case "draft_pick": {
@@ -573,47 +602,47 @@ export function processAction(state: GameState, action: GameAction): GameState |
       if (!result) return null;
       // If draft just ended (phase switched to turns), build turn order
       if (result.phase === "turns") {
-        return buildTurnOrder(result, rng);
+        return finish(buildTurnOrder(result, rng));
       }
-      return result;
+      return finish(result);
     }
     case "companion_pick": {
       const result = companionPick(state, action.playerId, action.companionId, rng);
       if (!result) return null;
       // If companion draft just ended (phase switched to turns), build turn order
       if (result.phase === "turns") {
-        return buildTurnOrder(result, rng);
+        return finish(buildTurnOrder(result, rng));
       }
-      return result;
+      return finish(result);
     }
     case "purple_card_pick": {
       const result = purpleCardPick(state, action.playerId, action.cardIndex);
       if (!result) return null;
       if (result.phase === "turns" && !result.purpleDraft) {
-        return buildTurnOrder(result, rng);
+        return finish(buildTurnOrder(result, rng));
       }
-      return result;
+      return finish(result);
     }
     case "income":
-      return takeIncome(state, action.playerId, action.choice);
+      return finish(takeIncome(state, action.playerId, action.choice));
     case "income_pick":
-      return pickIncomeCard(state, action.playerId, action.cardId);
+      return finish(pickIncomeCard(state, action.playerId, action.cardId));
 
     case "build": {
-      return buildDistrict(state, action.playerId, action.cardId);
+      return finish(buildDistrict(state, action.playerId, action.cardId));
     }
 
     case "ability":
-      return useAbility(state, action.playerId, action.ability, rng);
+      return finish(useAbility(state, action.playerId, action.ability, rng));
 
     case "use_companion":
-      return useCompanion(state, action.playerId, action.targetPlayerId, action.targetCardId, action.targetHeroId);
+      return finish(useCompanion(state, action.playerId, action.targetPlayerId, action.targetCardId, action.targetHeroId));
 
     case "activate_building":
-      return activateBuilding(state, action.playerId, action.cardId, rng);
+      return finish(activateBuilding(state, action.playerId, action.cardId, rng));
 
     case "end_turn":
-      return advanceTurn(state, rng);
+      return finish(advanceTurn(state, rng));
 
     default:
       return null;
