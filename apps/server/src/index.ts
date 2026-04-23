@@ -15,7 +15,7 @@ import {
 } from "./room.js";
 import { initDb } from "./db.js";
 import { loginWithGoogle, verifyToken } from "./auth.js";
-import { updateNickname, updateSettings } from "./db.js";
+import { updateNickname, updateSettings, getWallet, updateWallet } from "./db.js";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
@@ -84,6 +84,8 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse) {
       email: user.email,
       avatarUrl: user.avatar_url,
       settings: user.settings,
+      gold: user.gold,
+      diamonds: user.diamonds,
     });
     return;
   }
@@ -111,6 +113,36 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse) {
     const body = JSON.parse(await readBody(req));
     await updateSettings(user.id, body.settings ?? {});
     json(res, 200, { ok: true });
+    return;
+  }
+
+  // Wallet (gold/diamonds) read
+  if (url === "/auth/wallet" && method === "GET") {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) { json(res, 401, { error: "No token" }); return; }
+    const user = await verifyToken(token);
+    if (!user) { json(res, 401, { error: "Invalid token" }); return; }
+    const wallet = await getWallet(user.id);
+    if (!wallet) { json(res, 404, { error: "User not found" }); return; }
+    json(res, 200, wallet);
+    return;
+  }
+
+  // Wallet (gold/diamonds) update (admin/dev endpoint for now)
+  if (url === "/auth/wallet" && method === "PUT") {
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    if (!token) { json(res, 401, { error: "No token" }); return; }
+    const user = await verifyToken(token);
+    if (!user) { json(res, 401, { error: "Invalid token" }); return; }
+    const body = JSON.parse(await readBody(req));
+    const gold = Number(body.gold ?? user.gold);
+    const diamonds = Number(body.diamonds ?? user.diamonds);
+    if (!Number.isFinite(gold) || !Number.isFinite(diamonds) || gold < 0 || diamonds < 0) {
+      json(res, 400, { error: "Invalid wallet values" });
+      return;
+    }
+    await updateWallet(user.id, Math.floor(gold), Math.floor(diamonds));
+    json(res, 200, { gold: Math.floor(gold), diamonds: Math.floor(diamonds) });
     return;
   }
 
@@ -174,7 +206,7 @@ function ensureBroadcast(roomId: string) {
 }
 
 wss.on("connection", (ws) => {
-  ws.on("message", (raw) => {
+  ws.on("message", async (raw) => {
     const now = Date.now();
     let timestamps = rateLimiter.get(ws);
     if (!timestamps) { timestamps = []; rateLimiter.set(ws, timestamps); }
@@ -195,14 +227,24 @@ wss.on("connection", (ws) => {
 
     switch (msg.type) {
       case "create_room": {
-        const { roomId, playerId } = createRoom(msg.playerName, ws);
+        let userId: number | null = null;
+        if (msg.authToken) {
+          const user = await verifyToken(msg.authToken);
+          userId = user?.id ?? null;
+        }
+        const { roomId, playerId } = createRoom(msg.playerName, ws, userId);
         socketMeta.set(ws, { roomId, playerId });
         send(ws, { type: "room_created", roomId, playerId });
         break;
       }
 
       case "join_room": {
-        const result = joinRoom(msg.roomId.toUpperCase(), msg.playerName, ws);
+        let userId: number | null = null;
+        if (msg.authToken) {
+          const user = await verifyToken(msg.authToken);
+          userId = user?.id ?? null;
+        }
+        const result = joinRoom(msg.roomId.toUpperCase(), msg.playerName, ws, userId);
         if (typeof result === "string") {
           send(ws, { type: "error", message: result });
         } else {
