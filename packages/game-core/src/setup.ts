@@ -10,11 +10,14 @@ export const DEFAULT_TEST_BUILD: MatchDeckBuild = {
 
 let _purpleGenId = 5000;
 
+/** Canonical name for the purple placeholder stub card. UI translates via i18n. */
+export const PURPLE_PLACEHOLDER_NAME = "Фиолетовая карта!";
+
 /** Build a purple placeholder stub card (cost 0, played like a spell to pick a real purple). */
 export function createPurplePlaceholder(): DistrictCard {
   return {
     id: `ph-purple-${_purpleGenId++}`,
-    name: "Фиолетовая карта",
+    name: PURPLE_PLACEHOLDER_NAME,
     cost: 0,
     originalCost: 0,
     hp: 0,

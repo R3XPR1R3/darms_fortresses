@@ -1,5 +1,5 @@
 export { createRng, type Rng } from "./rng.js";
-export { createMatch, createPurplePlaceholder, createPurpleFromAbility, materialiseBuildPurplePool } from "./setup.js";
+export { createMatch, createPurplePlaceholder, createPurpleFromAbility, materialiseBuildPurplePool, PURPLE_PLACEHOLDER_NAME } from "./setup.js";
 export { createBaseDeck, isPurpleCard, generateRandomCard, generateDifferentColorCard, addRandomColor } from "./deck.js";
 export { initDraft, draftPick, companionPick, companionSkip, currentDrafter, getAvailableCompanionIds } from "./draft.js";
 export { playPurplePlaceholder, pickFromPurpleOffer } from "./placeholder.js";

@@ -905,14 +905,15 @@ function saveBuildLocal(build: MatchDeckBuild) {
   try { localStorage.setItem(DECK_STORAGE_KEY, JSON.stringify(build)); } catch { /* noop */ }
 }
 
-/** All 16 picks for the purple deck-build pool: 11 buildings + 5 spells. */
+/** All 16 picks for the purple deck-build pool: 11 buildings + 5 spells.
+ *  Names and descriptions come from the i18n layer (three-language canonical source). */
 function getAllPurpleOptions(): Array<{ id: BuildablePurpleId; name: string; cost: number; emoji: string; desc: string; isSpell: boolean }> {
   const out: Array<{ id: BuildablePurpleId; name: string; cost: number; emoji: string; desc: string; isSpell: boolean }> = [];
   for (const p of ALL_PURPLE_SPECIAL) {
-    out.push({ id: p.ability, name: p.name.ru, cost: p.cost, emoji: p.emoji, desc: p.description.ru, isSpell: false });
+    out.push({ id: p.ability, name: tPurpleName(p.ability), cost: p.cost, emoji: p.emoji, desc: expandKw(tPurpleDesc(p.ability)), isSpell: false });
   }
   for (const s of ALL_SPELLS) {
-    out.push({ id: s.ability, name: s.name.ru, cost: s.cost, emoji: "✨", desc: s.description.ru, isSpell: true });
+    out.push({ id: s.ability, name: tSpellName(s.ability), cost: s.cost, emoji: "✨", desc: expandKw(tSpellDesc(s.ability)), isSpell: true });
   }
   return out;
 }
@@ -961,9 +962,9 @@ function openDeckBuilderModal() {
     const compSlots = draftCompanions.map((id, i) => {
       if (!id) return `<div class="db-slot db-slot-empty" data-companion-slot="${i}">+</div>`;
       const def = companions.find((c) => c.id === id);
-      return `<div class="db-slot db-slot-filled" data-companion-slot="${i}" title="${def?.description ?? ""}">
+      return `<div class="db-slot db-slot-filled" data-companion-slot="${i}" title="${tCompanionDescription(id).replace(/\{kw:[^}]+\}/g, "")}">
         <div style="font-size:20px">${def?.emoji ?? "?"}</div>
-        <div style="font-size:10px">${def?.name ?? id}</div>
+        <div style="font-size:10px">${tCompanionName(id)}</div>
         <div class="db-slot-x">×</div>
       </div>`;
     }).join("");
@@ -983,10 +984,12 @@ function openDeckBuilderModal() {
       const already = draftCompanions.includes(c.id);
       const slotsFull = draftCompanions.every((x) => x !== null);
       const disabled = already || slotsFull;
-      return `<button class="db-card ${already ? "db-card-used" : ""}" data-pick-companion="${c.id}" ${disabled ? "disabled" : ""} title="${c.description}">
+      const tag = c.passive ? t("companion.passive") : t("companion.active") ?? "active";
+      const descPlain = tCompanionDescription(c.id).replace(/\{kw:[^}]+\}/g, "");
+      return `<button class="db-card ${already ? "db-card-used" : ""}" data-pick-companion="${c.id}" ${disabled ? "disabled" : ""} title="${descPlain}">
         <div style="font-size:22px">${c.emoji}</div>
-        <div style="font-weight:bold;font-size:11px">${c.name}</div>
-        <div style="font-size:9px;color:#bbb">${c.heroColor ? districtColorDot(c.heroColor) + " " : ""}${c.passive ? "пассив" : "актив"}</div>
+        <div style="font-weight:bold;font-size:11px">${tCompanionName(c.id)}</div>
+        <div style="font-size:9px;color:#bbb">${c.heroColor ? districtColorDot(c.heroColor) + " " : ""}${tag}</div>
       </button>`;
     }).join("");
 
@@ -1543,10 +1546,19 @@ function renderOpponentBoard() {
     </div>
   `;
 
-  // Companion
-  const companionHtml = p.companion ? `
-    <div class="opp-companion">${companionEmoji(p.companion)} ${tCompanionName(p.companion, companionDef(p.companion)?.name ?? p.companion)}${p.companionDisabled ? " ❌" : ""}</div>
-  ` : "";
+  // Companion — always show name + short description so new players can read what the opponent has.
+  const companionHtml = p.companion ? (() => {
+    const def = companionDef(p.companion);
+    const name = tCompanionName(p.companion, def?.name ?? p.companion);
+    const desc = def ? expandKw(tCompanionDescription(p.companion, def.description)) : "";
+    const passiveTag = def?.passive ? `<span class="opp-companion-tag">${t("my.passive")}</span>` : "";
+    return `
+      <div class="opp-companion">
+        <div class="opp-companion-head">${companionEmoji(p.companion)} <b>${name}</b>${passiveTag}${p.companionDisabled ? " ❌" : ""}</div>
+        <div class="opp-companion-desc">${desc}</div>
+      </div>
+    `;
+  })() : "";
 
   // Districts
   const districts = p.builtDistricts.map((d) => districtCardHtml(d)).join("");
