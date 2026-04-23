@@ -293,9 +293,9 @@ describe("turn phase", () => {
       }),
     };
 
-    // one turn: merchant gets +1, non-merchant does not yet
+    // one turn: merchant gets at least +1 from mine end-of-turn (plus passive income); non-merchant does not yet
     s = advanceTurn(s, rng);
-    expect(s.players[merchantIdx].gold).toBe(1);
+    expect(s.players[merchantIdx].gold).toBeGreaterThanOrEqual(1);
     expect(s.players[playerIdx].gold).toBe(0);
 
     // finish day => non-merchant gets payout
@@ -305,7 +305,7 @@ describe("turn phase", () => {
 });
 
 describe("setup", () => {
-  it("deals 4 cards to each player with no purple", () => {
+  it("deals 4 cards to each player; non-placeholder cards are not purple buildings", () => {
     const deck = makeDeck(40);
     const rng = createRng(42);
     const state = createMatch(PLAYERS, deck, rng);
@@ -313,7 +313,10 @@ describe("setup", () => {
     for (const p of state.players) {
       expect(p.hand).toHaveLength(4);
       for (const card of p.hand) {
-        expect(card.colors.includes("purple")).toBe(false);
+        // Only placeholders may be purple-coloured; actual purple building cards are not dealt.
+        if (card.colors.includes("purple")) {
+          expect(card.placeholder).toBe("purple");
+        }
       }
     }
   });
@@ -328,11 +331,11 @@ describe("setup", () => {
     }
   });
 
-  it("remaining deck has correct size after dealing", () => {
+  it("remaining deck has correct size after dealing (incl. placeholders)", () => {
     const deck = makeDeck(40);
     const rng = createRng(42);
     const state = createMatch(PLAYERS, deck, rng);
-
-    expect(state.deck.length).toBe(24);
+    // 40 in test deck + 24 placeholders × 4 players = 136, minus 4×4 dealt = 120
+    expect(state.deck.length).toBe(40 - 16 + 24 * PLAYERS.length);
   });
 });

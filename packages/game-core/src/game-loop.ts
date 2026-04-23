@@ -1,8 +1,10 @@
 import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
 import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
-import { initDraft, draftPick, companionPick, purpleCardPick } from "./draft.js";
-import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer } from "./turns.js";
+import { initDraft, draftPick, companionPick, companionSkip } from "./draft.js";
+import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer, canAddDistrict, pushBuiltDistrict, markCompanionGone } from "./turns.js";
+import { createPurpleFromAbility } from "./setup.js";
+import { playPurplePlaceholder, pickFromPurpleOffer } from "./placeholder.js";
 import { useAbility, checkWinCondition } from "./abilities.js";
 import { generateRandomCard, generateDifferentColorCard, generateCard } from "./deck.js";
 
@@ -36,6 +38,14 @@ function enforceHandLimit(state: GameState): GameState {
 function companionActive(state: GameState, playerIdx: number): boolean {
   const p = state.players[playerIdx];
   return !!p.companion && !p.companionDisabled && !p.assassinated;
+}
+
+/** Generate a random purple building (from the 11-card registry). */
+function randomPurpleBuilding(rng: Rng): DistrictCard | null {
+  const tpl = PURPLE_CARD_TEMPLATES[rng.int(0, PURPLE_CARD_TEMPLATES.length - 1)];
+  if (!tpl) return null;
+  const card = createPurpleFromAbility(tpl.ability);
+  return card;
 }
 
 /** Get the hero color for a player */
@@ -242,20 +252,18 @@ function useCompanion(
     case CompanionId.Reconstructor: {
       // For 2 gold, builds a destroyed district from discard pile. Leaves pool.
       if (player.gold < 2) return null;
-      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
+      if (!canAddDistrict(player)) return null;
       if (state.discardPile.length === 0) return null;
       const pile = [...state.discardPile];
       const pickIdx = rng.int(0, pile.length - 1);
       const rebuilt = { ...pile[pickIdx], hp: pile[pickIdx].cost };
       pile.splice(pickIdx, 1);
-      newPlayers[playerIdx] = {
-        ...player,
-        gold: player.gold - 2,
-        builtDistricts: [...player.builtDistricts, rebuilt],
-        companionUsed: true,
-      };
+      newPlayers[playerIdx] = markCompanionGone(
+        pushBuiltDistrict({ ...player, gold: player.gold - 2, companionUsed: true }, rebuilt),
+        CompanionId.Reconstructor,
+      );
       let s = addLog({ ...state, players: newPlayers, discardPile: pile }, `${player.name} — реконструктор: восстановил ${rebuilt.name}!`);
-      s = { ...s, bannedCompanions: [...s.bannedCompanions, CompanionId.Reconstructor], rng: rng.getSeed() };
+      s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);
     }
 
@@ -269,27 +277,28 @@ function useCompanion(
         hand: recolor(p.hand),
         builtDistricts: recolor(p.builtDistricts),
       }));
-      recolorPlayers[playerIdx] = { ...recolorPlayers[playerIdx], companionUsed: true };
+      recolorPlayers[playerIdx] = markCompanionGone(
+        { ...recolorPlayers[playerIdx], companionUsed: true },
+        CompanionId.DubiousDealer,
+      );
       let s = addLog({ ...state, players: recolorPlayers }, `${player.name} — сомнительный делец: всё стало ${newColor}!`);
-      s = { ...s, bannedCompanions: [...s.bannedCompanions, CompanionId.DubiousDealer], rng: rng.getSeed() };
+      s = { ...s, rng: rng.getSeed() };
       return s;
     }
 
     case CompanionId.SorcererApprentice: {
       // For 2 gold, builds a random discarded district
       if (player.gold < 2) return null;
-      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
+      if (!canAddDistrict(player)) return null;
       if (state.discardPile.length === 0) return null;
       const pile = [...state.discardPile];
       const pickIdx = rng.int(0, pile.length - 1);
       const built = { ...pile[pickIdx], hp: pile[pickIdx].cost };
       pile.splice(pickIdx, 1);
-      newPlayers[playerIdx] = {
-        ...player,
-        gold: player.gold - 2,
-        builtDistricts: [...player.builtDistricts, built],
-        companionUsed: true,
-      };
+      newPlayers[playerIdx] = pushBuiltDistrict(
+        { ...player, gold: player.gold - 2, companionUsed: true },
+        built,
+      );
       let s = addLog({ ...state, players: newPlayers, discardPile: pile }, `${player.name} — ученик чародея: построил ${built.name} из сброса`);
       s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);
@@ -305,14 +314,12 @@ function useCompanion(
       const sold = player.hand[cardIdx];
       const newHand = [...player.hand];
       newHand.splice(cardIdx, 1);
-      newPlayers[playerIdx] = {
-        ...player,
-        hand: newHand,
-        gold: player.gold + sold.cost,
-        companionUsed: true,
-      };
+      newPlayers[playerIdx] = markCompanionGone(
+        { ...player, hand: newHand, gold: player.gold + sold.cost, companionUsed: true },
+        CompanionId.StrangeMerchant,
+      );
       let s = addLog({ ...state, players: newPlayers }, `${player.name} — странный торговец: продал ${sold.name} за ${sold.cost}💰`);
-      s = { ...s, bannedCompanions: [...s.bannedCompanions, CompanionId.StrangeMerchant], rng: rng.getSeed() };
+      s = { ...s, rng: rng.getSeed() };
       return s;
     }
 
@@ -355,12 +362,13 @@ function useCompanion(
       }
       if (nextIdx === -1) return null;
       const nextPlayer = state.players[nextIdx];
-      // Pick a random replacement companion
-      const excluded = new Set(state.players.map((p) => p.companion).filter(Boolean) as CompanionId[]);
-      const available = COMPANIONS.map((c) => c.id).filter((id) => !excluded.has(id) && !state.bannedCompanions.includes(id));
+      // Replacement is picked from the target's OWN personal pool (available slots, excluding their current pick).
+      const alternatives = nextPlayer.companionDeck
+        .filter((s) => s.state === "available" && s.id !== nextPlayer.companion)
+        .map((s) => s.id);
       let newCompanion: CompanionId | null = null;
-      if (available.length > 0) {
-        newCompanion = available[rng.int(0, available.length - 1)];
+      if (alternatives.length > 0) {
+        newCompanion = alternatives[rng.int(0, alternatives.length - 1)];
       }
       newPlayers[playerIdx] = { ...player, gold: player.gold - 2, companionUsed: true };
       if (newCompanion) {
@@ -371,7 +379,7 @@ function useCompanion(
     }
 
     case CompanionId.Sniper: {
-      // Permanently removes target player's companion from the pool
+      // Permanently removes target player's companion from THEIR personal pool.
       if (!targetPlayerId) return null;
       const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
       if (targetIdx === -1 || targetIdx === playerIdx) return null;
@@ -380,10 +388,12 @@ function useCompanion(
       const removedId = target.companion;
       const removedName = COMPANIONS.find((c) => c.id === removedId)?.name ?? "?";
       newPlayers[playerIdx] = { ...player, companionUsed: true };
-      newPlayers[targetIdx] = { ...target, companion: null, companionUsed: true };
+      newPlayers[targetIdx] = markCompanionGone(
+        { ...target, companion: null, companionUsed: true },
+        removedId,
+      );
       return {
         ...addLog({ ...state, players: newPlayers }, `${player.name} — снайпер: навсегда убрал ${removedName} у ${target.name}!`),
-        bannedCompanions: [...state.bannedCompanions, removedId],
         rng: rng.getSeed(),
       };
     }
@@ -391,15 +401,13 @@ function useCompanion(
     case CompanionId.Fisherman: {
       // For 1 gold, builds a random cost-2 district (allows duplicates)
       if (player.gold < 1) return null;
-      if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
+      if (!canAddDistrict(player)) return null;
       const newCard = generateRandomCard(2, rng);
       newCard.hp = 2;
-      newPlayers[playerIdx] = {
-        ...player,
-        gold: player.gold - 1,
-        builtDistricts: [...player.builtDistricts, newCard],
-        companionUsed: true,
-      };
+      newPlayers[playerIdx] = pushBuiltDistrict(
+        { ...player, gold: player.gold - 1, companionUsed: true },
+        newCard,
+      );
       let s = addLog({ ...state, players: newPlayers }, `${player.name} — рыбак: построил ${newCard.name} (2💰)`);
       s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);
@@ -425,13 +433,17 @@ function useCompanion(
     }
 
     case CompanionId.Designer: {
-      // Mark a built district to transform into a purple card at next purple draft
+      // Convert a chosen own district into a random purple building immediately.
       if (!targetCardId) return null;
       const cardIdx = player.builtDistricts.findIndex((c) => c.id === targetCardId);
       if (cardIdx === -1) return null;
-      const markedCard = player.builtDistricts[cardIdx];
-      newPlayers[playerIdx] = { ...player, designerMarkedCardId: targetCardId, companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — дизайнер: пометил ${markedCard.name} для превращения`), rng: rng.getSeed() };
+      const oldCard = player.builtDistricts[cardIdx];
+      const newCard = randomPurpleBuilding(rng);
+      if (!newCard) return null;
+      const newDistricts = [...player.builtDistricts];
+      newDistricts[cardIdx] = { ...newCard, hp: newCard.cost };
+      newPlayers[playerIdx] = { ...player, builtDistricts: newDistricts, companionUsed: true };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — дизайнер: ${oldCard.name} → ${newCard.name}`), rng: rng.getSeed() };
     }
 
     case CompanionId.Innkeeper: {
@@ -469,10 +481,13 @@ function useCompanion(
           for (const d of toRemove) destroyed.push(`${d.name} (${p.name})`);
         }
       }
-      newPlayers[playerIdx] = { ...newPlayers[playerIdx] ?? player, companionUsed: true };
+      newPlayers[playerIdx] = markCompanionGone(
+        { ...(newPlayers[playerIdx] ?? player), companionUsed: true },
+        CompanionId.Peacemaker,
+      );
       const msg = destroyed.length > 0 ? `разрушил: ${destroyed.join(", ")}` : "ничего не разрушено";
       let s = addLog({ ...state, players: newPlayers, discardPile }, `${player.name} — миротворец: ${msg}`);
-      s = { ...s, bannedCompanions: [...s.bannedCompanions, CompanionId.Peacemaker], rng: rng.getSeed() };
+      s = { ...s, rng: rng.getSeed() };
       return s;
     }
 
@@ -513,54 +528,15 @@ function useCompanion(
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — заказчик: цель назначена`), rng: rng.getSeed() };
     }
 
-    case CompanionId.Investor: {
-      newPlayers[playerIdx] = { ...player, gold: player.gold + 2, companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — инвестор: +2💰`), rng: rng.getSeed() };
-    }
-
-    case CompanionId.Trainer: {
-      const roll = rng.int(0, 3);
-      // 0 assassin-like, 1 thief-like, 2 sorcerer-like, 3 architect-like
-      if (roll === 0) {
-        const candidates = state.players
-          .map((p, i) => ({ p, i }))
-          .filter(({ p, i }) => i !== playerIdx && p.hero && !p.assassinated)
-          .filter(({ i }) => {
-            if (!state.turnOrder) return true;
-            const pos = state.turnOrder.indexOf(i);
-            return pos === -1 || pos > state.currentTurnIndex;
-          });
-        if (candidates.length > 0) {
-          const pick = candidates[rng.int(0, candidates.length - 1)];
-          newPlayers[pick.i] = { ...newPlayers[pick.i], assassinated: true };
-          newPlayers[playerIdx] = { ...newPlayers[playerIdx], companionUsed: true };
-          return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: получена способность убийцы`), rng: rng.getSeed() };
-        }
-      } else if (roll === 1) {
-        const candidates = state.players
-          .filter((p, i) => i !== playerIdx && p.hero && p.hero !== HeroId.Assassin && !p.assassinated);
-        if (candidates.length > 0) {
-          const target = candidates[rng.int(0, candidates.length - 1)];
-          newPlayers[playerIdx] = { ...newPlayers[playerIdx], robbedHeroId: target.hero, companionUsed: true };
-          return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: получена способность вора`), rng: rng.getSeed() };
-        }
-      } else if (roll === 2) {
-        // Sorcerer draw mode
-        let newDeck = [...state.deck];
-        let hand = [...player.hand];
-        for (let i = 0; i < 2 && hand.length > 0; i++) {
-          const idx = rng.int(0, hand.length - 1);
-          hand.splice(idx, 1);
-        }
-        const drawn = newDeck.splice(0, Math.min(2, newDeck.length));
-        newPlayers[playerIdx] = { ...newPlayers[playerIdx], hand: [...hand, ...drawn], companionUsed: true };
-        return { ...addLog({ ...state, players: newPlayers, deck: newDeck }, `${player.name} — тренер: получена способность чародея (сброс 2, добор 2)`), rng: rng.getSeed() };
-      } else {
-        newPlayers[playerIdx] = { ...newPlayers[playerIdx], buildsRemaining: player.buildsRemaining + 2, companionUsed: true };
-        return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: получена способность архитектора`), rng: rng.getSeed() };
-      }
-      newPlayers[playerIdx] = { ...newPlayers[playerIdx], companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — тренер: эффект не сработал`), rng: rng.getSeed() };
+    case CompanionId.TreasureTrader: {
+      // Gain a random purple building in hand. Leaves pool.
+      const purple = randomPurpleBuilding(rng);
+      if (!purple) return null;
+      newPlayers[playerIdx] = markCompanionGone(
+        { ...player, hand: [...player.hand, purple], companionUsed: true },
+        CompanionId.TreasureTrader,
+      );
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — торговец сокровищами: получена ${purple.name}`), rng: rng.getSeed() };
     }
 
     // Passive companions — should not be used via action
@@ -577,7 +553,6 @@ function useCompanion(
     case CompanionId.Jester:
     case CompanionId.Knight:
     case CompanionId.Nobility:
-    case CompanionId.TreasureTrader:
       return null;
 
     default:
@@ -609,19 +584,24 @@ export function processAction(state: GameState, action: GameAction): GameState |
     case "companion_pick": {
       const result = companionPick(state, action.playerId, action.companionId, rng);
       if (!result) return null;
-      // If companion draft just ended (phase switched to turns), build turn order
       if (result.phase === "turns") {
         return finish(buildTurnOrder(result, rng));
       }
       return finish(result);
     }
-    case "purple_card_pick": {
-      const result = purpleCardPick(state, action.playerId, action.cardIndex);
+    case "companion_skip": {
+      const result = companionSkip(state, action.playerId, rng);
       if (!result) return null;
-      if (result.phase === "turns" && !result.purpleDraft) {
+      if (result.phase === "turns") {
         return finish(buildTurnOrder(result, rng));
       }
       return finish(result);
+    }
+    case "purple_placeholder_play": {
+      return finish(playPurplePlaceholder(state, action.playerId, action.cardId, rng));
+    }
+    case "purple_placeholder_pick": {
+      return finish(pickFromPurpleOffer(state, action.playerId, action.offerIndex));
     }
     case "income":
       return finish(takeIncome(state, action.playerId, action.choice));
@@ -742,24 +722,14 @@ function activateBuilding(
     }
 
     case "crypt": {
-      // Self-destroy for 2 gold — get 2 random purple cards
+      // Self-destroy for 2 gold — get 2 random purple buildings.
       if (player.gold < 2) return null;
       const newDistricts = [...player.builtDistricts];
       newDistricts.splice(cardIdx, 1);
-      // Generate 2 random purple cards
       const purpleCards: DistrictCard[] = [];
       for (let i = 0; i < 2; i++) {
-        const tpl = PURPLE_CARD_TEMPLATES[rng.int(0, PURPLE_CARD_TEMPLATES.length - 1)];
-        purpleCards.push({
-          id: `purple-gen-${Date.now()}-${rng.int(0, 9999)}`,
-          name: tpl.name,
-          cost: tpl.cost,
-          originalCost: tpl.cost,
-          hp: tpl.cost,
-          colors: tpl.colors as DistrictCard["colors"],
-          baseColors: tpl.colors as DistrictCard["colors"],
-          purpleAbility: tpl.ability,
-        });
+        const pc = randomPurpleBuilding(rng);
+        if (pc) purpleCards.push(pc);
       }
       newPlayers[playerIdx] = {
         ...player,
@@ -767,7 +737,7 @@ function activateBuilding(
         builtDistricts: newDistricts,
         hand: [...player.hand, ...purpleCards],
       };
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — склеп: уничтожен, получено 2 фиолетовые карты`), rng: rng.getSeed() };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — склеп: уничтожен, получено 2 фиолетовые постройки`), rng: rng.getSeed() };
     }
 
     case "tnt_storage": {

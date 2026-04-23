@@ -1,5 +1,5 @@
-import type { GameState, GameAction, AbilityPayload, PlayerState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, MAX_HAND_CARDS, CompanionId, COMPANIONS, isPassiveCompanion, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
+import type { GameState, GameAction, AbilityPayload, PlayerState, MatchDeckBuild, BuildablePurpleId } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, MAX_HAND_CARDS, CompanionId, COMPANIONS, isPassiveCompanion, PURPLE_CARD_TEMPLATES, DECK_BUILD_PURPLE_SIZE, DECK_BUILD_COMPANION_SIZE, ALL_PURPLE_SPECIAL, ALL_SPELLS, BOT_BUILDS } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateCardShatter, animateChanges, resetAnimState } from "./anim.js";
@@ -74,6 +74,8 @@ interface LobbyPlayer {
   name: string;
   isBot: boolean;
   isHost: boolean;
+  deckReady: boolean;
+  buildLabel?: string;
 }
 
 // ---- Auth state ----
@@ -178,11 +180,19 @@ let lobbyPlayers: LobbyPlayer[] = [];
 const HUMAN_ID = "human";
 const BOT_IDS = ["bot-1", "bot-2", "bot-3"];
 function getLocalPlayers() {
+  const humanBuild = loadSavedBuild();
+  // Pick 3 distinct random bot archetypes for local play.
+  const shuffled = [...BOT_BUILDS];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  const botBuilds = shuffled.slice(0, 3);
   return [
-    { id: HUMAN_ID, name: t("lobby.you") },
-    { id: BOT_IDS[0], name: "Бот Алиса" },
-    { id: BOT_IDS[1], name: "Бот Борис" },
-    { id: BOT_IDS[2], name: "Бот Вика" },
+    { id: HUMAN_ID, name: t("lobby.you"), build: humanBuild ?? undefined },
+    { id: BOT_IDS[0], name: "Бот " + botBuilds[0].name, build: botBuilds[0].build },
+    { id: BOT_IDS[1], name: "Бот " + botBuilds[1].name, build: botBuilds[1].build },
+    { id: BOT_IDS[2], name: "Бот " + botBuilds[2].name, build: botBuilds[2].build },
   ];
 }
 
@@ -290,13 +300,23 @@ function connectWS(playerName: string, roomId: string | null, reconnect = false)
   };
 }
 
+/** If a saved deck-build exists locally, push it to the server immediately. */
+function autoSendSavedBuild() {
+  const saved = loadSavedBuild();
+  if (!saved) return;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "set_deck_build", build: saved }));
+  }
+}
+
 function handleServerMessage(msg: Record<string, unknown>) {
   switch (msg.type) {
     case "room_created":
       myRoomId = msg.roomId as string;
       myPlayerId = msg.playerId as string;
       isHost = true;
-      lobbyPlayers = [{ id: myPlayerId, name: t("lobby.you"), isBot: false, isHost: true }];
+      lobbyPlayers = [{ id: myPlayerId, name: t("lobby.you"), isBot: false, isHost: true, deckReady: false }];
+      autoSendSavedBuild();
       renderLobby();
       break;
 
@@ -305,6 +325,7 @@ function handleServerMessage(msg: Record<string, unknown>) {
       myPlayerId = msg.playerId as string;
       isHost = false;
       lobbyPlayers = msg.players as LobbyPlayer[];
+      autoSendSavedBuild();
       renderLobby();
       break;
 
@@ -362,35 +383,30 @@ function runLocalBots() {
   if (!localState || localState.phase === "end") return;
 
   // Start new draft if needed
-  if (localState.phase === "draft" && !localState.draft && !localState.purpleDraft) {
+  if (localState.phase === "draft" && !localState.draft) {
     localState = startDraft(localState);
     render();
     setTimeout(runLocalBots, 500);
     return;
   }
 
-  // Handle purple draft for bots (simultaneous — all bots pick at once)
-  if (localState.purpleDraft) {
-    let anyBotPicked = false;
-    for (const bot of BOT_IDS) {
-      if (!localState.purpleDraft) break;
-      const botIdx = localState.players.findIndex((p) => p.id === bot);
-      if (botIdx === -1) continue;
-      if (localState.purpleDraft.picked[botIdx]) continue;
+  // Handle any bot with a pending purple placeholder offer (local-only).
+  for (const bot of BOT_IDS) {
+    const botIdx = localState.players.findIndex((p) => p.id === bot);
+    if (botIdx === -1) continue;
+    const offer = localState.players[botIdx].pendingPurpleOffer;
+    if (offer && offer.length > 0) {
       const action = botAction(localState, bot);
       if (action) {
         const next = processAction(localState, action);
         if (next) {
           localState = next;
-          anyBotPicked = true;
+          render();
+          setTimeout(runLocalBots, 500);
+          return;
         }
       }
     }
-    if (anyBotPicked) {
-      render();
-      setTimeout(runLocalBots, 500);
-    }
-    return;
   }
 
   // Determine if it's a bot's turn
@@ -565,9 +581,14 @@ function getDraft(): DraftView | null {
   return null;
 }
 
-function getPurpleDraft(): { offers: any[]; picked: boolean[] } | null {
-  if (mode === "online" && onlineState) return (onlineState as any).purpleDraft ?? null;
-  if (localState) return localState.purpleDraft ?? null;
+/** Returns the current player's pending purple placeholder offer, if any. */
+function getPendingPurpleOffer(): any[] | null {
+  if (mode === "online" && onlineState) return (onlineState as any).pendingPurpleOffer ?? null;
+  if (localState) {
+    const myIdx = localState.players.findIndex((p) => p.id === getMyId());
+    if (myIdx === -1) return null;
+    return localState.players[myIdx].pendingPurpleOffer ?? null;
+  }
   return null;
 }
 
@@ -773,6 +794,12 @@ function renderMenu() {
         : menuPanel === "treasury" ? treasuryPanel
           : "";
 
+  const hasBuild = !!loadSavedBuild();
+  const gateAttr = hasBuild ? "" : "disabled";
+  const gateHint = hasBuild
+    ? ""
+    : `<div class="hint" style="color:#e8a030;margin:4px 0">⚠ ${t("menu.deck_required") ?? "Соберите колоду, чтобы играть"}</div>`;
+
   app.innerHTML = `
     <h1>⚔ Darms: Fortresses</h1>
     <div class="menu-screen">
@@ -781,15 +808,17 @@ function renderMenu() {
       <button class="btn btn-secondary btn-small" id="btn-lang">${t("lang.toggle")}</button>
       <div class="menu-resources">💰 ${t("menu.gold")}: <b>${menuGold}</b> &nbsp; ♦ ${t("menu.diamonds")}: <b>${menuDiamonds}</b></div>
       <input type="text" id="player-name" placeholder="${t("menu.name_placeholder")}" value="${defaultName}" class="menu-input" maxlength="20"/>
-      <button class="btn btn-primary btn-large" id="btn-local">🎮 ${t("menu.local")}</button>
+      <button class="btn ${hasBuild ? "btn-secondary" : "btn-primary"} btn-large" id="btn-deckbuilder-menu">🃏 ${hasBuild ? t("lobby.edit_deck") : t("lobby.build_deck")}</button>
+      ${gateHint}
+      <button class="btn btn-primary btn-large" id="btn-local" ${gateAttr}>🎮 ${t("menu.local")}</button>
       <button class="btn btn-secondary btn-large" id="btn-card-pool">📚 ${t("menu.card_pool")}</button>
       <button class="btn btn-secondary btn-large" id="btn-store">🛒 ${t("menu.store")}</button>
       <button class="btn btn-secondary btn-large" id="btn-campaign">📖 ${t("menu.campaign")}</button>
       <button class="btn btn-secondary btn-large" id="btn-treasury">🏦 ${t("menu.treasury")}</button>
       ${activePanelHtml ? `<div id="menu-feature-panel">${activePanelHtml}</div>` : ""}
       <div class="menu-divider">${t("menu.online_divider")}</div>
-      <button class="btn btn-secondary btn-large" id="btn-create">🌐 ${t("menu.create_room")}</button>
-      <button class="btn btn-secondary btn-large" id="btn-join">🔗 ${t("menu.join_room")}</button>
+      <button class="btn btn-secondary btn-large" id="btn-create" ${gateAttr}>🌐 ${t("menu.create_room")}</button>
+      <button class="btn btn-secondary btn-large" id="btn-join" ${gateAttr}>🔗 ${t("menu.join_room")}</button>
     </div>
   `;
 
@@ -848,6 +877,221 @@ function renderMenu() {
   });
   document.getElementById("btn-create")!.addEventListener("click", () => showLobbyScreen("create"));
   document.getElementById("btn-join")!.addEventListener("click", () => showLobbyScreen("join"));
+  document.getElementById("btn-deckbuilder-menu")?.addEventListener("click", () => openDeckBuilderModal());
+}
+
+// ---- Deck builder ----
+
+const DECK_STORAGE_KEY = "darms_deck_build_v1";
+
+/** Load the deck-build from localStorage, or null if none saved. */
+function loadSavedBuild(): MatchDeckBuild | null {
+  try {
+    const raw = localStorage.getItem(DECK_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (
+      parsed && Array.isArray(parsed.purple) && parsed.purple.length === DECK_BUILD_PURPLE_SIZE
+      && Array.isArray(parsed.companions) && parsed.companions.length === DECK_BUILD_COMPANION_SIZE
+      && new Set(parsed.companions).size === DECK_BUILD_COMPANION_SIZE
+    ) {
+      return parsed as MatchDeckBuild;
+    }
+  } catch { /* noop */ }
+  return null;
+}
+
+function saveBuildLocal(build: MatchDeckBuild) {
+  try { localStorage.setItem(DECK_STORAGE_KEY, JSON.stringify(build)); } catch { /* noop */ }
+}
+
+/** All 16 picks for the purple deck-build pool: 11 buildings + 5 spells.
+ *  Names and descriptions come from the i18n layer (three-language canonical source). */
+function getAllPurpleOptions(): Array<{ id: BuildablePurpleId; name: string; cost: number; emoji: string; desc: string; isSpell: boolean }> {
+  const out: Array<{ id: BuildablePurpleId; name: string; cost: number; emoji: string; desc: string; isSpell: boolean }> = [];
+  for (const p of ALL_PURPLE_SPECIAL) {
+    out.push({ id: p.ability, name: tPurpleName(p.ability), cost: p.cost, emoji: p.emoji, desc: expandKw(tPurpleDesc(p.ability)), isSpell: false });
+  }
+  for (const s of ALL_SPELLS) {
+    out.push({ id: s.ability, name: tSpellName(s.ability), cost: s.cost, emoji: "✨", desc: expandKw(tSpellDesc(s.ability)), isSpell: true });
+  }
+  return out;
+}
+
+function openDeckBuilderModal() {
+  // Working draft — starts from previously saved build or an empty slate.
+  const saved = loadSavedBuild();
+  let draftPurple: (BuildablePurpleId | null)[] = Array(DECK_BUILD_PURPLE_SIZE).fill(null);
+  let draftCompanions: (CompanionId | null)[] = Array(DECK_BUILD_COMPANION_SIZE).fill(null);
+  if (saved) {
+    for (let i = 0; i < DECK_BUILD_PURPLE_SIZE; i++) draftPurple[i] = saved.purple[i] ?? null;
+    for (let i = 0; i < DECK_BUILD_COMPANION_SIZE; i++) draftCompanions[i] = saved.companions[i] ?? null;
+  }
+
+  // Create modal overlay.
+  let overlay = document.getElementById("deck-builder-modal");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "deck-builder-modal";
+    overlay.className = "modal deck-builder-modal";
+    document.body.appendChild(overlay);
+  }
+  overlay.classList.add("show");
+
+  const close = () => {
+    overlay!.classList.remove("show");
+    // Menu gate reflects the saved build — re-render to refresh button states.
+    if (mode === "menu") renderMenu();
+    if (mode === "lobby") renderLobby();
+  };
+
+  const render = () => {
+    const companions = COMPANIONS;
+    const purples = getAllPurpleOptions();
+
+    const purpleSlots = draftPurple.map((id, i) => {
+      if (!id) return `<div class="db-slot db-slot-empty" data-purple-slot="${i}">+</div>`;
+      const opt = purples.find((p) => p.id === id);
+      return `<div class="db-slot db-slot-filled" data-purple-slot="${i}" title="${opt?.desc ?? ""}">
+        <div style="font-size:20px">${opt?.emoji ?? "🔮"}</div>
+        <div style="font-size:10px">${opt?.name ?? id}</div>
+        <div class="db-slot-x">×</div>
+      </div>`;
+    }).join("");
+
+    const compSlots = draftCompanions.map((id, i) => {
+      if (!id) return `<div class="db-slot db-slot-empty" data-companion-slot="${i}">+</div>`;
+      const def = companions.find((c) => c.id === id);
+      return `<div class="db-slot db-slot-filled" data-companion-slot="${i}" title="${tCompanionDescription(id).replace(/\{kw:[^}]+\}/g, "")}">
+        <div style="font-size:20px">${def?.emoji ?? "?"}</div>
+        <div style="font-size:10px">${tCompanionName(id)}</div>
+        <div class="db-slot-x">×</div>
+      </div>`;
+    }).join("");
+
+    const purpleGrid = purples.map((p) => {
+      const count = draftPurple.filter((x) => x === p.id).length;
+      const disabled = draftPurple.every((x) => x !== null);
+      return `<button class="db-card ${p.isSpell ? "db-card-spell" : ""}" data-pick-purple="${p.id}" ${disabled ? "disabled" : ""} title="${p.desc}">
+        <div style="font-size:22px">${p.emoji}</div>
+        <div style="font-weight:bold;font-size:11px">${p.name}</div>
+        <div style="font-size:10px;color:#bbb">${p.cost}💰 ${p.isSpell ? "(спел)" : ""}</div>
+        ${count > 0 ? `<span class="db-card-count">×${count}</span>` : ""}
+      </button>`;
+    }).join("");
+
+    const compGrid = companions.map((c) => {
+      const already = draftCompanions.includes(c.id);
+      const slotsFull = draftCompanions.every((x) => x !== null);
+      const disabled = already || slotsFull;
+      const tag = c.passive ? t("companion.passive") : t("companion.active") ?? "active";
+      const descPlain = tCompanionDescription(c.id).replace(/\{kw:[^}]+\}/g, "");
+      return `<button class="db-card ${already ? "db-card-used" : ""}" data-pick-companion="${c.id}" ${disabled ? "disabled" : ""} title="${descPlain}">
+        <div style="font-size:22px">${c.emoji}</div>
+        <div style="font-weight:bold;font-size:11px">${tCompanionName(c.id)}</div>
+        <div style="font-size:9px;color:#bbb">${c.heroColor ? districtColorDot(c.heroColor) + " " : ""}${tag}</div>
+      </button>`;
+    }).join("");
+
+    const purpleFilled = draftPurple.filter((x) => x !== null).length;
+    const compFilled = draftCompanions.filter((x) => x !== null).length;
+    const canSave = purpleFilled === DECK_BUILD_PURPLE_SIZE && compFilled === DECK_BUILD_COMPANION_SIZE;
+
+    overlay!.innerHTML = `
+      <div class="modal-content deck-builder-content">
+        <div class="deck-builder-header">
+          <h2>🃏 ${t("deck.title") ?? "Деклбилдинг"}</h2>
+          <button class="db-close">✕</button>
+        </div>
+        <div class="deck-builder-body">
+          <section class="db-section">
+            <h3>⚔ ${t("deck.companions") ?? "Компаньоны"} (${compFilled}/${DECK_BUILD_COMPANION_SIZE}) <span class="db-hint">— ${t("deck.companions_hint") ?? "3 разных"}</span></h3>
+            <div class="db-slot-row">${compSlots}</div>
+            <div class="db-grid">${compGrid}</div>
+          </section>
+          <section class="db-section">
+            <h3>🔮 ${t("deck.purple") ?? "Фиолетовые карты"} (${purpleFilled}/${DECK_BUILD_PURPLE_SIZE}) <span class="db-hint">— ${t("deck.purple_hint") ?? "повторы разрешены"}</span></h3>
+            <div class="db-slot-row">${purpleSlots}</div>
+            <div class="db-grid">${purpleGrid}</div>
+          </section>
+        </div>
+        <div class="deck-builder-footer">
+          <button class="btn btn-secondary" id="db-preset">⚙ ${t("deck.preset") ?? "Готовый билд"}</button>
+          <button class="btn btn-secondary" id="db-clear">🗑 ${t("deck.clear") ?? "Очистить"}</button>
+          <button class="btn btn-primary" id="db-save" ${canSave ? "" : "disabled"}>💾 ${t("deck.save") ?? "Сохранить"}</button>
+        </div>
+      </div>
+    `;
+
+    // Slot clicks (remove).
+    overlay!.querySelectorAll("[data-purple-slot]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const i = parseInt((el as HTMLElement).dataset.purpleSlot!, 10);
+        draftPurple[i] = null;
+        render();
+      });
+    });
+    overlay!.querySelectorAll("[data-companion-slot]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const i = parseInt((el as HTMLElement).dataset.companionSlot!, 10);
+        draftCompanions[i] = null;
+        render();
+      });
+    });
+
+    // Pick clicks.
+    overlay!.querySelectorAll<HTMLButtonElement>("[data-pick-purple]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        const id = btn.dataset.pickPurple as BuildablePurpleId;
+        const nextEmpty = draftPurple.findIndex((x) => x === null);
+        if (nextEmpty === -1) return;
+        draftPurple[nextEmpty] = id;
+        render();
+      });
+    });
+    overlay!.querySelectorAll<HTMLButtonElement>("[data-pick-companion]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        const id = btn.dataset.pickCompanion as CompanionId;
+        const nextEmpty = draftCompanions.findIndex((x) => x === null);
+        if (nextEmpty === -1) return;
+        draftCompanions[nextEmpty] = id;
+        render();
+      });
+    });
+
+    overlay!.querySelector(".db-close")?.addEventListener("click", close);
+
+    document.getElementById("db-clear")?.addEventListener("click", () => {
+      draftPurple = Array(DECK_BUILD_PURPLE_SIZE).fill(null);
+      draftCompanions = Array(DECK_BUILD_COMPANION_SIZE).fill(null);
+      render();
+    });
+
+    document.getElementById("db-preset")?.addEventListener("click", () => {
+      const archetype = BOT_BUILDS[Math.floor(Math.random() * BOT_BUILDS.length)];
+      draftPurple = [...archetype.build.purple];
+      draftCompanions = [...archetype.build.companions];
+      render();
+    });
+
+    document.getElementById("db-save")?.addEventListener("click", () => {
+      if (!canSave) return;
+      const build: MatchDeckBuild = {
+        purple: draftPurple.filter((x): x is BuildablePurpleId => x !== null),
+        companions: draftCompanions.filter((x): x is CompanionId => x !== null),
+      };
+      saveBuildLocal(build);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "set_deck_build", build }));
+      }
+      close();
+    });
+  };
+
+  render();
+  overlay!.onclick = (e) => { if (e.target === overlay) close(); };
 }
 
 function showCardPoolModal() {
@@ -896,7 +1140,6 @@ function showCardPoolModal() {
     `).join("");
 
   const companionsHtml = COMPANIONS
-    .filter((c) => c.id !== CompanionId.Investor && c.id !== CompanionId.Trainer)
     .map((c) => {
       const colorTag = c.heroColor ? ` <span style="color:${COLOR_HEX[c.heroColor] ?? "#888"};font-size:10px">${districtColorDot(c.heroColor)}</span>` : "";
       return `
@@ -906,14 +1149,7 @@ function showCardPoolModal() {
       </div>
     `;}).join("");
 
-  const specialCompanionsHtml = COMPANIONS
-    .filter((c) => c.id === CompanionId.Investor || c.id === CompanionId.Trainer)
-    .map((c) => `
-      <div class="pool-item">
-        <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}</div>
-        <div class="pool-item-sub">${expandKw(tCompanionDescription(c.id, c.description))}</div>
-      </div>
-    `).join("");
+  const specialCompanionsHtml = "";
 
   const purpleHtml = PURPLE_CARD_TEMPLATES
     .slice()
@@ -1002,11 +1238,28 @@ function showCardPoolModal() {
 
 function renderLobby() {
   const app = document.getElementById("app")!;
-  const playersList = lobbyPlayers.map((p) =>
-    `<div class="lobby-player ${p.isHost ? "host" : ""}">
-      ${p.isBot ? "🤖" : "👤"} ${tName(p.name)} ${p.isHost ? t("lobby.host") : ""}
-    </div>`
-  ).join("");
+  const playersList = lobbyPlayers.map((p) => {
+    const deckBadge = p.deckReady
+      ? `<span class="lobby-badge lobby-badge-ready">✅ ${t("lobby.deck_ready") ?? "колода готова"}</span>`
+      : `<span class="lobby-badge lobby-badge-pending">⏳ ${t("lobby.deck_pending") ?? "колода не собрана"}</span>`;
+    const buildLbl = p.isBot && p.buildLabel ? ` <span class="lobby-build-label">[${p.buildLabel}]</span>` : "";
+    return `<div class="lobby-player ${p.isHost ? "host" : ""}">
+      ${p.isBot ? "🤖" : "👤"} ${tName(p.name)}${buildLbl} ${p.isHost ? t("lobby.host") : ""}
+      ${deckBadge}
+    </div>`;
+  }).join("");
+
+  const myLobbyEntry = lobbyPlayers.find((p) => p.id === myPlayerId);
+  const myDeckReady = !!myLobbyEntry?.deckReady;
+  const allReady = lobbyPlayers.every((p) => p.deckReady);
+  const enoughPlayers = lobbyPlayers.length >= 4;
+  const canStart = isHost && enoughPlayers && allReady;
+
+  let startHint = "";
+  if (isHost) {
+    if (!enoughPlayers) startHint = t("lobby.need_four") ?? "Нужно 4 игрока";
+    else if (!allReady) startHint = t("lobby.wait_decks") ?? "Ждём пока все соберут колоду";
+  }
 
   app.innerHTML = `
     <h1>⚔ Darms: Fortresses</h1>
@@ -1015,11 +1268,17 @@ function renderLobby() {
       <div class="lobby-info">${t("lobby.share_code")}</div>
       <div class="lobby-players">${playersList}</div>
       <div class="lobby-count">${lobbyPlayers.length}/4 ${t("lobby.players_count")}</div>
+      <div class="lobby-actions">
+        <button class="btn ${myDeckReady ? "btn-secondary" : "btn-primary"}" id="btn-deckbuilder">
+          ${myDeckReady ? `✏️ ${t("lobby.edit_deck") ?? "Изменить колоду"}` : `🃏 ${t("lobby.build_deck") ?? "Собрать колоду"}`}
+        </button>
+      </div>
       ${isHost ? `
         <div class="lobby-actions">
           <button class="btn btn-secondary" id="btn-add-bot">🤖 ${t("lobby.add_bot")}</button>
-          <button class="btn btn-primary btn-large" id="btn-start" ${lobbyPlayers.length < 4 ? "disabled" : ""}>▶ ${t("lobby.start_game")}</button>
+          <button class="btn btn-primary btn-large" id="btn-start" ${canStart ? "" : "disabled"}>▶ ${t("lobby.start_game")}</button>
         </div>
+        ${startHint ? `<div class="lobby-info" style="color:#e8a030">${startHint}</div>` : ""}
       ` : `<div class="lobby-info">${t("lobby.waiting_host")}</div>`}
       <button class="btn btn-secondary" id="btn-back-menu" style="margin-top:12px;">← ${t("lobby.back")}</button>
     </div>
@@ -1034,6 +1293,9 @@ function renderLobby() {
   document.getElementById("btn-back-menu")?.addEventListener("click", () => {
     ws?.close();
     showMenu();
+  });
+  document.getElementById("btn-deckbuilder")?.addEventListener("click", () => {
+    openDeckBuilderModal();
   });
 }
 
@@ -1112,13 +1374,6 @@ function renderTurnBanner() {
   const myTurn = isMyTurn();
 
   if (phase === "draft") {
-    const purpleDraft = getPurpleDraft();
-    if (purpleDraft) {
-      el.className = "turn-banner my-turn";
-      el.id = "turn-banner";
-      el.innerHTML = `🔮 ${t("banner.day")} ${day} — ${t("purple.title")}`;
-      return;
-    }
     const draft = getDraft();
     const isCompanionPhase = draft?.draftPhase === "companion";
     el.className = "turn-banner" + (myTurn || isCompanionPhase ? " my-turn" : "");
@@ -1291,10 +1546,19 @@ function renderOpponentBoard() {
     </div>
   `;
 
-  // Companion
-  const companionHtml = p.companion ? `
-    <div class="opp-companion">${companionEmoji(p.companion)} ${tCompanionName(p.companion, companionDef(p.companion)?.name ?? p.companion)}${p.companionDisabled ? " ❌" : ""}</div>
-  ` : "";
+  // Companion — always show name + short description so new players can read what the opponent has.
+  const companionHtml = p.companion ? (() => {
+    const def = companionDef(p.companion);
+    const name = tCompanionName(p.companion, def?.name ?? p.companion);
+    const desc = def ? expandKw(tCompanionDescription(p.companion, def.description)) : "";
+    const passiveTag = def?.passive ? `<span class="opp-companion-tag">${t("my.passive")}</span>` : "";
+    return `
+      <div class="opp-companion">
+        <div class="opp-companion-head">${companionEmoji(p.companion)} <b>${name}</b>${passiveTag}${p.companionDisabled ? " ❌" : ""}</div>
+        <div class="opp-companion-desc">${desc}</div>
+      </div>
+    `;
+  })() : "";
 
   // Districts
   const districts = p.builtDistricts.map((d) => districtCardHtml(d)).join("");
@@ -1497,7 +1761,14 @@ function renderMyBoard() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const cardId = (btn as HTMLElement).dataset.build!;
-      dispatch({ type: "build", playerId: getMyId(), cardId });
+      const me = getPlayers()[getMyIndex()];
+      const card = me?.hand?.find((c: any) => c.id === cardId);
+      // Placeholder cards use their own action (free, opens purple offer).
+      if (card?.placeholder === "purple") {
+        dispatch({ type: "purple_placeholder_play", playerId: getMyId(), cardId });
+      } else {
+        dispatch({ type: "build", playerId: getMyId(), cardId });
+      }
     });
   });
   document.getElementById("btn-gold")?.addEventListener("click", () => {
@@ -1563,8 +1834,8 @@ function startDraftTimer(draft: DraftView) {
             const companionId = eligible[Math.floor(Math.random() * eligible.length)];
             dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
           } else {
-            // No eligible — pick Investor (Trainer also valid, server accepts both)
-            dispatch({ type: "companion_pick", playerId: getMyId(), companionId: CompanionId.Investor });
+            // No eligible — skip (personal pool exhausted)
+            dispatch({ type: "companion_skip", playerId: getMyId() });
           }
         } else if (currentDraft.availableHeroes.length > 0) {
           // Auto-pick a random hero
@@ -1630,28 +1901,15 @@ function renderDraft() {
   const phase = getPhase();
   const draft = getDraft();
 
-  // Purple card draft
-  const purpleDraft = getPurpleDraft();
-  if (purpleDraft) {
-    const myIdx = getMyIndex();
-    if (purpleDraft.picked[myIdx]) {
-      el.innerHTML = `
-        <h2 style="font-size:13px">🔮 ${t("purple.title")}</h2>
-        <p class="hint">${t("purple.waiting")}</p>
-      `;
-      return;
-    }
-    const cards = purpleDraft.offers[myIdx];
-    if (!cards || cards.length === 0) {
-      el.innerHTML = "";
-      return;
-    }
-    const cardButtons = cards.map((card: any, idx: number) => {
+  // Pending purple placeholder offer — modal-style choice.
+  const offer = getPendingPurpleOffer();
+  if (offer && offer.length > 0) {
+    const cardButtons = offer.map((card: any, idx: number) => {
       const tpl = PURPLE_CARD_TEMPLATES.find((t) => t.ability === card.purpleAbility);
-      const desc = tpl?.description ?? card.purpleAbility ?? "";
-      const emoji = tpl?.emoji ?? "🔮";
+      const desc = tpl?.description ?? (card.spellAbility ? `(${card.spellAbility})` : "");
+      const emoji = tpl?.emoji ?? (card.spellAbility ? "✨" : "🔮");
       return `
-        <button class="purple-card-offer" data-purple-pick="${idx}">
+        <button class="purple-card-offer" data-purple-offer-pick="${idx}">
           <div style="font-size:28px">${emoji}</div>
           <div style="font-weight:bold;font-size:13px">${card.name} (${card.cost}💰)</div>
           <div style="font-size:10px;color:#ccc;margin-top:4px">${desc}</div>
@@ -1660,19 +1918,15 @@ function renderDraft() {
       `;
     }).join("");
     el.innerHTML = `
-      <h2 style="font-size:13px">🔮 ${t("purple.title_day")} ${getDay()}</h2>
+      <h2 style="font-size:13px">🔮 ${t("purple.title")}</h2>
       <p class="hint">${t("purple.choose_one")}</p>
       <div class="purple-draft-grid">${cardButtons}</div>
-      <button class="btn btn-secondary" id="btn-purple-decline" style="margin-top:8px">❌ ${t("purple.skip")}</button>
     `;
-    el.querySelectorAll("[data-purple-pick]").forEach((btn) => {
+    el.querySelectorAll("[data-purple-offer-pick]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const idx = parseInt((btn as HTMLElement).dataset.purplePick!, 10);
-        dispatch({ type: "purple_card_pick", playerId: getMyId(), cardIndex: idx });
+        const idx = parseInt((btn as HTMLElement).dataset.purpleOfferPick!, 10);
+        dispatch({ type: "purple_placeholder_pick", playerId: getMyId(), offerIndex: idx });
       });
-    });
-    document.getElementById("btn-purple-decline")?.addEventListener("click", () => {
-      dispatch({ type: "purple_card_pick", playerId: getMyId(), cardIndex: -1 });
     });
     return;
   }
@@ -1731,10 +1985,9 @@ function renderDraft() {
       const def = companionDef(cId);
       return !(def?.heroColor && def.heroColor !== myHeroColor);
     });
-    if (!hasEligibleBase) {
-      const emergency = ((getDay() + getMyIndex()) % 2 === 0) ? CompanionId.Investor : CompanionId.Trainer;
-      unique = [...unique, emergency];
-    }
+    // No fallback companions any more — personal pool may be fully locked, in
+    // which case the player sees a skip button (rendered below).
+    const poolLocked = unique.length === 0 || !hasEligibleBase;
 
     const companionCards = unique.map((cId) => {
       const def = companionDef(cId);
@@ -1761,10 +2014,15 @@ function renderDraft() {
       emptyHtml += `<div class="companion-card companion-card-empty"></div>`;
     }
 
+    const skipBtn = poolLocked
+      ? `<button class="btn btn-secondary" id="btn-companion-skip" style="margin-top:8px">➖ ${t("draft.skip_companion") ?? "Пропустить выбор"}</button>`
+      : "";
+
     el.innerHTML = `
       <h2 style="font-size:13px">${t("draft.companion_title")} ${timerHtml}</h2>
       <p class="hint">${t("draft.choose_companion")}</p>
       <div class="companion-draft-grid">${companionCards}${emptyHtml}</div>
+      ${skipBtn}
     `;
 
     el.querySelectorAll(".companion-card[data-companion]").forEach((btn) => {
@@ -1773,6 +2031,10 @@ function renderDraft() {
         const companionId = (btn as HTMLElement).dataset.companion as CompanionId;
         dispatch({ type: "companion_pick", playerId: getMyId(), companionId });
       });
+    });
+    document.getElementById("btn-companion-skip")?.addEventListener("click", () => {
+      stopDraftTimer();
+      dispatch({ type: "companion_skip", playerId: getMyId() });
     });
     return;
   }

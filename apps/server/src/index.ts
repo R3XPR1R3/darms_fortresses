@@ -6,6 +6,7 @@ import {
   joinRoom,
   reconnectRoom,
   addBot,
+  setDeckBuild,
   startGame,
   handleAction,
   getRoom,
@@ -279,6 +280,18 @@ wss.on("connection", (ws) => {
         const result = addBot(meta.roomId, meta.playerId);
         if (typeof result === "string") {
           send(ws, { type: "error", message: result });
+        } else {
+          broadcastLobby(meta.roomId);
+        }
+        break;
+      }
+
+      case "set_deck_build": {
+        const meta = socketMeta.get(ws);
+        if (!meta) { send(ws, { type: "error", message: "Вы не в комнате" }); break; }
+        const err = setDeckBuild(meta.roomId, meta.playerId, msg.build);
+        if (err) {
+          send(ws, { type: "error", message: err });
         } else {
           broadcastLobby(meta.roomId);
         }

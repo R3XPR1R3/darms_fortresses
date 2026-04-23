@@ -11,30 +11,29 @@ import { createRng } from "./rng.js";
 export function botAction(state: GameState, botPlayerId: string): GameAction | null {
   const rng = createRng(state.rng + botPlayerId.charCodeAt(0));
 
-  // Purple card draft — evaluate offered cards and pick the best one
-  if (state.purpleDraft) {
-    const botIdx = state.players.findIndex((p) => p.id === botPlayerId);
-    if (botIdx === -1) return null;
-    if (state.purpleDraft.picked[botIdx]) return null;
-    const offers = state.purpleDraft.offers[botIdx];
-    if (!offers || offers.length === 0) {
-      return { type: "purple_card_pick", playerId: botPlayerId, cardIndex: -1 }; // decline
+  // Pending purple placeholder pick — choose one from the offer.
+  const botIdx = state.players.findIndex((p) => p.id === botPlayerId);
+  if (botIdx !== -1) {
+    const offer = state.players[botIdx].pendingPurpleOffer;
+    if (offer && offer.length > 0) {
+      const bestIdx = pickBestPurpleCard(state, botIdx, offer, rng);
+      const clampedIdx = Math.max(0, Math.min(offer.length - 1, bestIdx));
+      return { type: "purple_placeholder_pick", playerId: botPlayerId, offerIndex: clampedIdx };
     }
-    const bestIdx = pickBestPurpleCard(state, botIdx, offers, rng);
-    return { type: "purple_card_pick", playerId: botPlayerId, cardIndex: bestIdx };
   }
 
   if (state.phase === "draft") {
     const draft = state.draft!;
 
-    // Companion draft phase — sequential, same order as hero draft
+    // Companion draft phase — personal pool (3 slots), filter to available.
     if (draft.draftPhase === "companion") {
       const drafterIdx = currentDrafter(state);
       if (drafterIdx === null) return null;
       if (state.players[drafterIdx].id !== botPlayerId) return null;
-      const pool = draft.companionChoices?.[0];
-      if (!pool || pool.length === 0) return null;
-      // Pick best companion for the bot
+      const pool = draft.companionChoices?.[0] ?? [];
+      if (pool.length === 0) {
+        return { type: "companion_skip", playerId: botPlayerId };
+      }
       const pick = pickBestCompanion(state, drafterIdx, pool, rng);
       return { type: "companion_pick", playerId: botPlayerId, companionId: pick };
     }
@@ -73,13 +72,19 @@ export function botAction(state: GameState, botPlayerId: string): GameAction | n
     // Step 2: Take income if not taken
     if (!player.incomeTaken) {
       const canBuild = player.hand.some(
-        (c) => c.cost <= player.gold + 1 && !player.builtDistricts.some((d) => d.name === c.name),
+        (c) => c.cost <= player.gold + 1 && !player.builtDistricts.some((d) => d.name === c.name) && c.placeholder !== "purple",
       );
       return {
         type: "income",
         playerId: botPlayerId,
         choice: canBuild ? "gold" : "card",
       };
+    }
+
+    // Step 2.2: Play a purple placeholder if present — it's free and fetches a purple card.
+    const placeholder = player.hand.find((c) => c.placeholder === "purple");
+    if (placeholder && player.purplePool.length > 0) {
+      return { type: "purple_placeholder_play", playerId: botPlayerId, cardId: placeholder.id };
     }
 
     // Step 2.5: Use active companion after income
@@ -157,9 +162,10 @@ function pickBestCompanion(
     return true;
   });
 
-  // Fallback: if nothing eligible, choose between Investor and Trainer
+  // Fallback: if nothing eligible, just pick the first pool entry — caller should
+  // have used companion_skip instead, but this keeps us safe.
   if (eligible.length === 0) {
-    return rng.next() > 0.5 ? CompanionId.Trainer : CompanionId.Investor;
+    return pool[0];
   }
 
   // Only one option — pick it immediately
@@ -236,8 +242,7 @@ function pickBestCompanion(
       }
       case CompanionId.Contractor: score += player.hero === HeroId.Assassin ? 5 : 1; break;
       case CompanionId.NightShadow: score += player.gold >= 3 ? 4 : 2; break;
-      case CompanionId.Investor: score += 3; break;
-      case CompanionId.Trainer: score += 4; break;
+      case CompanionId.TreasureTrader: score += 3; break;
     }
 
     if (score > bestScore) {
@@ -511,10 +516,8 @@ function pickCompanionAction(
       return { type: "use_companion", playerId: player.id, targetHeroId: targets[Math.floor(Math.random() * targets.length)] };
     }
 
-    case CompanionId.Investor:
-      return { type: "use_companion", playerId: player.id };
-
-    case CompanionId.Trainer:
+    case CompanionId.TreasureTrader:
+      // Active now: pull a random purple building.
       return { type: "use_companion", playerId: player.id };
 
     // Bots avoid debuff companions (Pyromancer, UnluckyMage)
@@ -663,6 +666,17 @@ function scoreDraftPick(
 
   const faceUpBans = state.draft?.faceUpBans ?? [];
 
+  // Bias towards heroes whose color matches the bot's build: any companion in
+  // the bot's personal deck with a hero-colour lock implies that build expects
+  // that color (e.g., SunPriestess → blue → Cleric).
+  const buildColorBias: Record<string, number> = {};
+  for (const slot of player.companionDeck) {
+    const def = COMPANIONS.find((c) => c.id === slot.id);
+    if (def?.heroColor) {
+      buildColorBias[def.heroColor] = (buildColorBias[def.heroColor] ?? 0) + 1;
+    }
+  }
+
   let bestHero = available[0];
   let bestScore = -Infinity;
 
@@ -675,6 +689,8 @@ function scoreDraftPick(
       const handCount = handColorCounts[hColor] || 0;
       score += builtCount * 2;
       score += handCount * 1;
+      // Build bias: each color-matched companion adds a small pull.
+      score += (buildColorBias[hColor] ?? 0) * 2.5;
     }
 
     if (threatLevel > 0) {

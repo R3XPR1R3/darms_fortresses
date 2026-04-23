@@ -5,6 +5,30 @@ import { ALL_PURPLE_SPECIAL } from "./cards/index.js";
 
 export const WIN_DISTRICTS = 8;
 export const MAX_HAND_CARDS = 10;
+/** Number of purple placeholder cards shuffled into each player's deck at match start. */
+export const PURPLE_PLACEHOLDERS_PER_MATCH = 24;
+/** Number of purple cards in a deck-build (repeats allowed). */
+export const DECK_BUILD_PURPLE_SIZE = 6;
+/** Number of companion slots in a deck-build (must be unique). */
+export const DECK_BUILD_COMPANION_SIZE = 3;
+
+/** An ability identifier for any deck-buildable purple card (building or spell). */
+export type BuildablePurpleId = PurpleAbility | import("./card.js").SpellAbility;
+
+/** Pre-match deck selection made by the player in the main menu. */
+export interface MatchDeckBuild {
+  /** Exactly DECK_BUILD_PURPLE_SIZE purple card ids (buildings + spells); duplicates allowed. */
+  purple: BuildablePurpleId[];
+  /** Exactly DECK_BUILD_COMPANION_SIZE unique companions. */
+  companions: CompanionId[];
+}
+
+/** State of a single companion slot in a player's personal pool during a match. */
+export type CompanionSlotState = "available" | "sleeping" | "gone";
+export interface CompanionSlot {
+  id: CompanionId;
+  state: CompanionSlotState;
+}
 
 /** Top-level game state — single source of truth */
 export interface GameState {
@@ -25,24 +49,11 @@ export interface GameState {
   rng: number; // seed for deterministic randomness
   /** Global Bard usage count — each use increases cost by 1 */
   bardUsageCount: number;
-  /** Companions permanently removed from the draft pool (Sniper, leavesPool) */
+  /** Companions permanently removed from the draft pool (Sniper, leavesPool) — legacy, now per-player via companionDeck.state */
   bannedCompanions: CompanionId[];
-  /** Purple card draft state (days 3,6,9,12) */
-  purpleDraft: PurpleDraftState | null;
   /** Plague spell duration in days (0 = inactive). */
   plagueDaysLeft?: number;
 }
-
-/** State for the purple card draft mini-phase */
-export interface PurpleDraftState {
-  /** 3 cards offered to each player individually (indexed by player index) */
-  offers: (DistrictCard[] | null)[];
-  /** Which players have picked (indexed by player index) */
-  picked: boolean[];
-}
-
-/** Days on which purple card draft occurs */
-export const PURPLE_DRAFT_DAYS = [3, 6, 9, 12];
 
 /** Purple card template definitions */
 export interface PurpleCardTemplate {
@@ -110,6 +121,12 @@ export interface PlayerState {
   contractorTargetHeroId?: HeroId | null;
   /** Building IDs activated this turn (limits once-per-turn buildings like Cult) */
   activatedBuildings?: string[];
+  /** Remaining purple cards in this player's deck build (consumed when a placeholder is played). */
+  purplePool: DistrictCard[];
+  /** Personal companion pool (3 slots). State changes during the match. */
+  companionDeck: CompanionSlot[];
+  /** When non-null, player has played a placeholder and must pick one of these offered cards. */
+  pendingPurpleOffer: DistrictCard[] | null;
 }
 
 /** State tracking the hero draft within a day */
@@ -124,7 +141,7 @@ export interface DraftState {
   draftOrder: number[];
   /** Which step of the draft we're on */
   currentStep: number;
-  /** Companion choices offered to each player (3 per player) */
+  /** Companion choices offered to each player (personal pool filtered to available slots) */
   companionChoices: CompanionId[][] | null;
   /** Which phase of draft: "hero" or "companion" */
   draftPhase: "hero" | "companion";

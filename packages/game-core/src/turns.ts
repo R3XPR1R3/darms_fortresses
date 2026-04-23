@@ -1,8 +1,30 @@
-import type { GameState, DistrictCard, CardColor } from "@darms/shared-types";
+import type { GameState, DistrictCard, CardColor, PlayerState } from "@darms/shared-types";
 import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME, MAX_HAND_CARDS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
 import { addRandomColor } from "./deck.js";
+
+/** Hard cap: true iff this player can add one more district. */
+export function canAddDistrict(player: PlayerState): boolean {
+  return player.builtDistricts.length < WIN_DISTRICTS;
+}
+
+/** Safely add a district. No-op if at cap. */
+export function pushBuiltDistrict(player: PlayerState, card: DistrictCard): PlayerState {
+  if (!canAddDistrict(player)) return player;
+  return { ...player, builtDistricts: [...player.builtDistricts, card] };
+}
+
+/**
+ * Mark a companion slot in the given player's personal pool as permanently "gone"
+ * (for leavesPool companions after use, and Sniper targets). Idempotent.
+ */
+export function markCompanionGone(player: PlayerState, companionId: CompanionId): PlayerState {
+  const companionDeck = player.companionDeck.map((s) =>
+    s.id === companionId ? { ...s, state: "gone" as const } : s,
+  );
+  return { ...player, companionDeck };
+}
 
 /**
  * Build the turn order for the current day based on hero speeds.
@@ -197,7 +219,7 @@ export function pickIncomeCard(
   const accepted = freeSlots > 0 ? [picked] : [];
   const overflow = accepted.length === 0 ? 1 : 0;
 
-  let updated = {
+  let updated: PlayerState = {
     ...player,
     hand: [...player.hand, ...accepted],
     incomeOffer: null,
@@ -212,18 +234,15 @@ export function pickIncomeCard(
     updated = { ...updated, incomeTaken: false };
   }
 
-  // Leader auto-builds City Gates if picked into hand.
-  if (updated.hero === HeroId.King && updated.builtDistricts.length < WIN_DISTRICTS) {
+  // Leader auto-builds City Gates if picked into hand (hard-capped at WIN_DISTRICTS).
+  if (updated.hero === HeroId.King && canAddDistrict(updated)) {
     const gateIdx = updated.hand.findIndex((d) => d.purpleAbility === "city_gates");
     if (gateIdx !== -1) {
       const hand = [...updated.hand];
       const gate = hand[gateIdx];
       hand.splice(gateIdx, 1);
-      updated = {
-        ...updated,
-        hand,
-        builtDistricts: [...updated.builtDistricts, { ...gate, cost: 8, originalCost: 8, hp: 8 }],
-      };
+      const builtGate = { ...gate, cost: 8, originalCost: 8, hp: 8 };
+      updated = pushBuiltDistrict({ ...updated, hand }, builtGate);
     }
   }
 
@@ -252,12 +271,15 @@ export function buildDistrict(
   const player = state.players[playerIdx];
   if (player.assassinated) return null;
   if (player.buildsRemaining <= 0) return null;
-  if (player.builtDistricts.length >= WIN_DISTRICTS) return null;
+  if (!canAddDistrict(player)) return null;
 
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
   if (cardIdx === -1) return null;
 
   const card = player.hand[cardIdx];
+
+  // Placeholders are not buildable — they must be played via the dedicated action.
+  if (card.placeholder === "purple") return null;
 
   // Flame cards can be "played away" for 2 gold (discarded, not built).
   if (card.name === FLAME_CARD_NAME) {
@@ -408,13 +430,14 @@ export function buildDistrict(
   // (Fort effect is passive — applied when checking HP, not on build)
 
   const newPlayers = [...state.players];
-  newPlayers[playerIdx] = {
+  const afterGoldHand = {
     ...player,
     gold: player.gold - effectiveCost,
     hand: newHand,
-    builtDistricts: [...player.builtDistricts, builtCard],
     buildsRemaining: player.buildsRemaining - 1,
   };
+  // Defensive: pushBuiltDistrict no-ops if somehow at cap.
+  newPlayers[playerIdx] = pushBuiltDistrict(afterGoldHand, builtCard);
 
   let newState = { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `🏗️ ${player.name} построил ${card.name}` }] };
   newState = checkWinCondition(newState);
@@ -659,6 +682,17 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     // End of day — apply end-of-day effects
     state = applyTreasurerEndOfDay(state, rng);
     state = applyRoyalGuardEndOfDay(state);
+
+    // Wake all sleeping companions back to available for next day.
+    {
+      const wakePlayers = state.players.map((p) => ({
+        ...p,
+        companionDeck: p.companionDeck.map((s) =>
+          s.state === "sleeping" ? { ...s, state: "available" as const } : s,
+        ),
+      }));
+      state = { ...state, players: wakePlayers };
+    }
 
     // Re-check: if a player was marked finishedFirst but districts were destroyed
     // below the threshold, clear the flag — the game continues

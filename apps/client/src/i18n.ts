@@ -86,6 +86,7 @@ const dict: Record<string, TranslationEntry> = {
   "menu.treasury_covers": { en: "Covers", ru: "Обложки" },
   "menu.treasury_cards": { en: "Cards", ru: "Карты" },
   "menu.empty": { en: "Empty for now.", ru: "Пока пусто." },
+  "menu.deck_required": { en: "Build a deck to play", ru: "Соберите колоду, чтобы играть" },
 
   // Lobby
   "lobby.host": { en: "(host)", ru: "(хост)" },
@@ -99,6 +100,25 @@ const dict: Record<string, TranslationEntry> = {
   "lobby.enter_code": { en: "Enter room code:", ru: "Введи код комнаты:" },
   "lobby.connecting": { en: "Connecting...", ru: "Подключение..." },
   "lobby.you": { en: "You", ru: "Ты" },
+  "lobby.deck_ready": { en: "deck ready", ru: "колода готова" },
+  "lobby.deck_pending": { en: "deck pending", ru: "колода не собрана" },
+  "lobby.build_deck": { en: "Build deck", ru: "Собрать колоду" },
+  "lobby.edit_deck": { en: "Edit deck", ru: "Изменить колоду" },
+  "lobby.need_four": { en: "Need 4 players", ru: "Нужно 4 игрока" },
+  "lobby.wait_decks": { en: "Waiting for all decks", ru: "Ждём пока все соберут колоду" },
+
+  // Deck builder
+  "deck.title": { en: "Deck Builder", ru: "Деклбилдинг" },
+  "deck.companions": { en: "Companions", ru: "Компаньоны" },
+  "deck.companions_hint": { en: "3 unique", ru: "3 разных" },
+  "deck.purple": { en: "Purple cards", ru: "Фиолетовые карты" },
+  "deck.purple_hint": { en: "duplicates allowed", ru: "повторы разрешены" },
+  "deck.save": { en: "Save", ru: "Сохранить" },
+  "deck.clear": { en: "Clear", ru: "Очистить" },
+  "deck.preset": { en: "Preset build", ru: "Готовый билд" },
+
+  // Draft / companion skip
+  "draft.skip_companion": { en: "Skip companion", ru: "Пропустить выбор" },
 
   // Draft
   "draft.title": { en: "Hero Draft", ru: "Драфт героев" },
@@ -239,6 +259,7 @@ const dict: Record<string, TranslationEntry> = {
   "purple.choose_one": { en: "Choose one of three purple cards:", ru: "Выберите одну из трёх фиолетовых карт:", id: "Pilih satu dari tiga kartu ungu:" },
   "purple.skip": { en: "Skip", ru: "Пропустить", id: "Lewati" },
   "companion.passive": { en: "passive", ru: "авто", id: "pasif" },
+  "companion.active": { en: "active", ru: "актив", id: "aktif" },
   "companion.only_color": { en: "only", ru: "только", id: "hanya" },
   "companion_modal.no_valid_targets": { en: "No valid targets", ru: "Нет подходящих целей", id: "Tidak ada target yang cocok" },
   "companion_modal.no_cards": { en: "No cards", ru: "Нет карт", id: "Tidak ada kartu" },
@@ -285,9 +306,28 @@ export function tHero(heroId: string): string {
 }
 
 // ---- District name translations ----
-/** Translate any card name (districts, purple, spells) via card registry */
+/**
+ * Translate any card name (districts, purple, spells, placeholder) to the current language.
+ * Canonical source: i18n dictionaries in this file; falls back to the card registry (ru/en only).
+ */
 export function tDistrict(name: string): string {
-  if (currentLang === "ru") return name; // names stored in Russian
+  // Placeholder stub — centralized here, not in the card registry.
+  if (name === "Фиолетовая карта!" || name === "Purple Card!" || name === "Kartu ungu!") {
+    return PLACEHOLDER_NAME[currentLang] ?? PLACEHOLDER_NAME.en;
+  }
+  // Try i18n-first lookup by matching ru name against PURPLE_NAMES / SPELL_NAMES.
+  for (const [ability, entry] of Object.entries(PURPLE_NAMES)) {
+    if (entry.ru === name || entry.en === name || entry.id === name) {
+      return entry[currentLang] ?? entry.en;
+    }
+  }
+  for (const [ability, entry] of Object.entries(SPELL_NAMES)) {
+    if (entry.ru === name || entry.en === name || entry.id === name) {
+      return entry[currentLang] ?? entry.en;
+    }
+  }
+  // Plain districts still come from the card registry (ru/en only for now).
+  if (currentLang === "ru") return name;
   const def = findCardByName(name);
   if (!def) return name;
   return def.name[currentLang as "en"] ?? def.name.en;
@@ -313,17 +353,15 @@ export function tName(name: string): string {
   return name;
 }
 
+// ---- Canonical companion translations (single source of truth: name + description × 3 langs) ----
 const COMPANION_NAMES: Record<string, TranslationEntry> = {
   farmer: { en: "Farmer", ru: "Фермер", id: "Petani" },
-  hunter: { en: "Hunter", ru: "Охотник", id: "Pemburu" },
-  saboteur: { en: "Saboteur", ru: "Диверсант", id: "Saboteur" },
-  bard: { en: "Bard", ru: "Бард", id: "Bard" },
-  blacksmith: { en: "Blacksmith", ru: "Кузнец", id: "Pandai besi" },
-  alchemist: { en: "Alchemist", ru: "Алхимик", id: "Alkemis" },
-  cannoneer: { en: "Cannoneer", ru: "Канонир", id: "Kanonir" },
   treasurer: { en: "Trader", ru: "Торговец", id: "Pedagang" },
+  hunter: { en: "Hunter", ru: "Охотник", id: "Pemburu" },
   mason: { en: "Mason", ru: "Каменщик", id: "Tukang batu" },
+  saboteur: { en: "Saboteur", ru: "Диверсант", id: "Penyabotase" },
   official: { en: "Official", ru: "Чиновник", id: "Pejabat" },
+  blacksmith: { en: "Blacksmith", ru: "Кузнец", id: "Pandai besi" },
   sun_priestess: { en: "Sun Priestess", ru: "Жрица солнца", id: "Pendeta matahari" },
   courier: { en: "Courier", ru: "Курьер", id: "Kurir" },
   royal_guard: { en: "Royal Guard", ru: "Королевский страж", id: "Pengawal kerajaan" },
@@ -331,79 +369,129 @@ const COMPANION_NAMES: Record<string, TranslationEntry> = {
   artist: { en: "Artist", ru: "Художник", id: "Seniman" },
   druid: { en: "Druid", ru: "Друид", id: "Druid" },
   marauder: { en: "Marauder", ru: "Мародёр", id: "Perampok" },
-  strange_merchant: { en: "Strange Merchant", ru: "Странный торговец", id: "Pedagang aneh" },
-  pyromancer: { en: "Pyromancer", ru: "Пиромант", id: "Piromancer" },
-  unlucky_mage: { en: "Unlucky Mage", ru: "Неудачный маг", id: "Penyihir sial" },
-  sniper: { en: "Sniper", ru: "Снайпер", id: "Sniper" },
-  designer: { en: "Designer", ru: "Дизайнер", id: "Desainer" },
-  contractor: { en: "Contractor", ru: "Заказчик", id: "Kontraktor" },
-  night_shadow: { en: "Night Shadow", ru: "Ночная тень", id: "Bayangan malam" },
-  investor: { en: "Investor", ru: "Инвестор", id: "Investor" },
-  trainer: { en: "Trainer", ru: "Тренер", id: "Pelatih" },
+  bard: { en: "Bard", ru: "Бард", id: "Pujangga" },
+  alchemist: { en: "Alchemist", ru: "Алхимик", id: "Alkemis" },
+  cannoneer: { en: "Cannoneer", ru: "Канонир", id: "Penembak meriam" },
   reconstructor: { en: "Reconstructor", ru: "Реконструктор", id: "Rekonstruktor" },
   dubious_dealer: { en: "Dubious Dealer", ru: "Сомнительный делец", id: "Pedagang mencurigakan" },
   sorcerer_apprentice: { en: "Apprentice", ru: "Ученик чародея", id: "Murid penyihir" },
+  strange_merchant: { en: "Strange Merchant", ru: "Странный торговец", id: "Pedagang aneh" },
   gravedigger: { en: "Gravedigger", ru: "Могильщик", id: "Penggali kubur" },
   jester: { en: "Jester", ru: "Шут", id: "Badut" },
+  pyromancer: { en: "Pyromancer", ru: "Пиромант", id: "Penyihir api" },
   sun_fanatic: { en: "Sun Fanatic", ru: "Фанатик солнца", id: "Fanatik matahari" },
+  sniper: { en: "Sniper", ru: "Снайпер", id: "Penembak jitu" },
   knight: { en: "Knight", ru: "Рыцарь", id: "Ksatria" },
   fisherman: { en: "Fisherman", ru: "Рыбак", id: "Nelayan" },
+  unlucky_mage: { en: "Unlucky Mage", ru: "Неудачный маг", id: "Penyihir sial" },
   nobility: { en: "Nobility", ru: "Знать", id: "Bangsawan" },
   treasure_trader: { en: "Treasure Trader", ru: "Торговец сокровищами", id: "Pedagang harta" },
+  designer: { en: "Designer", ru: "Дизайнер", id: "Desainer" },
   innkeeper: { en: "Innkeeper", ru: "Трактирщик", id: "Penjaga penginapan" },
   peacemaker: { en: "Peacemaker", ru: "Миротворец", id: "Pembawa damai" },
+  contractor: { en: "Contractor", ru: "Заказчик", id: "Kontraktor" },
+  night_shadow: { en: "Night Shadow", ru: "Ночная тень", id: "Bayangan malam" },
 };
 
 const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
-  farmer: { en: "+1💰", ru: "+1💰" },
-  hunter: { en: "2💰: opponent discards 2 random cards", ru: "За 2💰: противник сбрасывает 2 случайные карты" },
-  saboteur: { en: "Disable a player's companion for this day", ru: "Отключает компаньона выбранного игрока на день" },
-  bard: { en: "Remove a player's companion permanently (cost grows)", ru: "Убирает компаньона игрока навсегда (цена растёт)" },
-  blacksmith: { en: "Replace a district with same-cost, different color", ru: "Меняет квартал на другой той же цены, другого цвета" },
-  alchemist: { en: "Upgrade your district: +1 cost, random new card (max 5)", ru: "Улучшает квартал: +1 к цене, случайная новая карта (макс 5)" },
-  cannoneer: { en: "Burn a hand card, deal 2 damage to random enemy district. 🔴 only", ru: "Сжигает карту из руки, −2 HP случайному кварталу врага. Только 🔴" },
-  treasurer: { en: "{kw:passive} End of day: richest gives you 1💰 and 1🃏. 🟢 only", ru: "{kw:passive} Конец дня: богатейший даёт 1💰 и 1🃏. Только 🟢" },
-  mason: { en: "1💰: split an expensive card into two cheaper ones", ru: "За 1💰: разделяет дорогую карту из руки на две" },
-  official: { en: "{kw:passive} Can build duplicate districts. 🔴 only", ru: "{kw:passive} Можно строить дубликаты кварталов. Только 🔴" },
-  sun_priestess: { en: "{kw:passive} Blue districts cost 1 less to build. 🔵 only", ru: "{kw:passive} Синие кварталы стоят на 1💰 меньше. Только 🔵" },
-  courier: { en: "{kw:passive} Hero speed −2", ru: "{kw:passive} Скорость героя −2" },
-  royal_guard: { en: "{kw:passive} +2💰 per 🟡 district. Next draft: pick from all 8 heroes. 🟡 only", ru: "{kw:passive} +2💰 за 🟡 квартал. Следующий драфт: выбор из 8 героев. Только 🟡" },
-  swindler: { en: "{kw:passive} Income gives both options + extra draw", ru: "{kw:passive} Доход даёт оба варианта + ещё карту" },
-  artist: { en: "{kw:passive} All 4 colors on board → +4💰", ru: "{kw:passive} Все 4 цвета на столе → +4💰" },
-  druid: { en: "{kw:passive} All drawn cards gain a random second color", ru: "{kw:passive} Все взятые карты становятся двухцветными" },
-  marauder: { en: "{kw:passive} On {kw:kill}: steal victim's cards", ru: "{kw:passive} При {kw:kill}: крадёте карты жертвы" },
-  strange_merchant: { en: "Discard a card → gain gold = its cost. 🟢 only. {kw:leaves}", ru: "Сбросить карту → получить золото = её цена. Только 🟢. {kw:leaves}" },
-  pyromancer: { en: "Card → 🔥 Flame. Flames multiply each turn!", ru: "Карта → 🔥 Пламя. Пламя множится каждый ход!" },
-  unlucky_mage: { en: "All your districts turn into the chosen card!", ru: "Все ваши постройки превращаются в эту карту!" },
-  sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}" },
-  designer: { en: "Mark a district — it becomes a purple card next purple draft", ru: "Пометить квартал — станет фиолетовой картой в след. фиолетовом драфте" },
-  contractor: { en: "Name a hero (not from open ban). If Assassin {kw:kill}s them → steal ALL their cards. Miss if hero is in shadow ban", ru: "Назовите героя (не из открытого бана). Если Убийца совершит {kw:kill} → все карты жертвы ваши. Промах если герой в скрытом бане" },
-  night_shadow: { en: "2💰: {kw:kill} an unrevealed hero", ru: "За 2💰: {kw:kill} нераскрытого героя" },
-  investor: { en: "+2💰", ru: "+2💰" },
-  trainer: { en: "Random colorless ability (Assassin/Thief/Sorcerer/Architect)", ru: "Случайная бесцветная способность (Убийца/Вор/Стратег/Архитектор)" },
-  reconstructor: { en: "2💰: rebuild a destroyed district. {kw:leaves}", ru: "За 2💰: восстановить разрушенный квартал. {kw:leaves}" },
-  dubious_dealer: { en: "Recolor all your cards and districts randomly. {kw:leaves}", ru: "Перекрашивает все ваши карты и кварталы случайно. {kw:leaves}" },
-  sorcerer_apprentice: { en: "2💰: build a random discarded district", ru: "За 2💰: строит случайный сброшенный квартал" },
-  gravedigger: { en: "{kw:passive} On {kw:kill}: gain the victim's hero ability", ru: "{kw:passive} При {kw:kill}: получаете способность убитого героя" },
-  jester: { en: "{kw:passive} Shuffle all players' hands. 🟡 only.", ru: "{kw:passive} Перемешивает руки всех игроков. Только 🟡." },
-  sun_fanatic: { en: "Only blue buildings, or 2💰 to replace next player's companion. 🔵 only", ru: "Только синие постройки, или 2💰 заменить компаньона следующего. Только 🔵" },
-  knight: { en: "{kw:passive} Richest loses 1💰 → poorest gains 1💰", ru: "{kw:passive} Богатейший теряет 1💰 → беднейший получает 1💰" },
-  fisherman: { en: "1💰: build a random cost-2 district (allows duplicates)", ru: "За 1💰: строит случайный квартал за 2 (дубликаты OK)" },
-  nobility: { en: "{kw:passive} Richest → +1🃏. Not richest → −1🃏 −1💰", ru: "{kw:passive} Богатейший → +1🃏. Не богатейший → −1🃏 −1💰" },
-  treasure_trader: { en: "{kw:passive} Pick 2 cards in purple draft instead of 1. {kw:leaves}", ru: "{kw:passive} Берёте 2 карты в фиолетовом драфте вместо 1. {kw:leaves}" },
-  innkeeper: { en: "Reveal all opponents' purple cards in hand", ru: "Показывает все фиолетовые карты противников в руке" },
-  peacemaker: { en: "{kw:destroy} all Cannons, TNT Storages and Cults (no effects). {kw:leaves}", ru: "{kw:destroy} все Пушки, Склады тротила и Секты (без эффектов). {kw:leaves}" },
+  farmer: { en: "+1💰", ru: "+1💰", id: "+1💰" },
+  treasurer: { en: "{kw:passive} End of day: richest gives you 1💰 and 1🃏. 🟢 only", ru: "{kw:passive} Конец дня: богатейший даёт 1💰 и 1🃏. Только 🟢", id: "{kw:passive} Akhir hari: pemain terkaya memberi 1💰 dan 1🃏. Hanya 🟢" },
+  hunter: { en: "2💰: opponent discards 2 random cards", ru: "За 2💰: противник сбрасывает 2 случайные карты", id: "2💰: lawan membuang 2 kartu acak" },
+  mason: { en: "1💰: split an expensive card into two cheaper ones", ru: "За 1💰: разделяет дорогую карту из руки на две", id: "1💰: pisahkan kartu mahal menjadi dua kartu murah" },
+  saboteur: { en: "Disable a player's companion for this day", ru: "Отключает компаньона выбранного игрока на день", id: "Menonaktifkan companion pemain selama hari ini" },
+  official: { en: "{kw:passive} Can build duplicate districts. 🔴 only", ru: "{kw:passive} Можно строить дубликаты кварталов. Только 🔴", id: "{kw:passive} Boleh membangun distrik kembar. Hanya 🔴" },
+  blacksmith: { en: "Replace a district with same-cost, different color", ru: "Меняет квартал на другой той же цены, другого цвета", id: "Ganti distrik dengan yang berharga sama, warna berbeda" },
+  sun_priestess: { en: "{kw:passive} Blue districts cost 1 less to build. 🔵 only", ru: "{kw:passive} Синие кварталы стоят на 1💰 меньше. Только 🔵", id: "{kw:passive} Distrik biru 1💰 lebih murah. Hanya 🔵" },
+  courier: { en: "{kw:passive} Hero speed −2", ru: "{kw:passive} Скорость героя −2", id: "{kw:passive} Kecepatan hero −2" },
+  royal_guard: { en: "{kw:passive} +2💰 per 🟡 district. Next draft: pick from all 8 heroes. 🟡 only", ru: "{kw:passive} +2💰 за 🟡 квартал. Следующий драфт: выбор из 8 героев. Только 🟡", id: "{kw:passive} +2💰 per distrik 🟡. Draft berikut: pilih dari 8 hero. Hanya 🟡" },
+  swindler: { en: "{kw:passive} Income gives both options + extra draw", ru: "{kw:passive} Доход даёт оба варианта + ещё карту", id: "{kw:passive} Pendapatan memberi kedua opsi + 1 kartu ekstra" },
+  artist: { en: "{kw:passive} All 4 colors on board → +4💰", ru: "{kw:passive} Все 4 цвета на столе → +4💰", id: "{kw:passive} Ke-4 warna di meja → +4💰" },
+  druid: { en: "{kw:passive} All drawn cards gain a random second color", ru: "{kw:passive} Все взятые карты становятся двухцветными", id: "{kw:passive} Kartu yang diambil mendapat warna kedua acak" },
+  marauder: { en: "{kw:passive} On {kw:kill}: steal victim's cards", ru: "{kw:passive} При {kw:kill}: крадёте карты жертвы", id: "{kw:passive} Saat {kw:kill}: curi kartu korban" },
+  bard: { en: "Remove a player's companion permanently (cost grows)", ru: "Убирает компаньона игрока навсегда (цена растёт)", id: "Hapus companion pemain secara permanen (harga naik)" },
+  alchemist: { en: "Upgrade your district: +1 cost, random new card (max 5)", ru: "Улучшает квартал: +1 к цене, случайная новая карта (макс 5)", id: "Tingkatkan distrik: +1 biaya, kartu acak baru (maks 5)" },
+  cannoneer: { en: "Burn a hand card, deal 2 damage to random enemy district. 🔴 only", ru: "Сжигает карту из руки, −2 HP случайному кварталу врага. Только 🔴", id: "Bakar kartu dari tangan, −2 HP ke distrik musuh acak. Hanya 🔴" },
+  reconstructor: { en: "2💰: rebuild a destroyed district. {kw:leaves}", ru: "За 2💰: восстановить разрушенный квартал. {kw:leaves}", id: "2💰: bangun kembali distrik yang hancur. {kw:leaves}" },
+  dubious_dealer: { en: "Recolor all cards and districts randomly. {kw:leaves}", ru: "Перекрашивает все карты и кварталы случайно. {kw:leaves}", id: "Mengecat ulang semua kartu dan distrik secara acak. {kw:leaves}" },
+  sorcerer_apprentice: { en: "2💰: build a random discarded district", ru: "За 2💰: строит случайный сброшенный квартал", id: "2💰: bangun distrik acak dari tumpukan buangan" },
+  strange_merchant: { en: "Discard a card → gain gold = its cost. 🟢 only. {kw:leaves}", ru: "Сбросить карту → получить золото = её цена. Только 🟢. {kw:leaves}", id: "Buang kartu → dapat emas = harganya. Hanya 🟢. {kw:leaves}" },
+  gravedigger: { en: "{kw:passive} On {kw:kill}: gain the victim's hero ability", ru: "{kw:passive} При {kw:kill}: получаете способность убитого героя", id: "{kw:passive} Saat {kw:kill}: dapatkan kemampuan hero korban" },
+  jester: { en: "{kw:passive} Shuffle all players' hands. 🟡 only.", ru: "{kw:passive} Перемешивает руки всех игроков. Только 🟡.", id: "{kw:passive} Acak kartu tangan semua pemain. Hanya 🟡." },
+  pyromancer: { en: "Card → 🔥 Flame. Flames multiply each turn!", ru: "Карта → 🔥 Пламя. Пламя множится каждый ход!", id: "Kartu → 🔥 Api. Api berkembang tiap giliran!" },
+  sun_fanatic: { en: "Only blue buildings, or 2💰 to replace next player's companion. 🔵 only", ru: "Только синие постройки, или 2💰 заменить компаньона следующего. Только 🔵", id: "Hanya bangunan biru, atau 2💰 untuk ganti companion pemain berikut. Hanya 🔵" },
+  sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}", id: "Hapus permanen companion lawan dari pool. {kw:leaves}" },
+  knight: { en: "{kw:passive} Richest loses 1💰 → poorest gains 1💰", ru: "{kw:passive} Богатейший теряет 1💰 → беднейший получает 1💰", id: "{kw:passive} Pemain terkaya kehilangan 1💰 → termiskin dapat 1💰" },
+  fisherman: { en: "1💰: build a random cost-2 district (allows duplicates)", ru: "За 1💰: строит случайный квартал за 2 (дубликаты OK)", id: "1💰: bangun distrik acak berharga 2 (duplikat boleh)" },
+  unlucky_mage: { en: "All your districts turn into the chosen card!", ru: "Все ваши постройки превращаются в эту карту!", id: "Semua distrik Anda berubah jadi kartu yang dipilih!" },
+  nobility: { en: "{kw:passive} Richest → +1🃏. Not richest → −1🃏 −1💰", ru: "{kw:passive} Богатейший → +1🃏. Не богатейший → −1🃏 −1💰", id: "{kw:passive} Terkaya → +1🃏. Bukan terkaya → −1🃏 −1💰" },
+  treasure_trader: { en: "Gain a random purple building in hand. {kw:leaves}", ru: "Даёт случайную фиолетовую постройку в руку. {kw:leaves}", id: "Dapatkan bangunan ungu acak di tangan. {kw:leaves}" },
+  designer: { en: "Turn one of your districts into a random purple building", ru: "Превращает выбранный ваш район в случайную фиолетовую постройку", id: "Ubah distrik Anda jadi bangunan ungu acak" },
+  innkeeper: { en: "Reveal all opponents' purple cards in hand", ru: "Показывает все фиолетовые карты противников в руке", id: "Tampilkan semua kartu ungu di tangan lawan" },
+  peacemaker: { en: "{kw:destroy} all Cannons, TNT Storages and Cults (no effects). {kw:leaves}", ru: "{kw:destroy} все Пушки, Склады тротила и Секты (без эффектов). {kw:leaves}", id: "{kw:destroy} semua Meriam, Gudang TNT dan Kultus (tanpa efek). {kw:leaves}" },
+  contractor: { en: "Name a hero (not from open ban). If Assassin {kw:kill}s them → steal their purple cards", ru: "Назовите героя (не из открытого бана). Если Убийца совершит {kw:kill} → крадёте его фиолетовые карты", id: "Sebutkan hero (bukan dari ban terbuka). Jika Assassin {kw:kill} → curi kartu ungunya" },
+  night_shadow: { en: "2💰: {kw:kill} an unrevealed hero", ru: "За 2💰: {kw:kill} нераскрытого героя", id: "2💰: {kw:kill} hero yang belum terbuka" },
 };
 
-export function tCompanionName(id: string, fallback: string): string {
+export function tCompanionName(id: string, fallback?: string): string {
   const entry = COMPANION_NAMES[id];
-  return entry ? (entry[currentLang] ?? entry.en) : fallback;
+  return entry ? (entry[currentLang] ?? entry.en) : (fallback ?? id);
 }
 
-export function tCompanionDescription(id: string, fallback: string): string {
+export function tCompanionDescription(id: string, fallback?: string): string {
   const entry = COMPANION_DESCRIPTIONS[id];
-  return entry ? (entry[currentLang] ?? entry.en) : fallback;
+  return entry ? (entry[currentLang] ?? entry.en) : (fallback ?? "");
 }
+
+// ---- Canonical purple building translations ----
+const PURPLE_NAMES: Record<string, TranslationEntry> = {
+  cannon: { en: "Cannon", ru: "Пушка", id: "Meriam" },
+  fort: { en: "Fort", ru: "Форт", id: "Benteng" },
+  stronghold: { en: "Stronghold", ru: "Цитадель", id: "Kubu" },
+  monument: { en: "Monument", ru: "Монумент", id: "Monumen" },
+  highway: { en: "Highway", ru: "Шоссе", id: "Jalan raya" },
+  city_gates: { en: "City Gates", ru: "Врата в город", id: "Gerbang kota" },
+  crypt: { en: "Crypt", ru: "Склеп", id: "Makam" },
+  tnt_storage: { en: "TNT Storage", ru: "Склад тротила", id: "Gudang TNT" },
+  mine: { en: "Mine", ru: "Шахта", id: "Tambang" },
+  cult: { en: "Cult", ru: "Секта", id: "Kultus" },
+  altar_darkness: { en: "Altar of Darkness", ru: "Алтарь тьмы", id: "Altar kegelapan" },
+};
+
+const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
+  cannon: { en: "{kw:activate} 1💰: deal 1 damage to a random enemy district (unlimited per day)", ru: "{kw:activate} За 1💰: −1 HP случайному кварталу врага (без лимита)", id: "{kw:activate} 1💰: 1 damage ke distrik musuh acak (tanpa batas)" },
+  fort: { en: "{kw:passive} Other buildings −1 HP on table. Destroyed → refund its cost in gold", ru: "{kw:passive} Другие постройки −1 HP на столе. При разрушении — возврат золотом", id: "{kw:passive} Bangunan lain −1 HP di meja. Jika hancur — kembalikan emas" },
+  stronghold: { en: "{kw:passive} Immune to destruction and damage", ru: "{kw:passive} Неуязвима к разрушению и урону", id: "{kw:passive} Kebal dari penghancuran & damage" },
+  monument: { en: "In hand: costs 3. On table: 5/5 HP", ru: "В руке: цена 3. На столе: 5/5 HP", id: "Di tangan: harga 3. Di meja: 5/5 HP" },
+  highway: { en: "{kw:passive} Hero speed −1", ru: "{kw:passive} Скорость героя −1", id: "{kw:passive} Kecepatan hero −1" },
+  city_gates: { en: "In hand: cost −2 each day. Leader auto-builds it for free", ru: "В руке: цена −2 каждый день. Лидер строит автоматически и бесплатно", id: "Di tangan: harga −2 tiap hari. Leader membangunnya gratis otomatis" },
+  crypt: { en: "{kw:activate} 2💰: self-destroy, gain 2 random purple buildings in hand", ru: "{kw:activate} За 2💰: самоуничтожение, +2 случайные фиолетовые постройки в руку", id: "{kw:activate} 2💰: hancurkan diri, dapat 2 bangunan ungu acak" },
+  tnt_storage: { en: "{kw:activate} 2💰: self-destroy, {kw:destroy} 2 random districts for each player", ru: "{kw:activate} За 2💰: самоуничтожение, {kw:destroy} 2 случайных квартала у каждого", id: "{kw:activate} 2💰: hancurkan diri, {kw:destroy} 2 distrik acak tiap pemain" },
+  mine: { en: "{kw:passive} +1💰 at end of day (Merchant: end of each turn)", ru: "{kw:passive} +1💰 в конце дня (Казначей: в конце каждого хода)", id: "{kw:passive} +1💰 di akhir hari (Pedagang: tiap giliran)" },
+  cult: { en: "{kw:activate} Blue hero only: replace a random opponent's district with a copy of Cult", ru: "{kw:activate} Только синий герой: заменяет случайный квартал оппа на Секту", id: "{kw:activate} Hanya hero biru: ganti distrik lawan acak dengan salinan Kultus" },
+  altar_darkness: { en: "{kw:altar} 4 Altars → alternate win condition. Duplicates allowed", ru: "{kw:altar} 4 алтаря → альтернативная победа. Разрешены дубликаты", id: "{kw:altar} 4 Altar → kondisi menang alternatif. Duplikat diizinkan" },
+};
+
+// ---- Canonical spell translations ----
+const SPELL_NAMES: Record<string, TranslationEntry> = {
+  ignite: { en: "Ignite", ru: "Поджигание", id: "Pembakaran" },
+  gold_rain: { en: "Gold Rain", ru: "Золотой дождь", id: "Hujan emas" },
+  holy_day: { en: "Holy Day", ru: "Священный день", id: "Hari suci" },
+  flood: { en: "Flood", ru: "Потоп", id: "Banjir" },
+  plague: { en: "Plague", ru: "Чума", id: "Wabah" },
+};
+
+const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
+  ignite: { en: "{kw:spell} Replace a random card in opponent's hand with 🔥 Flame", ru: "{kw:spell} Заменяет случайную карту в руке противника на 🔥 Пламя", id: "{kw:spell} Ganti kartu acak di tangan lawan dengan 🔥 Api" },
+  gold_rain: { en: "{kw:spell} Everyone gets +1💰", ru: "{kw:spell} Все получают +1💰", id: "{kw:spell} Semua pemain dapat +1💰" },
+  holy_day: { en: "{kw:spell} Until end of day: all districts become blue", ru: "{kw:spell} До конца дня: все кварталы синие", id: "{kw:spell} Hingga akhir hari: semua distrik jadi biru" },
+  flood: { en: "{kw:spell} Up to 4 random districts from each player return to hand", ru: "{kw:spell} До 4 случайных кварталов у каждого возвращаются в руку", id: "{kw:spell} Sampai 4 distrik acak tiap pemain kembali ke tangan" },
+  plague: { en: "{kw:spell} 3-day effect: each day a random player loses gold, a random district takes damage", ru: "{kw:spell} Эффект 3 дня: каждый день случайный игрок теряет золото, случайный квартал получает урон", id: "{kw:spell} Efek 3 hari: tiap hari pemain acak kehilangan emas, distrik acak kena damage" },
+};
+
+// ---- Placeholder stub name ----
+const PLACEHOLDER_NAME: TranslationEntry = {
+  en: "Purple Card!", ru: "Фиолетовая карта!", id: "Kartu ungu!",
+};
 
 // ---- Log message translation ----
 // Log messages come from game-core in Russian. We translate them on display.
@@ -445,23 +533,37 @@ export function expandKw(text: string): string {
   return text.replace(/\{kw:(\w+)\}/g, (_, id) => kwHtml(id));
 }
 
-// ---- Spell translations (from card registry) ----
-export function tSpellName(name: string): string {
-  return tDistrict(name);
+// ---- Spell translations (canonical: this file) ----
+export function tSpellName(nameOrAbility: string): string {
+  // Name passed → translate via tDistrict which covers all purple/spell names.
+  if (SPELL_NAMES[nameOrAbility]) {
+    const entry = SPELL_NAMES[nameOrAbility];
+    return entry[currentLang] ?? entry.en;
+  }
+  return tDistrict(nameOrAbility);
 }
 
 export function tSpellDesc(ability: string): string {
+  const entry = SPELL_DESCRIPTIONS[ability];
+  if (entry) return entry[currentLang] ?? entry.en;
+  // Last-resort fallback (e.g., ids not yet added).
   const def = findSpellByAbility(ability);
   if (!def) return ability;
   return def.description[currentLang as "en" | "ru"] ?? def.description.en;
 }
 
-// ---- Purple card translations (from card registry) ----
-export function tPurpleName(name: string): string {
-  return tDistrict(name);
+// ---- Purple card translations (canonical: this file) ----
+export function tPurpleName(nameOrAbility: string): string {
+  if (PURPLE_NAMES[nameOrAbility]) {
+    const entry = PURPLE_NAMES[nameOrAbility];
+    return entry[currentLang] ?? entry.en;
+  }
+  return tDistrict(nameOrAbility);
 }
 
 export function tPurpleDesc(ability: string): string {
+  const entry = PURPLE_DESCRIPTIONS[ability];
+  if (entry) return entry[currentLang] ?? entry.en;
   const def = findPurpleByAbility(ability);
   if (!def) return ability;
   return def.description[currentLang as "en" | "ru"] ?? def.description.en;

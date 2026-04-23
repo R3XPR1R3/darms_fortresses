@@ -1,4 +1,4 @@
-import type { GameAction, GameState, PlayerState, DraftState, CompanionId, DistrictCard } from "@darms/shared-types";
+import type { GameAction, GameState, PlayerState, DraftState, CompanionId, DistrictCard, MatchDeckBuild, CompanionSlot } from "@darms/shared-types";
 
 // ---- Client → Server ----
 
@@ -8,6 +8,7 @@ export type ClientMessage =
   | { type: "reconnect_room"; roomId: string; playerId: string }
   | { type: "start_game" }
   | { type: "add_bot" }
+  | { type: "set_deck_build"; build: MatchDeckBuild | null }
   | { type: "action"; action: GameAction };
 
 // ---- Server → Client ----
@@ -25,6 +26,10 @@ export interface LobbyPlayer {
   name: string;
   isBot: boolean;
   isHost: boolean;
+  /** True iff this player has submitted a valid deck-build; blocks start if false. */
+  deckReady: boolean;
+  /** Optional label for bots describing which preset they use. */
+  buildLabel?: string;
 }
 
 /**
@@ -43,7 +48,8 @@ export interface PlayerView {
   winner: number | null;
   log: GameState["log"];
   myIndex: number;
-  purpleDraft: { offers: (DistrictCard[] | null)[]; picked: boolean[] } | null;
+  /** Client-visible view of the requesting player's own pending purple offer, if any. */
+  pendingPurpleOffer: DistrictCard[] | null;
 }
 
 export interface PlayerViewEntry {
@@ -65,6 +71,10 @@ export interface PlayerViewEntry {
   companionUsed: boolean;
   companionDisabled: boolean;
   designerMarkedCardId: string | null;
+  /** Personal companion pool with per-slot state (all players can see this). */
+  companionDeck: CompanionSlot[];
+  /** Remaining size of this player's purple deck-build pool (public). */
+  purplePoolSize: number;
 }
 
 export interface DraftView {
