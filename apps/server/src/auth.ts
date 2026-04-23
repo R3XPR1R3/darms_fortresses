@@ -15,7 +15,7 @@ export interface JwtPayload {
 /** Verify Google id_token and create/update user in DB. Returns JWT. */
 export async function loginWithGoogle(idToken: string): Promise<{
   token: string;
-  user: { id: number; nickname: string; email: string | null; avatarUrl: string | null };
+  user: { id: number; nickname: string; email: string | null; avatarUrl: string | null; gold: number; diamonds: number };
 }> {
   const ticket = await googleClient.verifyIdToken({
     idToken,
@@ -46,6 +46,8 @@ export async function loginWithGoogle(idToken: string): Promise<{
       nickname: user.nickname,
       email: user.email,
       avatarUrl: user.avatar_url,
+      gold: user.gold,
+      diamonds: user.diamonds,
     },
   };
 }

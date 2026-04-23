@@ -1,5 +1,5 @@
 import type { GameState, AbilityPayload, PlayerState, LogEntry } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, PURPLE_CARD_TEMPLATES } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 function addLog(state: GameState, message: string): LogEntry[] {
@@ -86,13 +86,19 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
       // Draw 2 extra cards
       newDeck = [...state.deck];
       const drawn = newDeck.splice(0, Math.min(2, newDeck.length));
+      const freeSlots = Math.max(0, MAX_HAND_CARDS - p.hand.length);
+      const accepted = drawn.slice(0, freeSlots);
+      const overflow = drawn.length - accepted.length;
       newPlayers[playerIdx] = {
         ...p,
-        hand: [...p.hand, ...drawn],
+        hand: [...p.hand, ...accepted],
         buildsRemaining: 3,
       };
       if (drawn.length > 0) {
-        log = addLog({ ...state, log }, `${p.name} (Архитектор) берёт ${drawn.length} карты, может строить до 3`);
+        log = addLog({ ...state, log }, `${p.name} (Архитектор) берёт ${accepted.length} карты, может строить до 3`);
+      }
+      if (overflow > 0) {
+        log = addLog({ ...state, log }, `💥 ${p.name}: ${overflow} карт(ы) рассыпались (лимит руки ${MAX_HAND_CARDS})`);
       }
       break;
     }
@@ -277,7 +283,7 @@ export function useAbility(
     case "sorcerer": {
       if (player.hero !== HeroId.Sorcerer) return null;
       if (ability.mode === "draw") {
-        // Discard 2 random cards from hand, then draw 3 from deck
+        // Discard 2 random cards from hand, then draw 2 from deck
         newDeck = [...state.deck];
         let newHand = [...player.hand];
         const discarded: string[] = [];
@@ -286,14 +292,20 @@ export function useAbility(
           discarded.push(newHand[idx].name);
           newHand.splice(idx, 1);
         }
-        const drawn = newDeck.splice(0, Math.min(3, newDeck.length));
-        newHand = [...newHand, ...drawn];
+        const drawn = newDeck.splice(0, Math.min(2, newDeck.length));
+        const freeSlots = Math.max(0, MAX_HAND_CARDS - newHand.length);
+        const accepted = drawn.slice(0, freeSlots);
+        const overflow = drawn.length - accepted.length;
+        newHand = [...newHand, ...accepted];
         newPlayers[playerIdx] = {
           ...player,
           hand: newHand,
           abilityUsed: true,
         };
-        log = addLog({ ...state, log }, `${player.name} (Чародей) сбросил ${discarded.length} карт, взял ${drawn.length}`);
+        log = addLog({ ...state, log }, `${player.name} (Чародей) сбросил ${discarded.length} карт, взял ${accepted.length}`);
+        if (overflow > 0) {
+          log = addLog({ ...state, log }, `💥 ${player.name}: ${overflow} карт(ы) рассыпались (лимит руки ${MAX_HAND_CARDS})`);
+        }
       } else {
         // Swap hands — can target any player (including assassinated)
         if (!ability.targetPlayerId) return null;
