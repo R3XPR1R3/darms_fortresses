@@ -672,20 +672,125 @@ function buildingTextureUrl(d: { colors: string[]; cost: number; spellAbility?: 
   return `/buildings/${key}.png`;
 }
 
-function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number; spellAbility?: string }): string {
+function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string }, opts: { info?: boolean } = {}): string {
   const cs = colorStyle(d.colors);
   const hpLabel = d.hp != null && d.hp !== d.cost ? `<div class="card-hp">HP ${d.hp}</div>` : "";
   const spellClass = d.spellAbility ? "spell-card" : "";
   const spellLabel = d.spellAbility ? `<div class="spell-badge">✦ ${kwHtml("spell")} ✦</div>` : "";
   const texUrl = buildingTextureUrl(d);
+  const infoBtn = opts.info !== false
+    ? `<button class="card-info-btn" data-card-info="${encodeCardPayload(d)}" title="Info">ℹ</button>`
+    : "";
   return `<div class="district-card ${cs.cls} ${spellClass}" style="${cs.style}">
     <img class="card-texture" src="${texUrl}" alt="" />
     <div class="card-cost-badge">${d.cost}</div>
     ${spellLabel}
     <div class="card-name">${tDistrict(d.name)}</div>
     ${hpLabel}
+    ${infoBtn}
   </div>`;
 }
+
+/** Encode a card reference for the info popover (JSON in a data attribute). */
+function encodeCardPayload(c: { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string }): string {
+  const payload = {
+    name: c.name,
+    cost: c.cost,
+    colors: c.colors,
+    hp: c.hp,
+    spellAbility: c.spellAbility,
+    purpleAbility: c.purpleAbility,
+    placeholder: c.placeholder,
+  };
+  // Use base64 of JSON so quotes/braces don't break the attribute.
+  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+}
+
+function decodeCardPayload(encoded: string): { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string } | null {
+  try {
+    return JSON.parse(decodeURIComponent(escape(atob(encoded))));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Open the card-info popover for a card. Works for purple buildings,
+ * spells, placeholder stubs, and plain coloured districts.
+ */
+function showCardInfoPopover(card: { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string }) {
+  let overlay = document.getElementById("card-info-popover");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "card-info-popover";
+    document.body.appendChild(overlay);
+  }
+
+  // Resolve display label, description, emoji.
+  let emoji = "🏠";
+  let title = tDistrict(card.name);
+  let desc = "";
+  let extraTag = "";
+
+  if (card.placeholder === "purple") {
+    emoji = "🟣";
+    title = tDistrict(card.name); // already i18n-aware
+    desc = t("purple.placeholder_desc");
+    extraTag = t("deck.placeholder") ?? "placeholder";
+  } else if (card.purpleAbility) {
+    const tpl = PURPLE_CARD_TEMPLATES.find((t) => t.ability === card.purpleAbility);
+    emoji = tpl?.emoji ?? "🔮";
+    title = tPurpleName(card.purpleAbility);
+    desc = expandKw(tPurpleDesc(card.purpleAbility));
+    extraTag = t("deck.building") ?? "building";
+  } else if (card.spellAbility) {
+    emoji = "✨";
+    title = tSpellName(card.spellAbility);
+    desc = expandKw(tSpellDesc(card.spellAbility));
+    extraTag = t("pool.spells") ?? "spell";
+  }
+
+  const colorDots = card.colors.map((c) => districtColorDot(c)).join(" ");
+  const hpLine = card.hp != null && card.hp !== card.cost
+    ? `<div class="cip-line">❤️ HP: <b>${card.hp}</b> / ${card.cost}</div>`
+    : "";
+
+  overlay.innerHTML = `
+    <div class="cip-backdrop"></div>
+    <div class="cip-content" role="dialog" aria-modal="true">
+      <button class="cip-close" title="Close">✕</button>
+      <div class="cip-head">
+        <div class="cip-emoji">${emoji}</div>
+        <div class="cip-title">
+          <div class="cip-name">${title}</div>
+          <div class="cip-meta">${colorDots} &nbsp; ${card.cost}💰 ${extraTag ? `&nbsp; <span class="db-tag">${extraTag}</span>` : ""}</div>
+        </div>
+      </div>
+      ${hpLine}
+      ${desc ? `<div class="cip-desc">${desc}</div>` : `<div class="cip-desc cip-desc-muted">${t("info.plain_district") ?? "Обычный квартал — без особых эффектов."}</div>`}
+    </div>
+  `;
+  overlay.classList.add("show");
+
+  const close = () => overlay!.classList.remove("show");
+  overlay.onclick = (e) => {
+    const t = e.target as HTMLElement;
+    if (t.classList.contains("cip-backdrop") || t.closest(".cip-close")) close();
+  };
+}
+
+/** Global delegated handler — any click on [data-card-info] opens the info popover. */
+document.addEventListener("click", (e) => {
+  const target = e.target as HTMLElement;
+  const btn = target.closest<HTMLElement>("[data-card-info]");
+  if (!btn) return;
+  e.stopPropagation();
+  e.preventDefault();
+  const payload = btn.dataset.cardInfo;
+  if (!payload) return;
+  const card = decodeCardPayload(payload);
+  if (card) showCardInfoPopover(card);
+}, true);
 
 // ---- Player switching state ----
 let selectedOpponentIndex: number | null = null;
@@ -971,10 +1076,15 @@ function openDeckBuilderModal() {
     const purpleGrid = purples.map((p) => {
       const count = draftPurple.filter((x) => x === p.id).length;
       const disabled = draftPurple.every((x) => x !== null);
-      return `<button class="db-card ${p.isSpell ? "db-card-spell" : ""}" data-pick-purple="${p.id}" ${disabled ? "disabled" : ""} title="${p.desc}">
-        <div style="font-size:22px">${p.emoji}</div>
-        <div style="font-weight:bold;font-size:11px">${p.name}</div>
-        <div style="font-size:10px;color:#bbb">${p.cost}💰 ${p.isSpell ? "(спел)" : ""}</div>
+      const tag = p.isSpell ? `<span class="db-tag db-tag-spell">${t("pool.spells") ?? "спел"}</span>` : `<span class="db-tag">${t("deck.building") ?? "постройка"}</span>`;
+      return `<button class="db-card ${p.isSpell ? "db-card-spell" : ""}" data-pick-purple="${p.id}" ${disabled ? "disabled" : ""}>
+        <div class="db-card-head">
+          <span class="db-card-emoji">${p.emoji}</span>
+          <span class="db-card-cost">${p.cost}💰</span>
+        </div>
+        <div class="db-card-name">${p.name}</div>
+        <div class="db-card-tags">${tag}</div>
+        <div class="db-card-desc">${p.desc}</div>
         ${count > 0 ? `<span class="db-card-count">×${count}</span>` : ""}
       </button>`;
     }).join("");
@@ -983,12 +1093,16 @@ function openDeckBuilderModal() {
       const already = draftCompanions.includes(c.id);
       const slotsFull = draftCompanions.every((x) => x !== null);
       const disabled = already || slotsFull;
-      const tag = c.passive ? t("companion.passive") : t("companion.active") ?? "active";
-      const descPlain = tCompanionDescription(c.id).replace(/\{kw:[^}]+\}/g, "");
-      return `<button class="db-card ${already ? "db-card-used" : ""}" data-pick-companion="${c.id}" ${disabled ? "disabled" : ""} title="${descPlain}">
-        <div style="font-size:22px">${c.emoji}</div>
-        <div style="font-weight:bold;font-size:11px">${tCompanionName(c.id)}</div>
-        <div style="font-size:9px;color:#bbb">${c.heroColor ? districtColorDot(c.heroColor) + " " : ""}${tag}</div>
+      const modeTag = `<span class="db-tag ${c.passive ? "db-tag-passive" : "db-tag-active"}">${c.passive ? t("companion.passive") : t("companion.active")}</span>`;
+      const colorTag = c.heroColor ? `<span class="db-tag" style="color:${COLOR_HEX[c.heroColor] ?? "#888"}">${districtColorDot(c.heroColor)} ${t("companion.only_color")}</span>` : "";
+      const desc = expandKw(tCompanionDescription(c.id));
+      return `<button class="db-card ${already ? "db-card-used" : ""}" data-pick-companion="${c.id}" ${disabled ? "disabled" : ""}>
+        <div class="db-card-head">
+          <span class="db-card-emoji">${c.emoji}</span>
+        </div>
+        <div class="db-card-name">${tCompanionName(c.id)}</div>
+        <div class="db-card-tags">${modeTag}${colorTag}</div>
+        <div class="db-card-desc">${desc}</div>
       </button>`;
     }).join("");
 
@@ -1681,12 +1795,17 @@ function renderMyBoard() {
       const buildable = canBuild && affordable && !duplicate;
       const cs = colorStyle(c.colors);
       const texUrl = buildingTextureUrl(c);
+      const placeholderAction = c.placeholder === "purple" && myTurnNow && !getPendingPurpleOffer();
+      const buildBtn = c.placeholder === "purple"
+        ? (placeholderAction ? `<button class="btn btn-primary btn-build" data-build="${c.id}">🟣 ${t("my.play_placeholder") ?? "Разыграть"}</button>` : "")
+        : (buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : "");
       return `
-        <div class="hand-card ${cs.cls}" style="${cs.style}">
+        <div class="hand-card ${cs.cls} ${c.placeholder === "purple" ? "placeholder-card" : ""}" style="${cs.style}">
           <img class="card-texture" src="${texUrl}" alt="" />
           <div class="card-cost">${c.cost}</div>
           <div class="card-name-text">${tDistrict(c.name)}</div>
-          ${buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : ""}
+          <button class="card-info-btn" data-card-info="${encodeCardPayload(c)}" title="Info">ℹ</button>
+          ${buildBtn}
         </div>
       `;
     }).join("");

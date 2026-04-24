@@ -414,7 +414,12 @@ function useCompanion(
     }
 
     case CompanionId.UnluckyMage: {
-      // Discards a card from hand — all own built districts become that card
+      // Discards a card from hand — all own built districts become copies of that card,
+      // duplicates allowed. Preserves the original id + current HP to keep board state
+      // consistent, but copies EVERY identity field (name/cost/colors/baseColors/
+      // purpleAbility/spellAbility) so the transformed districts behave exactly like
+      // copies of the sacrificed card — in particular, if an altar is sacrificed, the
+      // resulting districts all count towards the 4-altar alternate win condition.
       if (!targetCardId) return null;
       const cardIdx = player.hand.findIndex((c) => c.id === targetCardId);
       if (cardIdx === -1) return null;
@@ -422,14 +427,20 @@ function useCompanion(
       const newHand = [...player.hand];
       newHand.splice(cardIdx, 1);
       const newDistricts = player.builtDistricts.map((d) => ({
-        ...d,
+        id: d.id,
+        hp: d.hp, // keep existing damage state
         name: template.name,
         cost: template.cost,
-        colors: template.colors,
-        // keep existing hp
+        originalCost: template.originalCost ?? template.cost,
+        colors: [...template.colors],
+        baseColors: template.baseColors ? [...template.baseColors] : [...template.colors],
+        purpleAbility: template.purpleAbility,
+        spellAbility: template.spellAbility,
       }));
       newPlayers[playerIdx] = { ...player, hand: newHand, builtDistricts: newDistricts, companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: все постройки стали ${template.name}!`), rng: rng.getSeed() };
+      let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: все постройки стали ${template.name}!`);
+      s = { ...s, rng: rng.getSeed() };
+      return checkWinCondition(s);
     }
 
     case CompanionId.Designer: {

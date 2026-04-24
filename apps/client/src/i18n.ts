@@ -116,6 +116,19 @@ const dict: Record<string, TranslationEntry> = {
   "deck.save": { en: "Save", ru: "Сохранить" },
   "deck.clear": { en: "Clear", ru: "Очистить" },
   "deck.preset": { en: "Preset build", ru: "Готовый билд" },
+  "deck.building": { en: "building", ru: "постройка", id: "bangunan" },
+  "deck.placeholder": { en: "placeholder", ru: "заглушка", id: "placeholder" },
+
+  // Info popover
+  "info.plain_district": { en: "Plain district — no special effects.", ru: "Обычный квартал — без особых эффектов.", id: "Distrik biasa — tanpa efek khusus." },
+  "purple.placeholder_desc": {
+    en: "Play from hand: pick one purple card from your deck-build. The last one is granted automatically; if the pool is empty, the stub recycles and a random coloured card appears instead.",
+    ru: "Разыграйте из руки: выберите фиолетовую карту из своего билда. Последняя выдаётся автоматически; если пул пуст, заглушка возвращается в колоду и вместо неё приходит случайная цветная карта.",
+    id: "Mainkan dari tangan: pilih satu kartu ungu dari deck-build Anda. Yang terakhir langsung diberikan; jika pool kosong, stub daur ulang dan kartu warna acak muncul.",
+  },
+
+  // Hand
+  "my.play_placeholder": { en: "Play", ru: "Разыграть", id: "Mainkan" },
 
   // Draft / companion skip
   "draft.skip_companion": { en: "Skip companion", ru: "Пропустить выбор" },

@@ -552,25 +552,117 @@
     .db-slot-filled:hover .db-slot-x { opacity: 1; }
     .db-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
-      gap: 6px;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
     }
     .db-card {
-      background: #22242f; border: 1px solid #353646; border-radius: 6px;
-      padding: 6px 4px; cursor: pointer; text-align: center;
+      background: #22242f; border: 1px solid #353646; border-radius: 8px;
+      padding: 10px; cursor: pointer; text-align: left;
       font-family: inherit; color: #ddd;
       transition: transform 0.12s, border-color 0.12s;
       position: relative;
+      display: flex; flex-direction: column; gap: 6px;
+      min-height: 140px;
     }
     .db-card:hover:not(:disabled) { transform: translateY(-1px); border-color: #6b6d80; }
     .db-card:disabled { opacity: 0.45; cursor: not-allowed; }
     .db-card-spell { border-color: #8e44ad; background: linear-gradient(135deg, #2a1445, #1a0a30); }
     .db-card-used { opacity: 0.35; }
+    .db-card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 6px;
+    }
+    .db-card-emoji { font-size: 24px; line-height: 1; }
+    .db-card-cost { font-size: 11px; color: #e2b714; font-weight: bold; }
+    .db-card-name { font-weight: bold; font-size: 13px; color: #fff; line-height: 1.2; }
+    .db-card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .db-tag {
+      font-size: 9px; color: #aaa;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      padding: 1px 5px; border-radius: 3px;
+      line-height: 1.4;
+    }
+    .db-tag-passive { background: rgba(189, 195, 199, 0.12); color: #bdc3c7; }
+    .db-tag-active { background: rgba(230, 126, 34, 0.12); color: #f39c12; }
+    .db-tag-spell { background: rgba(142, 68, 173, 0.2); color: #c7a8f0; }
+    .db-card-desc {
+      font-size: 10px; color: #9c9cb0; line-height: 1.35;
+      white-space: normal; word-wrap: break-word;
+      flex: 1;
+    }
     .db-card-count {
-      position: absolute; top: 2px; right: 4px;
+      position: absolute; top: 4px; right: 6px;
       background: #e2b714; color: #181a24;
-      font-size: 10px; font-weight: bold;
-      padding: 1px 5px; border-radius: 8px;
+      font-size: 11px; font-weight: bold;
+      padding: 1px 6px; border-radius: 8px;
+    }
+
+    /* --- Card info button (appears on every card: hand, my board, opponent board) --- */
+    .card-info-btn {
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: #fff;
+      font-size: 12px; font-weight: bold;
+      cursor: pointer;
+      padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 3;
+      transition: background 0.15s, transform 0.15s;
+    }
+    .card-info-btn:hover {
+      background: rgba(63, 94, 251, 0.9);
+      transform: scale(1.1);
+    }
+    .district-card, .hand-card { position: relative; }
+
+    /* --- Card info popover --- */
+    #card-info-popover {
+      display: none; position: fixed; inset: 0;
+      z-index: 200;
+      justify-content: center; align-items: center;
+      padding: 16px;
+    }
+    #card-info-popover.show { display: flex; }
+    #card-info-popover .cip-backdrop {
+      position: absolute; inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+    }
+    #card-info-popover .cip-content {
+      position: relative;
+      background: #181a24;
+      border: 1px solid #3a3c4c;
+      border-radius: 10px;
+      padding: 16px 18px;
+      max-width: 360px;
+      width: 100%;
+      color: #ddd;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    }
+    #card-info-popover .cip-close {
+      position: absolute; top: 6px; right: 8px;
+      background: transparent; border: 0;
+      color: #bbb; font-size: 18px;
+      cursor: pointer; padding: 4px 8px;
+      border-radius: 4px;
+    }
+    #card-info-popover .cip-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    #card-info-popover .cip-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+    #card-info-popover .cip-emoji { font-size: 34px; }
+    #card-info-popover .cip-title { flex: 1; }
+    #card-info-popover .cip-name { font-size: 16px; font-weight: bold; color: #fff; }
+    #card-info-popover .cip-meta { font-size: 11px; color: #999; margin-top: 4px; }
+    #card-info-popover .cip-line { font-size: 12px; color: #ccc; margin-top: 4px; }
+    #card-info-popover .cip-desc { font-size: 13px; line-height: 1.5; color: #ddd; margin-top: 8px; }
+    #card-info-popover .cip-desc-muted { color: #888; font-style: italic; }
+
+    /* Placeholder hand-card styling — subtle purple shimmer */
+    .hand-card.placeholder-card {
+      background: linear-gradient(135deg, #2a1445 0%, #1a0a30 100%) !important;
+      border: 2px dashed #9060e0 !important;
     }
 
     /* --- Lobby badges --- */
