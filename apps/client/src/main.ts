@@ -2413,21 +2413,11 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.UnluckyMage: {
-      title.textContent = `💫 ${companionLabel}`;
-      const hand = getMyHand();
-      options.innerHTML = `
-        <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
-        ${hand.length > 0 ? hand.map((c) =>
-          `<button class="modal-option" data-target-card="${c.id}">${tDistrict(c.name)} (${c.cost}💰)</button>`
-        ).join("") : `<p class="hint">${t("companion_modal.no_cards")}</p>`}
-      `;
-      options.querySelectorAll(".modal-option").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
-          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
-          close();
-        });
-      });
+      // Random-discard companion: no UI choice. The caller normally short-circuits
+      // and dispatches use_companion directly (no targetType), so this is only a
+      // safety fallback if something forces the modal open.
+      dispatch({ type: "use_companion", playerId: getMyId() });
+      close();
       break;
     }
 

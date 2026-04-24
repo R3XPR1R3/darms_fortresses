@@ -435,7 +435,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}", id: "Hapus permanen companion lawan dari pool. {kw:leaves}" },
   knight: { en: "{kw:passive} Richest loses 1💰 → poorest gains 1💰", ru: "{kw:passive} Богатейший теряет 1💰 → беднейший получает 1💰", id: "{kw:passive} Pemain terkaya kehilangan 1💰 → termiskin dapat 1💰" },
   fisherman: { en: "1💰: build a random cost-2 district (allows duplicates)", ru: "За 1💰: строит случайный квартал за 2 (дубликаты OK)", id: "1💰: bangun distrik acak berharga 2 (duplikat boleh)" },
-  unlucky_mage: { en: "All your districts turn into the chosen card!", ru: "Все ваши постройки превращаются в эту карту!", id: "Semua distrik Anda berubah jadi kartu yang dipilih!" },
+  unlucky_mage: { en: "Discards a RANDOM hand card — all your districts become copies of it", ru: "Сбрасывает СЛУЧАЙНУЮ карту из руки — все ваши постройки становятся её копией", id: "Buang kartu ACAK dari tangan — semua distrik Anda jadi salinannya" },
   nobility: { en: "{kw:passive} Richest → +1🃏. Not richest → −1🃏 −1💰", ru: "{kw:passive} Богатейший → +1🃏. Не богатейший → −1🃏 −1💰", id: "{kw:passive} Terkaya → +1🃏. Bukan terkaya → −1🃏 −1💰" },
   treasure_trader: { en: "Gain a random purple building in hand. {kw:leaves}", ru: "Даёт случайную фиолетовую постройку в руку. {kw:leaves}", id: "Dapatkan bangunan ungu acak di tangan. {kw:leaves}" },
   designer: { en: "Turn one of your districts into a random purple building", ru: "Превращает выбранный ваш район в случайную фиолетовую постройку", id: "Ubah distrik Anda jadi bangunan ungu acak" },

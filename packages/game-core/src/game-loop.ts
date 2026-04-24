@@ -414,21 +414,18 @@ function useCompanion(
     }
 
     case CompanionId.UnluckyMage: {
-      // Discards a card from hand — all own built districts become copies of that card,
-      // duplicates allowed. Preserves the original id + current HP to keep board state
-      // consistent, but copies EVERY identity field (name/cost/colors/baseColors/
-      // purpleAbility/spellAbility) so the transformed districts behave exactly like
-      // copies of the sacrificed card — in particular, if an altar is sacrificed, the
-      // resulting districts all count towards the 4-altar alternate win condition.
-      if (!targetCardId) return null;
-      const cardIdx = player.hand.findIndex((c) => c.id === targetCardId);
-      if (cardIdx === -1) return null;
+      // "Unlucky" because the sacrificed card is chosen AT RANDOM from hand — the
+      // player has no say. All own built districts then become copies of that
+      // random card (identity fully copied so altars count, spells behave, etc.).
+      // Run checkWinCondition after in case the lucky roll lands on an altar.
+      if (player.hand.length === 0) return null;
+      const cardIdx = rng.int(0, player.hand.length - 1);
       const template = player.hand[cardIdx];
       const newHand = [...player.hand];
       newHand.splice(cardIdx, 1);
       const newDistricts = player.builtDistricts.map((d) => ({
         id: d.id,
-        hp: d.hp, // keep existing damage state
+        hp: d.hp,
         name: template.name,
         cost: template.cost,
         originalCost: template.originalCost ?? template.cost,
@@ -438,7 +435,7 @@ function useCompanion(
         spellAbility: template.spellAbility,
       }));
       newPlayers[playerIdx] = { ...player, hand: newHand, builtDistricts: newDistricts, companionUsed: true };
-      let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: все постройки стали ${template.name}!`);
+      let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: случайно сброшена ${template.name}, все постройки стали ей!`);
       s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);
     }

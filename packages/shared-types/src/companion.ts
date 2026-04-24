@@ -90,7 +90,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Sniper, name: "Снайпер", description: "Навсегда убирает компаньона противника из пула", emoji: "🎯", passive: false, targetType: "player" },
   { id: CompanionId.Knight, name: "Рыцарь", description: "Забирает 1💰 у богатейшего, отдаёт беднейшему", emoji: "⚜️", passive: true },
   { id: CompanionId.Fisherman, name: "Рыбак", description: "За 1💰 строит случайную постройку за 2 (дубликаты)", emoji: "🐟", passive: false, useCost: 1 },
-  { id: CompanionId.UnluckyMage, name: "Неудачный маг", description: "Сбрасывает карту — все постройки превращаются в неё. Дебафф!", emoji: "💫", passive: false, targetType: "own_hand_card" },
+  { id: CompanionId.UnluckyMage, name: "Неудачный маг", description: "Сбрасывает случайную карту из руки — все ваши постройки превращаются в её копию. Дебафф!", emoji: "💫", passive: false },
   { id: CompanionId.Nobility, name: "Знать", description: "Самый богатый → +1🃏. Не самый богатый → −1🃏 и −1💰", emoji: "👑", passive: true },
   // --- Wave 3 (purple-themed) ---
   { id: CompanionId.TreasureTrader, name: "Торговец сокровищами", description: "Даёт случайную фиолетовую постройку в руку. Уходит из пула", emoji: "💎", passive: false, useCost: 0, leavesPool: true },
