@@ -116,6 +116,19 @@ const dict: Record<string, TranslationEntry> = {
   "deck.save": { en: "Save", ru: "Сохранить" },
   "deck.clear": { en: "Clear", ru: "Очистить" },
   "deck.preset": { en: "Preset build", ru: "Готовый билд" },
+  "deck.building": { en: "building", ru: "постройка", id: "bangunan" },
+  "deck.placeholder": { en: "placeholder", ru: "заглушка", id: "placeholder" },
+
+  // Info popover
+  "info.plain_district": { en: "Plain district — no special effects.", ru: "Обычный квартал — без особых эффектов.", id: "Distrik biasa — tanpa efek khusus." },
+  "purple.placeholder_desc": {
+    en: "Play from hand: pick one purple card from your deck-build. The last one is granted automatically; if the pool is empty, the stub recycles and a random coloured card appears instead.",
+    ru: "Разыграйте из руки: выберите фиолетовую карту из своего билда. Последняя выдаётся автоматически; если пул пуст, заглушка возвращается в колоду и вместо неё приходит случайная цветная карта.",
+    id: "Mainkan dari tangan: pilih satu kartu ungu dari deck-build Anda. Yang terakhir langsung diberikan; jika pool kosong, stub daur ulang dan kartu warna acak muncul.",
+  },
+
+  // Hand
+  "my.play_placeholder": { en: "Play", ru: "Разыграть", id: "Mainkan" },
 
   // Draft / companion skip
   "draft.skip_companion": { en: "Skip companion", ru: "Пропустить выбор" },
@@ -422,7 +435,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}", id: "Hapus permanen companion lawan dari pool. {kw:leaves}" },
   knight: { en: "{kw:passive} Richest loses 1💰 → poorest gains 1💰", ru: "{kw:passive} Богатейший теряет 1💰 → беднейший получает 1💰", id: "{kw:passive} Pemain terkaya kehilangan 1💰 → termiskin dapat 1💰" },
   fisherman: { en: "1💰: build a random cost-2 district (allows duplicates)", ru: "За 1💰: строит случайный квартал за 2 (дубликаты OK)", id: "1💰: bangun distrik acak berharga 2 (duplikat boleh)" },
-  unlucky_mage: { en: "All your districts turn into the chosen card!", ru: "Все ваши постройки превращаются в эту карту!", id: "Semua distrik Anda berubah jadi kartu yang dipilih!" },
+  unlucky_mage: { en: "Discards a RANDOM hand card — all your districts become copies of it", ru: "Сбрасывает СЛУЧАЙНУЮ карту из руки — все ваши постройки становятся её копией", id: "Buang kartu ACAK dari tangan — semua distrik Anda jadi salinannya" },
   nobility: { en: "{kw:passive} Richest → +1🃏. Not richest → −1🃏 −1💰", ru: "{kw:passive} Богатейший → +1🃏. Не богатейший → −1🃏 −1💰", id: "{kw:passive} Terkaya → +1🃏. Bukan terkaya → −1🃏 −1💰" },
   treasure_trader: { en: "Gain a random purple building in hand. {kw:leaves}", ru: "Даёт случайную фиолетовую постройку в руку. {kw:leaves}", id: "Dapatkan bangunan ungu acak di tangan. {kw:leaves}" },
   designer: { en: "Turn one of your districts into a random purple building", ru: "Превращает выбранный ваш район в случайную фиолетовую постройку", id: "Ubah distrik Anda jadi bangunan ungu acak" },

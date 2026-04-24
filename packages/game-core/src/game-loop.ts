@@ -414,22 +414,30 @@ function useCompanion(
     }
 
     case CompanionId.UnluckyMage: {
-      // Discards a card from hand — all own built districts become that card
-      if (!targetCardId) return null;
-      const cardIdx = player.hand.findIndex((c) => c.id === targetCardId);
-      if (cardIdx === -1) return null;
+      // "Unlucky" because the sacrificed card is chosen AT RANDOM from hand — the
+      // player has no say. All own built districts then become copies of that
+      // random card (identity fully copied so altars count, spells behave, etc.).
+      // Run checkWinCondition after in case the lucky roll lands on an altar.
+      if (player.hand.length === 0) return null;
+      const cardIdx = rng.int(0, player.hand.length - 1);
       const template = player.hand[cardIdx];
       const newHand = [...player.hand];
       newHand.splice(cardIdx, 1);
       const newDistricts = player.builtDistricts.map((d) => ({
-        ...d,
+        id: d.id,
+        hp: d.hp,
         name: template.name,
         cost: template.cost,
-        colors: template.colors,
-        // keep existing hp
+        originalCost: template.originalCost ?? template.cost,
+        colors: [...template.colors],
+        baseColors: template.baseColors ? [...template.baseColors] : [...template.colors],
+        purpleAbility: template.purpleAbility,
+        spellAbility: template.spellAbility,
       }));
       newPlayers[playerIdx] = { ...player, hand: newHand, builtDistricts: newDistricts, companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: все постройки стали ${template.name}!`), rng: rng.getSeed() };
+      let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: случайно сброшена ${template.name}, все постройки стали ей!`);
+      s = { ...s, rng: rng.getSeed() };
+      return checkWinCondition(s);
     }
 
     case CompanionId.Designer: {
