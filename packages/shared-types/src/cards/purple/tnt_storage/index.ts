@@ -9,8 +9,8 @@ export const tntStorage: PurpleSpecialDef = {
   emoji: "🧨",
   name: { ru: "Склад тротила", en: "TNT Storage" },
   description: {
-    ru: "{kw:activate} Самоуничтожение за 2💰: {kw:destroy} 2 случайных квартала у каждого",
-    en: "{kw:activate} Self-destroy for 2💰: {kw:destroy} 2 random districts per player",
+    ru: "{kw:activate} Самоуничтожение за 2💰: 8 урона, распределённого случайно между постройками всех игроков (Цитадель неуязвима)",
+    en: "{kw:activate} Self-destroy for 2💰: deal 8 damage spread randomly across every player's districts (Stronghold is immune)",
   },
 };
 

@@ -760,7 +760,12 @@ function activateBuilding(
     }
 
     case "tnt_storage": {
-      // Self-destroy for 2 gold — destroys 2 random districts for each player
+      // Self-destroy for 2 gold — deals 8 total damage spread across the
+      // surviving districts of EVERY player (TNT-Storage owner included for
+      // post-self-destroy ones), one point at a time. Strongholds are immune
+      // and never picked. If all damageable districts are wiped before the 8
+      // points are spent, the rest is wasted (no overflow). This replaces the
+      // old "kill 2 random districts each" rule which was too swingy.
       if (player.gold < 2) return null;
       const newDistricts = [...player.builtDistricts];
       newDistricts.splice(cardIdx, 1);
@@ -768,25 +773,43 @@ function activateBuilding(
       let discardPile = [...state.discardPile, card];
       let log = state.log;
 
-      for (let i = 0; i < state.players.length; i++) {
-        const p = newPlayers[i];
-        const pDistricts = [...p.builtDistricts];
-        const destroyed: string[] = [];
-        for (let d = 0; d < 2 && pDistricts.length > 0; d++) {
-          const candidates = pDistricts
-            .map((dist, idx) => ({ dist, idx }))
-            .filter(({ dist }) => dist.purpleAbility !== "stronghold");
-          if (candidates.length === 0) break;
-          const idx = candidates[rng.int(0, candidates.length - 1)].idx;
-          destroyed.push(pDistricts[idx].name);
-          discardPile = [...discardPile, pDistricts[idx]];
-          pDistricts.splice(idx, 1);
+      // Track damage distribution per (player, district id) for log readability.
+      const totalDamage = 8;
+      const losses: Map<number, string[]> = new Map();
+      for (let dmg = 0; dmg < totalDamage; dmg++) {
+        // Build a fresh candidate list each tick so destroyed districts vanish.
+        const pool: Array<{ pIdx: number; dIdx: number }> = [];
+        for (let i = 0; i < newPlayers.length; i++) {
+          const districts = newPlayers[i].builtDistricts;
+          for (let j = 0; j < districts.length; j++) {
+            if (districts[j].purpleAbility === "stronghold") continue;
+            pool.push({ pIdx: i, dIdx: j });
+          }
         }
-        if (destroyed.length > 0) {
-          newPlayers[i] = { ...newPlayers[i], builtDistricts: pDistricts };
-          log = [...log, { day: state.day, message: `🧨 ${p.name} потерял: ${destroyed.join(", ")}` }];
+        if (pool.length === 0) break;
+        const pick = pool[rng.int(0, pool.length - 1)];
+        const owner = newPlayers[pick.pIdx];
+        const dList = [...owner.builtDistricts];
+        const target = dList[pick.dIdx];
+        const newCost = target.cost - 1;
+        if (newCost < 1) {
+          dList.splice(pick.dIdx, 1);
+          discardPile = [...discardPile, target];
+          const arr = losses.get(pick.pIdx) ?? [];
+          arr.push(target.name);
+          losses.set(pick.pIdx, arr);
+        } else {
+          dList[pick.dIdx] = { ...target, cost: newCost, hp: newCost };
         }
+        newPlayers[pick.pIdx] = { ...owner, builtDistricts: dList };
       }
+
+      // Log per-player destruction summary; survivors with damage are reflected
+      // in their cost/HP so no extra log line is needed for them.
+      losses.forEach((names, pIdx) => {
+        log = [...log, { day: state.day, message: `🧨 ${newPlayers[pIdx].name} потерял: ${names.join(", ")}` }];
+      });
+      log = [...log, { day: state.day, message: `🧨 ${player.name} взорвал Склад тротила: ${totalDamage} урона распределено между постройками` }];
       return { ...state, players: newPlayers, discardPile, log, rng: rng.getSeed() };
     }
 

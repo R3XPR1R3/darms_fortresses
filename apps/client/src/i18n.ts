@@ -478,7 +478,7 @@ const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
   highway: { en: "{kw:passive} Hero speed −1", ru: "{kw:passive} Скорость героя −1", id: "{kw:passive} Kecepatan hero −1" },
   city_gates: { en: "In hand: cost −2 each day. Leader auto-builds it for free", ru: "В руке: цена −2 каждый день. Лидер строит автоматически и бесплатно", id: "Di tangan: harga −2 tiap hari. Leader membangunnya gratis otomatis" },
   crypt: { en: "{kw:activate} 2💰: self-destroy, gain 2 random purple buildings in hand", ru: "{kw:activate} За 2💰: самоуничтожение, +2 случайные фиолетовые постройки в руку", id: "{kw:activate} 2💰: hancurkan diri, dapat 2 bangunan ungu acak" },
-  tnt_storage: { en: "{kw:activate} 2💰: self-destroy, {kw:destroy} 2 random districts for each player", ru: "{kw:activate} За 2💰: самоуничтожение, {kw:destroy} 2 случайных квартала у каждого", id: "{kw:activate} 2💰: hancurkan diri, {kw:destroy} 2 distrik acak tiap pemain" },
+  tnt_storage: { en: "{kw:activate} 2💰: self-destroy, 8 damage spread across every player's districts (Stronghold immune)", ru: "{kw:activate} За 2💰: самоуничтожение, 8 урона распределяется случайно между постройками всех игроков (Цитадель неуязвима)", id: "{kw:activate} 2💰: hancurkan diri, 8 damage tersebar pada distrik tiap pemain (Kubu kebal)" },
   mine: { en: "{kw:passive} +1💰 at end of day (Merchant: end of each turn)", ru: "{kw:passive} +1💰 в конце дня (Казначей: в конце каждого хода)", id: "{kw:passive} +1💰 di akhir hari (Pedagang: tiap giliran)" },
   cult: { en: "{kw:activate} Blue hero only: replace a random opponent's district with a copy of Cult", ru: "{kw:activate} Только синий герой: заменяет случайный квартал оппа на Секту", id: "{kw:activate} Hanya hero biru: ganti distrik lawan acak dengan salinan Kultus" },
   altar_darkness: { en: "{kw:altar} Build 4 Altars → alternate win condition", ru: "{kw:altar} Постройте 4 алтаря → альтернативная победа", id: "{kw:altar} Bangun 4 Altar → kondisi menang alternatif" },
@@ -565,6 +565,7 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   // Pyromancer flames at end of turn
   { pattern: /🔥 Пламя у (.+?): сгорело карт (\d+), новых огней (\d+)/, en: (_, n, b, s) => `🔥 Flames in ${n}'s hand: ${b} cards burned, ${s} new flames`, id: (_, n, b, s) => `🔥 Api di tangan ${n}: ${b} kartu terbakar, ${s} api baru` },
   { pattern: /🧨 (.+?) потерял: (.+)/, en: (_, n, list) => `🧨 ${n} lost: ${list}`, id: (_, n, list) => `🧨 ${n} kehilangan: ${list}` },
+  { pattern: /🧨 (.+?) взорвал Склад тротила: (\d+) урона распределено между постройками/, en: (_, n, d) => `🧨 ${n} blew up TNT Storage: ${d} damage spread across districts`, id: (_, n, d) => `🧨 ${n} meledakkan Gudang TNT: ${d} damage tersebar di distrik` },
 
   // Treasurer companion eod
   { pattern: /(.+?) — торговец: (.+?) отдал (\d+)💰/, en: (_, n, src, g) => `${n} — Trader: ${src} gave ${g}💰`, id: (_, n, src, g) => `${n} — Pedagang: ${src} memberi ${g}💰` },
