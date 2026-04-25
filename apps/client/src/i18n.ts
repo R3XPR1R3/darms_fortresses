@@ -430,7 +430,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   strange_merchant: { en: "Discard a card → gain gold = its cost. 🟢 only. {kw:leaves}", ru: "Сбросить карту → получить золото = её цена. Только 🟢. {kw:leaves}", id: "Buang kartu → dapat emas = harganya. Hanya 🟢. {kw:leaves}" },
   gravedigger: { en: "{kw:passive} On {kw:kill}: gain the victim's hero ability", ru: "{kw:passive} При {kw:kill}: получаете способность убитого героя", id: "{kw:passive} Saat {kw:kill}: dapatkan kemampuan hero korban" },
   jester: { en: "{kw:passive} Shuffle all players' hands. 🟡 only.", ru: "{kw:passive} Перемешивает руки всех игроков. Только 🟡.", id: "{kw:passive} Acak kartu tangan semua pemain. Hanya 🟡." },
-  pyromancer: { en: "Card → 🔥 Flame. Flames multiply each turn!", ru: "Карта → 🔥 Пламя. Пламя множится каждый ход!", id: "Kartu → 🔥 Api. Api berkembang tiap giliran!" },
+  pyromancer: { en: "Plant 🔥 Flame in any player's hand (random card). Flames multiply each turn!", ru: "Подбрасывает 🔥 Пламя в руку любого игрока (случайной картой). Пламя множится каждый ход!", id: "Tanam 🔥 Api di tangan pemain mana pun (kartu acak). Api berkembang tiap giliran!" },
   sun_fanatic: { en: "Only blue buildings, or 2💰 to replace next player's companion. 🔵 only", ru: "Только синие постройки, или 2💰 заменить компаньона следующего. Только 🔵", id: "Hanya bangunan biru, atau 2💰 untuk ganti companion pemain berikut. Hanya 🔵" },
   sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}", id: "Hapus permanen companion lawan dari pool. {kw:leaves}" },
   knight: { en: "{kw:passive} Richest loses 1💰 → poorest gains 1💰", ru: "{kw:passive} Богатейший теряет 1💰 → беднейший получает 1💰", id: "{kw:passive} Pemain terkaya kehilangan 1💰 → termiskin dapat 1💰" },
@@ -481,7 +481,7 @@ const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
   tnt_storage: { en: "{kw:activate} 2💰: self-destroy, {kw:destroy} 2 random districts for each player", ru: "{kw:activate} За 2💰: самоуничтожение, {kw:destroy} 2 случайных квартала у каждого", id: "{kw:activate} 2💰: hancurkan diri, {kw:destroy} 2 distrik acak tiap pemain" },
   mine: { en: "{kw:passive} +1💰 at end of day (Merchant: end of each turn)", ru: "{kw:passive} +1💰 в конце дня (Казначей: в конце каждого хода)", id: "{kw:passive} +1💰 di akhir hari (Pedagang: tiap giliran)" },
   cult: { en: "{kw:activate} Blue hero only: replace a random opponent's district with a copy of Cult", ru: "{kw:activate} Только синий герой: заменяет случайный квартал оппа на Секту", id: "{kw:activate} Hanya hero biru: ganti distrik lawan acak dengan salinan Kultus" },
-  altar_darkness: { en: "{kw:altar} 4 Altars → alternate win condition. Duplicates allowed", ru: "{kw:altar} 4 алтаря → альтернативная победа. Разрешены дубликаты", id: "{kw:altar} 4 Altar → kondisi menang alternatif. Duplikat diizinkan" },
+  altar_darkness: { en: "{kw:altar} Build 4 Altars → alternate win condition", ru: "{kw:altar} Постройте 4 алтаря → альтернативная победа", id: "{kw:altar} Bangun 4 Altar → kondisi menang alternatif" },
 };
 
 // ---- Canonical spell translations ----

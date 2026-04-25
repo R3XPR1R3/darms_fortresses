@@ -333,12 +333,11 @@ export function buildDistrict(
     return null;
   }
 
-  // Duplicate check — Official (red hero) allows duplicates; altar_darkness always allows duplicates
+  // Duplicate check — only Official companion (red hero) allows duplicates.
   const allowDuplicates =
-    card.purpleAbility === "altar_darkness"
-    || (player.companion === CompanionId.Official
-      && !player.companionDisabled
-      && heroColor === "red");
+    player.companion === CompanionId.Official
+    && !player.companionDisabled
+    && heroColor === "red";
 
   if (!allowDuplicates && player.builtDistricts.some((d) => d.name === card.name)) return null;
 
@@ -683,12 +682,15 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     state = applyTreasurerEndOfDay(state, rng);
     state = applyRoyalGuardEndOfDay(state);
 
-    // Wake all sleeping companions back to available for next day.
+    // Wake companions whose sleepEndDay has reached today. Companions picked today
+    // were given sleepEndDay = state.day + 1, so they stay asleep through tomorrow.
     {
       const wakePlayers = state.players.map((p) => ({
         ...p,
         companionDeck: p.companionDeck.map((s) =>
-          s.state === "sleeping" ? { ...s, state: "available" as const } : s,
+          s.state === "sleeping" && s.sleepEndDay !== undefined && s.sleepEndDay <= state.day
+            ? { id: s.id, state: "available" as const }
+            : s,
         ),
       }));
       state = { ...state, players: wakePlayers };

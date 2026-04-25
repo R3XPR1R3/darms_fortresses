@@ -1787,11 +1787,17 @@ function renderMyBoard() {
 
   // Hand
   const canBuild = myTurnNow && me.buildsRemaining > 0 && me.incomeTaken;
+  // Mirror server rule: only the Official companion on a red hero allows duplicate
+  // districts to be built. Without this check the Build button never rendered for
+  // duplicates and players couldn't see that Official is letting them stack altars.
+  const myHeroColor = me.hero ? (HEROES.find((h) => h.id === me.hero)?.color ?? null) : null;
+  const officialAllows =
+    me.companion === CompanionId.Official && !me.companionDisabled && myHeroColor === "red";
   let handSection = "";
   if (hand.length > 0 && phase !== "end") {
     const cards = hand.map((c) => {
       const affordable = me.gold >= c.cost;
-      const duplicate = me.builtDistricts.some((d) => d.name === c.name);
+      const duplicate = !officialAllows && me.builtDistricts.some((d) => d.name === c.name);
       const buildable = canBuild && affordable && !duplicate;
       const cs = colorStyle(c.colors);
       const texUrl = buildingTextureUrl(c);

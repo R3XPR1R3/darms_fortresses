@@ -3,7 +3,7 @@ import type { SpellDef } from "../../types.js";
 export const flood: SpellDef = {
   id: "flood",
   type: "spell",
-  cost: 0,
+  cost: 5,
   colors: ["purple"],
   ability: "flood",
   count: 2,

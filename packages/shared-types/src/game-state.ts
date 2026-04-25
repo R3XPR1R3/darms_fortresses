@@ -28,6 +28,11 @@ export type CompanionSlotState = "available" | "sleeping" | "gone";
 export interface CompanionSlot {
   id: CompanionId;
   state: CompanionSlotState;
+  /**
+   * The last day the companion is asleep (inclusive). The companion wakes up at the
+   * end of this day. Set when transitioning into "sleeping" state on pick.
+   */
+  sleepEndDay?: number;
 }
 
 /** Top-level game state — single source of truth */

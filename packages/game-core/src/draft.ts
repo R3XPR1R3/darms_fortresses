@@ -249,7 +249,10 @@ export function companionPick(
 
   const newPlayers = [...state.players];
   const newSlots = [...player.companionDeck];
-  newSlots[slotIdx] = { ...newSlots[slotIdx], state: "sleeping" };
+  // Picked today (day = state.day). Spec: "goes to sleep at end of day, can't be
+  // picked on the NEXT day" — so the slot stays asleep through the very next day
+  // and wakes up at the end of state.day + 1.
+  newSlots[slotIdx] = { ...newSlots[slotIdx], state: "sleeping", sleepEndDay: state.day + 1 };
   newPlayers[expectedPlayerIdx] = {
     ...player,
     companion: companionId,
