@@ -282,8 +282,9 @@ export function useAbility(
       if (player.hero !== HeroId.Thief) return null;
       // Can't target assassin or self
       if (ability.targetHeroId === HeroId.Thief || ability.targetHeroId === HeroId.Assassin) return null;
+      const robbedHeroName = HEROES.find((h) => h.id === ability.targetHeroId)?.name ?? "???";
       newPlayers[playerIdx] = { ...player, robbedHeroId: ability.targetHeroId, abilityUsed: true };
-      log = addLog({ ...state, log }, `${player.name} готовит ограбление...`);
+      log = addLog({ ...state, log }, `🪙 Вор выбрал ${robbedHeroName}`);
       break;
     }
     case "sorcerer": {

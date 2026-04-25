@@ -264,6 +264,7 @@ export function buildDistrict(
   state: GameState,
   playerId: string,
   cardId: string,
+  targetCardId?: string,
 ): GameState | null {
   const playerIdx = state.players.findIndex((p) => p.id === playerId);
   if (playerIdx === -1) return null;
@@ -408,6 +409,46 @@ export function buildDistrict(
       log = [...log, { day: state.day, message: `🌊 ${player.name} применил Потоп: до 4 случайных кварталов у каждого вернулись в руку` }];
     } else if (card.spellAbility === "plague") {
       log = [...log, { day: state.day, message: `☣️ ${player.name} применил Чуму: эффект активен 3 дня` }];
+    } else if (card.spellAbility === "fire_ritual") {
+      // Sacrifice ONE of the caster's own built districts (chosen via targetCardId).
+      // For every gold of its cost, plant a 🔥 Flame in a random opponent's hand
+      // (each iteration rolls a fresh random opponent, so flames spread across
+      // multiple players probabilistically).
+      if (!targetCardId) return null;
+      const sacrificedIdx = newPlayers[playerIdx].builtDistricts.findIndex((d) => d.id === targetCardId);
+      if (sacrificedIdx === -1) return null;
+      const sacrificed = newPlayers[playerIdx].builtDistricts[sacrificedIdx];
+      const newDistricts = [...newPlayers[playerIdx].builtDistricts];
+      newDistricts.splice(sacrificedIdx, 1);
+      newPlayers[playerIdx] = { ...newPlayers[playerIdx], builtDistricts: newDistricts };
+      const flameCount = Math.max(0, sacrificed.cost);
+      const opponentIdxs = state.players
+        .map((_, i) => i)
+        .filter((i) => i !== playerIdx);
+      for (let i = 0; i < flameCount && opponentIdxs.length > 0; i++) {
+        const targetOpp = opponentIdxs[randomInt(0, opponentIdxs.length - 1)];
+        const flameCard: DistrictCard = {
+          id: `flame-fr-${Date.now()}-${i}-${randomInt(0, 9999)}`,
+          name: FLAME_CARD_NAME,
+          cost: 2,
+          originalCost: 2,
+          hp: 0,
+          colors: ["red"],
+          baseColors: ["red"],
+        };
+        newPlayers[targetOpp] = { ...newPlayers[targetOpp], hand: [...newPlayers[targetOpp].hand, flameCard] };
+      }
+      // Sacrificed district goes to the discard pile (so Reconstructor/Sorcerer's
+      // Apprentice could later raise it back).
+      const newDiscardPile = [...state.discardPile, sacrificed];
+      log = [...log, { day: state.day, message: `🔥 ${player.name} применил Ритуал огня: сжёг ${sacrificed.name}, разослал ${flameCount} 🔥 случайным противникам` }];
+      newPlayers[playerIdx] = {
+        ...newPlayers[playerIdx],
+        gold: player.gold - effectiveCost,
+        hand: newHand,
+        buildsRemaining: player.buildsRemaining - 1,
+      };
+      return { ...state, players: newPlayers, log, discardPile: newDiscardPile };
     }
 
     newPlayers[playerIdx] = {

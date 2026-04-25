@@ -37,11 +37,13 @@ export interface IncomePickAction {
   cardId: string;
 }
 
-/** Player builds a district from hand */
+/** Player builds a district from hand. Some spells need a target — pass it via targetCardId. */
 export interface BuildAction {
   type: "build";
   playerId: string;
   cardId: string;
+  /** Target district id (for spells like fire_ritual that sacrifice an own building). */
+  targetCardId?: string;
 }
 
 /** Player uses their hero ability */

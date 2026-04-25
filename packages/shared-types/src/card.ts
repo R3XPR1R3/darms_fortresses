@@ -20,7 +20,7 @@ export interface DistrictCard {
   placeholder?: "purple";
 }
 
-export type SpellAbility = "ignite" | "gold_rain" | "holy_day" | "flood" | "plague";
+export type SpellAbility = "ignite" | "gold_rain" | "holy_day" | "flood" | "plague" | "fire_ritual";
 
 /** Identifiers for special purple building abilities */
 export type PurpleAbility =

@@ -52,9 +52,10 @@ export function playPurplePlaceholder(
     const colored = generateRandomCard(coloredCost, rng);
     const newPlayers = [...state.players];
     newPlayers[playerIdx] = { ...player, hand: [...newHand, colored] };
+    // Anonymous log — never reveals the granted card identity, only that the pool is exhausted.
     return addLog(
       { ...state, players: newPlayers, deck: newDeck, rng: rng.getSeed() },
-      `🟣 ${player.name} разыграл заглушку — пул пуст, возврат в колоду, получена ${colored.name}`,
+      `🟣 ${player.name} разыграл заглушку — пул пуст, заглушка возвращается в колоду`,
     );
   }
 
@@ -67,9 +68,10 @@ export function playPurplePlaceholder(
       hand: [...newHand, granted],
       purplePool: [],
     };
+    // Anonymous: don't name the card, just announce that it's their last pool entry.
     return addLog(
       { ...state, players: newPlayers, rng: rng.getSeed() },
-      `🟣 ${player.name} разыграл заглушку — последняя фиолетовая карта: ${granted.name}`,
+      `🟣 ${player.name} разыграл заглушку — последняя карта из пула`,
     );
   }
 
@@ -90,9 +92,10 @@ export function playPurplePlaceholder(
     hand: newHand,
     pendingPurpleOffer: offer,
   };
+  // Anonymous "N of M" — no card identities revealed publicly.
   return addLog(
     { ...state, players: newPlayers, rng: rng.getSeed() },
-    `🟣 ${player.name} разыграл заглушку — выбор ${offerCount} из ${pool.length}`,
+    `🟣 ${player.name} разыграл заглушку — выбирает ${offerCount} из ${pool.length}`,
   );
 }
 
@@ -128,8 +131,11 @@ export function pickFromPurpleOffer(
     pendingPurpleOffer: null,
   };
 
+  // Anonymous confirmation — public log only confirms the pick happened; the
+  // actual card identity stays private to the picking player. This prevents
+  // opponents from inferring archetype/strategy from the public journal.
   return addLog(
     { ...state, players: newPlayers },
-    `🟣 ${player.name} выбрал ${picked.name}`,
+    `🟣 ${player.name} выбрал карту`,
   );
 }

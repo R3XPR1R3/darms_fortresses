@@ -179,9 +179,12 @@ let lobbyPlayers: LobbyPlayer[] = [];
 // ---- Local game state ----
 const HUMAN_ID = "human";
 const BOT_IDS = ["bot-1", "bot-2", "bot-3"];
+const LOCAL_BOT_NAMES = ["Бот Алиса", "Бот Борис", "Бот Вика"];
 function getLocalPlayers() {
   const humanBuild = loadSavedBuild();
-  // Pick 3 distinct random bot archetypes for local play.
+  // Each local bot gets a random pre-built archetype, but the archetype is NEVER
+  // exposed via the bot name — opponents shouldn't be able to read strategy off
+  // the lobby/board. Only the build itself drives behaviour.
   const shuffled = [...BOT_BUILDS];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -190,9 +193,9 @@ function getLocalPlayers() {
   const botBuilds = shuffled.slice(0, 3);
   return [
     { id: HUMAN_ID, name: t("lobby.you"), build: humanBuild ?? undefined },
-    { id: BOT_IDS[0], name: "Бот " + botBuilds[0].name, build: botBuilds[0].build },
-    { id: BOT_IDS[1], name: "Бот " + botBuilds[1].name, build: botBuilds[1].build },
-    { id: BOT_IDS[2], name: "Бот " + botBuilds[2].name, build: botBuilds[2].build },
+    { id: BOT_IDS[0], name: LOCAL_BOT_NAMES[0], build: botBuilds[0].build },
+    { id: BOT_IDS[1], name: LOCAL_BOT_NAMES[1], build: botBuilds[1].build },
+    { id: BOT_IDS[2], name: LOCAL_BOT_NAMES[2], build: botBuilds[2].build },
   ];
 }
 
@@ -779,6 +782,40 @@ function showCardInfoPopover(card: { name: string; cost: number; colors: string[
   };
 }
 
+/** Open a target picker for the Fire Ritual spell — sacrifice one of your built districts. */
+function openFireRitualPicker(spellCardId: string) {
+  const me = getPlayers()[getMyIndex()];
+  const built = me?.builtDistricts ?? [];
+  if (built.length === 0) {
+    // No districts to burn — just dispatch with no target; server will reject and the user gets feedback.
+    dispatch({ type: "build", playerId: getMyId(), cardId: spellCardId });
+    return;
+  }
+  const modal = document.getElementById("ability-modal")!;
+  const title = document.getElementById("modal-title")!;
+  const options = document.getElementById("modal-options")!;
+  modal.classList.add("show");
+  const close = () => modal.classList.remove("show");
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+
+  title.textContent = `🔥 ${tSpellName("fire_ritual")}`;
+  options.innerHTML = `
+    <p class="hint" style="margin-bottom:8px">${expandKw(tSpellDesc("fire_ritual"))}</p>
+    ${built.map((d: any) => `
+      <button class="modal-option" data-fire-target="${d.id}">
+        ${tDistrict(d.name)} <span style="color:#e2b714">(${d.cost}💰 → ${d.cost}🔥)</span>
+      </button>
+    `).join("")}
+  `;
+  options.querySelectorAll<HTMLElement>("[data-fire-target]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetCardId = btn.dataset.fireTarget!;
+      dispatch({ type: "build", playerId: getMyId(), cardId: spellCardId, targetCardId });
+      close();
+    });
+  });
+}
+
 /** Global delegated handler — any click on [data-card-info] opens the info popover. */
 document.addEventListener("click", (e) => {
   const target = e.target as HTMLElement;
@@ -1359,9 +1396,9 @@ function renderLobby() {
     const deckBadge = p.deckReady
       ? `<span class="lobby-badge lobby-badge-ready">✅ ${t("lobby.deck_ready") ?? "колода готова"}</span>`
       : `<span class="lobby-badge lobby-badge-pending">⏳ ${t("lobby.deck_pending") ?? "колода не собрана"}</span>`;
-    const buildLbl = p.isBot && p.buildLabel ? ` <span class="lobby-build-label">[${p.buildLabel}]</span>` : "";
+    // Never show the bot's archetype name to opponents — it leaks strategy.
     return `<div class="lobby-player ${p.isHost ? "host" : ""}">
-      ${p.isBot ? "🤖" : "👤"} ${tName(p.name)}${buildLbl} ${p.isHost ? t("lobby.host") : ""}
+      ${p.isBot ? "🤖" : "👤"} ${tName(p.name)} ${p.isHost ? t("lobby.host") : ""}
       ${deckBadge}
     </div>`;
   }).join("");
@@ -1894,9 +1931,14 @@ function renderMyBoard() {
       // Placeholder cards use their own action (free, opens purple offer).
       if (card?.placeholder === "purple") {
         dispatch({ type: "purple_placeholder_play", playerId: getMyId(), cardId });
-      } else {
-        dispatch({ type: "build", playerId: getMyId(), cardId });
+        return;
       }
+      // Fire Ritual asks the player to pick which of their built districts to sacrifice.
+      if (card?.spellAbility === "fire_ritual") {
+        openFireRitualPicker(cardId);
+        return;
+      }
+      dispatch({ type: "build", playerId: getMyId(), cardId });
     });
   });
   document.getElementById("btn-gold")?.addEventListener("click", () => {

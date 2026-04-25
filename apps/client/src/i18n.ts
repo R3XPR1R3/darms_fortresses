@@ -491,6 +491,7 @@ const SPELL_NAMES: Record<string, TranslationEntry> = {
   holy_day: { en: "Holy Day", ru: "Священный день", id: "Hari suci" },
   flood: { en: "Flood", ru: "Потоп", id: "Banjir" },
   plague: { en: "Plague", ru: "Чума", id: "Wabah" },
+  fire_ritual: { en: "Fire Ritual", ru: "Ритуал огня", id: "Ritual api" },
 };
 
 const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
@@ -499,6 +500,7 @@ const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
   holy_day: { en: "{kw:spell} Until end of day: all districts become blue", ru: "{kw:spell} До конца дня: все кварталы синие", id: "{kw:spell} Hingga akhir hari: semua distrik jadi biru" },
   flood: { en: "{kw:spell} Up to 4 random districts from each player return to hand", ru: "{kw:spell} До 4 случайных кварталов у каждого возвращаются в руку", id: "{kw:spell} Sampai 4 distrik acak tiap pemain kembali ke tangan" },
   plague: { en: "{kw:spell} 3-day effect: each day a random player loses gold, a random district takes damage", ru: "{kw:spell} Эффект 3 дня: каждый день случайный игрок теряет золото, случайный квартал получает урон", id: "{kw:spell} Efek 3 hari: tiap hari pemain acak kehilangan emas, distrik acak kena damage" },
+  fire_ritual: { en: "{kw:spell} Burn one of your built districts. For every gold of its cost, plant a 🔥 Flame in a random opponent's hand", ru: "{kw:spell} Сожгите вашу постройку. За каждое золото её цены подбрасывает 🔥 Пламя в руку случайного противника", id: "{kw:spell} Bakar bangunan Anda. Untuk tiap emas dari biayanya, tanam 🔥 Api di tangan lawan acak" },
 };
 
 // ---- Placeholder stub name ----
@@ -518,7 +520,12 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /(.+?) \(Архитектор\) берёт (\d+) карты, может строить до 3/, en: (_, n, c) => `${n} (Architect) draws ${c} cards, can build up to 3` },
   { pattern: /(.+?) \(Генерал\) \+(\d+) золота за красные кварталы/, en: (_, n, g) => `${n} (General) +${g} gold for red districts` },
   { pattern: /(.+?) совершил убийство\.\.\./, en: (_, n) => `${n} committed murder...` },
-  { pattern: /(.+?) готовит ограбление\.\.\./, en: (_, n) => `${n} prepares a robbery...` },
+  { pattern: /🗡️ Убийца выбрал (.+)/, en: (_, h) => `🗡️ Assassin targeted ${h}`, id: (_, h) => `🗡️ Pembunuh menargetkan ${h}` },
+  { pattern: /🪙 Вор выбрал (.+)/, en: (_, h) => `🪙 Thief targeted ${h}`, id: (_, h) => `🪙 Pencuri menargetkan ${h}` },
+  { pattern: /🟣 (.+?) разыграл заглушку — выбирает (\d+) из (\d+)/, en: (_, n, k, m) => `🟣 ${n} plays the placeholder — picks ${k} of ${m}`, id: (_, n, k, m) => `🟣 ${n} memainkan placeholder — pilih ${k} dari ${m}` },
+  { pattern: /🟣 (.+?) разыграл заглушку — последняя карта из пула/, en: (_, n) => `🟣 ${n} plays the placeholder — last card from the pool`, id: (_, n) => `🟣 ${n} memainkan placeholder — kartu terakhir dari pool` },
+  { pattern: /🟣 (.+?) разыграл заглушку — пул пуст, заглушка возвращается в колоду/, en: (_, n) => `🟣 ${n} plays the placeholder — pool empty, stub returns to deck`, id: (_, n) => `🟣 ${n} memainkan placeholder — pool kosong, stub kembali ke dek` },
+  { pattern: /🟣 (.+?) выбрал карту/, en: (_, n) => `🟣 ${n} picked a card`, id: (_, n) => `🟣 ${n} memilih kartu` },
   { pattern: /(.+?) \(Чародей\) сбросил (\d+) карт, взял (\d+)/, en: (_, n, d, w) => `${n} (Sorcerer) discarded ${d} cards, drew ${w}` },
   { pattern: /(.+?) \(Чародей\) обменялся рукой с (.+)/, en: (_, n, t) => `${n} (Sorcerer) swapped hands with ${t}` },
   { pattern: /(.+?) \(Генерал\) разрушил (.+?) у (.+?) за (\d+) золота/, en: (_, n, d, t, g) => `${n} (General) destroyed ${tDistrict(d)} from ${t} for ${g} gold` },

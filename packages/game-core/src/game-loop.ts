@@ -628,7 +628,7 @@ export function processAction(state: GameState, action: GameAction): GameState |
       return finish(pickIncomeCard(state, action.playerId, action.cardId));
 
     case "build": {
-      return finish(buildDistrict(state, action.playerId, action.cardId));
+      return finish(buildDistrict(state, action.playerId, action.cardId, action.targetCardId));
     }
 
     case "ability":
