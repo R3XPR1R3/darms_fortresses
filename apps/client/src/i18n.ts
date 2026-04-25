@@ -580,6 +580,7 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /(.+?) — фермер: нет построек ≥3💰 → \+(\d+)💰/, en: (_, n, g) => `${n} — Farmer: no districts ≥3💰 → +${g}💰`, id: (_, n, g) => `${n} — Petani: tidak ada distrik ≥3💰 → +${g}💰` },
   { pattern: /(.+?) — перехватчик: \+(\d+)🃏 \(идёт первым\)/, en: (_, n, c) => `${n} — Interceptor: +${c}🃏 (going first)`, id: (_, n, c) => `${n} — Pencegat: +${c}🃏 (giliran pertama)` },
   { pattern: /(.+?) — агент: превратился в копию компаньона (.+?) \((.+?)\)/, en: (_, n, t, c) => `${n} — Agent: copied ${t}'s companion (${c})`, id: (_, n, t, c) => `${n} — Agen: salin companion ${t} (${c})` },
+  { pattern: /(.+?) — агент: разведка не увенчалась успехом — у (.+?) нет компаньона/, en: (_, n, t) => `${n} — Agent: reconnaissance failed — ${t} has no companion`, id: (_, n, t) => `${n} — Agen: pengintaian gagal — ${t} tidak punya companion` },
   { pattern: /(.+?) — рыцарь: (.+?) −(\d+)💰 → (.+?) \+(\d+)💰/, en: (_, n, rich, lost, poor, got) => `${n} — Knight: ${rich} −${lost}💰 → ${poor} +${got}💰`, id: (_, n, rich, lost, poor, got) => `${n} — Ksatria: ${rich} −${lost}💰 → ${poor} +${got}💰` },
   { pattern: /(.+?) — художник: все 4 цвета → \+(\d+)💰/, en: (_, n, g) => `${n} — Artist: all 4 colors → +${g}💰`, id: (_, n, g) => `${n} — Seniman: 4 warna → +${g}💰` },
   { pattern: /(.+?) — знать: (.+?) \+(\d+)🃏, остальные −1🃏 −2💰/, en: (_, n, rich, c) => `${n} — Nobility: ${rich} +${c}🃏, others −1🃏 −2💰`, id: (_, n, rich, c) => `${n} — Bangsawan: ${rich} +${c}🃏, lainnya −1🃏 −2💰` },
