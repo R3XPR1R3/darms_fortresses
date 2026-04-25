@@ -425,10 +425,15 @@ function useCompanion(
     }
 
     case CompanionId.UnluckyMage: {
-      // "Unlucky" because the sacrificed card is chosen AT RANDOM from hand — the
-      // player has no say. All own built districts then become copies of that
-      // random card (identity fully copied so altars count, spells behave, etc.).
-      // Run checkWinCondition after in case the lucky roll lands on an altar.
+      // "Unlucky" because the sacrificed card is chosen AT RANDOM from hand —
+      // the player has no say. All own built districts then take on the
+      // sacrificed card's IDENTITY (name, colors, purpleAbility, spellAbility),
+      // but each district KEEPS ITS OWN current cost / HP / value. Otherwise
+      // sacrificing an 8-cost City Gates from hand would inflate every cheap
+      // district to 8 score, and the companion turns into a strict upgrade
+      // instead of the debuff it's labelled as. With the cap, the alt-win
+      // path (sacrifice an altar to convert all districts into altars) still
+      // works and counts toward the 4-altar win, but you don't multiply value.
       if (player.hand.length === 0) return null;
       const cardIdx = rng.int(0, player.hand.length - 1);
       const template = player.hand[cardIdx];
@@ -436,10 +441,10 @@ function useCompanion(
       newHand.splice(cardIdx, 1);
       const newDistricts = player.builtDistricts.map((d) => ({
         id: d.id,
-        hp: d.hp,
+        cost: d.cost,                              // preserve own current value
+        hp: d.cost,                                // legacy alias kept in sync
+        originalCost: d.originalCost ?? d.cost,    // keep refund baseline
         name: template.name,
-        cost: template.cost,
-        originalCost: template.originalCost ?? template.cost,
         colors: [...template.colors],
         baseColors: template.baseColors ? [...template.baseColors] : [...template.colors],
         purpleAbility: template.purpleAbility,
