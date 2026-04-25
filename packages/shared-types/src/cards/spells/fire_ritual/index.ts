@@ -6,7 +6,9 @@ export const fireRitual: SpellDef = {
   cost: 3,
   colors: ["purple"],
   ability: "fire_ritual",
-  count: 2,
+  // Deck-builder only: not seeded into the shared deck. count is a no-op for
+  // purple cards since setup.ts filters all purple out of the natural draw pile.
+  count: 0,
   name: { ru: "Ритуал огня", en: "Fire Ritual" },
   description: {
     ru: "{kw:spell} Сожгите вашу постройку. За каждое золото её цены подбрасывает 🔥 Пламя в руку случайного противника",
