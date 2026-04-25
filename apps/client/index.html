@@ -987,27 +987,108 @@
       border-radius: 16px; font-size: 20px; font-weight: bold; max-width: 90%;
     }
 
-    /* ===== PORTRAIT PHONE HINT ===== */
+    /* (Old rotate-hint removed — game now supports portrait phones natively.) */
+
+    /* ===== PORTRAIT PHONE LAYOUT (narrow + tall) ===== */
     @media (max-width: 600px) and (orientation: portrait) {
-      #landscape-hint {
-        display: flex; position: fixed; inset: 0;
-        background: rgba(0,0,0,0.85); z-index: 300;
-        justify-content: center; align-items: center;
-        flex-direction: column; gap: 12px; color: #aaa; font-size: 14px;
+      body { font-size: 13px; }
+      #app, #game-board { max-width: 100%; padding: 6px; }
+      #game-board {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        min-height: 100dvh;
+        gap: 4px;
       }
-      #landscape-hint .rotate-icon { font-size: 48px; animation: rotate-hint 2s ease-in-out infinite; }
-      @keyframes rotate-hint {
-        0%, 100% { transform: rotate(0deg); }
-        50% { transform: rotate(90deg); }
+      h1 { font-size: 18px; padding: 6px 0; text-align: center; }
+      h2 { font-size: 13px; padding: 4px 6px; }
+      h3 { font-size: 12px; padding: 2px 4px; }
+      .btn { padding: 8px 12px; font-size: 13px; min-height: 36px; }
+      .btn-large { width: 100%; max-width: 100%; padding: 12px 14px !important; font-size: 14px !important; }
+      .menu-input { width: 100%; max-width: 100%; box-sizing: border-box; }
+
+      #turn-banner { font-size: 12px; padding: 4px 6px; min-height: 28px; }
+
+      /* Opponent tabs as horizontal scroll */
+      #opponent-tabs {
+        display: flex; flex-direction: row; gap: 4px;
+        overflow-x: auto; -webkit-overflow-scrolling: touch;
+        padding: 4px 2px;
+        border-bottom: 1px solid #0f3460;
+        scrollbar-width: thin;
       }
-      #landscape-hint .dismiss-btn {
-        margin-top: 8px; padding: 8px 16px;
-        background: #0f3460; border: 1px solid #e94560;
-        color: #eee; border-radius: 6px; cursor: pointer; font-size: 12px;
+      .opp-tab { flex: 0 0 auto; min-width: 110px; padding: 6px 8px; font-size: 11px; }
+
+      /* Stack opponent + own boards */
+      #opponent-board, #my-board {
+        width: 100%; max-width: 100%;
+        padding: 4px 0;
+        box-sizing: border-box;
       }
-    }
-    @media (min-width: 601px), (orientation: landscape) {
-      #landscape-hint { display: none !important; }
+
+      /* Hero portraits smaller */
+      .my-hero-row .hero-icon-large .hero-portrait,
+      .opp-hero-display .hero-icon-large .hero-portrait { width: 44px !important; height: 44px !important; }
+
+      /* Districts: 4-per-row max on phones */
+      .my-districts, .opp-districts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+      .district-card { font-size: 9px; min-width: 0; }
+      .district-card .card-cost-badge { width: 20px; height: 20px; font-size: 11px; }
+      .card-info-btn { width: 18px; height: 18px; font-size: 10px; }
+
+      /* Hand: horizontal scroll if too wide */
+      #my-hand .hand-cards {
+        display: flex; flex-direction: row; gap: 6px;
+        overflow-x: auto; -webkit-overflow-scrolling: touch;
+        padding: 4px 2px;
+        scrollbar-width: thin;
+      }
+      .hand-card { flex: 0 0 auto; width: 84px; min-height: 110px; font-size: 9px; }
+      .hand-card .card-cost { width: 22px; height: 22px; font-size: 12px; }
+      .hand-card .btn-build { font-size: 11px; padding: 4px 6px; }
+
+      /* Stat bars compact */
+      .my-stats-bar, .opp-stats-bar { font-size: 11px; gap: 6px; flex-wrap: wrap; }
+
+      /* Companion box stays readable */
+      .opp-companion { font-size: 10px; max-width: 100%; }
+      .opp-companion-head { font-size: 11px; }
+      .opp-companion-desc { font-size: 9px; }
+
+      /* Draft area */
+      #center-area { padding: 0 2px; }
+      .draft-heroes { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+      .hero-card { width: calc(50% - 4px); max-width: 160px; }
+      .hero-card-desc { font-size: 9px; }
+
+      /* Companion draft cards */
+      .companion-draft-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+      .companion-card { padding: 6px; }
+      .companion-card-portrait { font-size: 22px; }
+      .companion-card-name { font-size: 11px; }
+      .companion-card-desc { font-size: 9px; }
+
+      /* Purple offer cards (placeholder pick) */
+      .purple-card-offer { width: calc(50% - 4px); max-width: 160px; padding: 8px 6px; }
+
+      /* Ban list */
+      #ban-list { font-size: 10px; padding: 4px 6px; }
+
+      /* Log */
+      #log-toggle { font-size: 11px; padding: 4px 6px; }
+      #game-log { max-height: 140px; font-size: 10px; }
+
+      /* Modals on small screens */
+      #ability-modal .modal-content,
+      #card-pool-modal .pool-content {
+        max-width: calc(100vw - 16px) !important;
+        max-height: calc(100vh - 24px) !important;
+        width: 100% !important;
+      }
+      .deck-builder-content { max-width: calc(100vw - 16px); max-height: calc(100vh - 24px); }
+      .db-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+      .db-card { min-height: 130px; padding: 8px; }
+      #card-info-popover .cip-content { max-width: calc(100vw - 24px); }
     }
 
     /* ===== LANDSCAPE PHONE LAYOUT ===== */
@@ -1116,11 +1197,6 @@
   </style>
 </head>
 <body>
-  <div id="landscape-hint">
-    <div class="rotate-icon">📱↪️</div>
-    <div>Поверните телефон горизонтально / Turn your phone sideways</div>
-    <button class="dismiss-btn" onclick="this.parentElement.style.display='none'">OK, продолжить / Continue</button>
-  </div>
   <div id="app">
     <h1>⚔ Darms: Fortresses</h1>
   </div>
