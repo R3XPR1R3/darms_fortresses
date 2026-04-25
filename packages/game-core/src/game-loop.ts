@@ -582,6 +582,7 @@ function useCompanion(
 
     // Passive companions — should not be used via action
     case CompanionId.Farmer:
+    case CompanionId.Interceptor:
     case CompanionId.Treasurer:
     case CompanionId.Official:
     case CompanionId.SunPriestess:

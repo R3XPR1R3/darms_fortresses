@@ -404,6 +404,7 @@ const COMPANION_NAMES: Record<string, TranslationEntry> = {
   peacemaker: { en: "Peacemaker", ru: "Миротворец", id: "Pembawa damai" },
   contractor: { en: "Contractor", ru: "Заказчик", id: "Kontraktor" },
   night_shadow: { en: "Night Shadow", ru: "Ночная тень", id: "Bayangan malam" },
+  interceptor: { en: "Interceptor", ru: "Перехватчик", id: "Pencegat" },
 };
 
 const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
@@ -443,6 +444,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   peacemaker: { en: "{kw:destroy} all Cannons, TNT Storages and Cults (no effects). {kw:leaves}", ru: "{kw:destroy} все Пушки, Склады тротила и Секты (без эффектов). {kw:leaves}", id: "{kw:destroy} semua Meriam, Gudang TNT dan Kultus (tanpa efek). {kw:leaves}" },
   contractor: { en: "Name a hero (not from open ban). If Assassin {kw:kill}s them → steal their purple cards", ru: "Назовите героя (не из открытого бана). Если Убийца совершит {kw:kill} → крадёте его фиолетовые карты", id: "Sebutkan hero (bukan dari ban terbuka). Jika Assassin {kw:kill} → curi kartu ungunya" },
   night_shadow: { en: "2💰: {kw:kill} an unrevealed hero", ru: "За 2💰: {kw:kill} нераскрытого героя", id: "2💰: {kw:kill} hero yang belum terbuka" },
+  interceptor: { en: "{kw:passive} If first in turn order: draw 2 cards and slow the next player by +1 speed", ru: "{kw:passive} Если ходите первым — берёте 2 карты, скорость следующего +1", id: "{kw:passive} Jika urutan giliran pertama: ambil 2 kartu dan turunkan giliran berikutnya +1 kecepatan" },
 };
 
 export function tCompanionName(id: string, fallback?: string): string {
@@ -574,6 +576,7 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
 
   // Companion uses
   { pattern: /(.+?) — фермер: нет построек ≥3💰 → \+(\d+)💰/, en: (_, n, g) => `${n} — Farmer: no districts ≥3💰 → +${g}💰`, id: (_, n, g) => `${n} — Petani: tidak ada distrik ≥3💰 → +${g}💰` },
+  { pattern: /(.+?) — перехватчик: \+(\d+)🃏 \(идёт первым\)/, en: (_, n, c) => `${n} — Interceptor: +${c}🃏 (going first)`, id: (_, n, c) => `${n} — Pencegat: +${c}🃏 (giliran pertama)` },
   { pattern: /(.+?) — рыцарь: (.+?) −(\d+)💰 → (.+?) \+(\d+)💰/, en: (_, n, rich, lost, poor, got) => `${n} — Knight: ${rich} −${lost}💰 → ${poor} +${got}💰`, id: (_, n, rich, lost, poor, got) => `${n} — Ksatria: ${rich} −${lost}💰 → ${poor} +${got}💰` },
   { pattern: /(.+?) — художник: все 4 цвета → \+(\d+)💰/, en: (_, n, g) => `${n} — Artist: all 4 colors → +${g}💰`, id: (_, n, g) => `${n} — Seniman: 4 warna → +${g}💰` },
   { pattern: /(.+?) — знать: (.+?) \+(\d+)🃏, остальные −1🃏 −2💰/, en: (_, n, rich, c) => `${n} — Nobility: ${rich} +${c}🃏, others −1🃏 −2💰`, id: (_, n, rich, c) => `${n} — Bangsawan: ${rich} +${c}🃏, lainnya −1🃏 −2💰` },

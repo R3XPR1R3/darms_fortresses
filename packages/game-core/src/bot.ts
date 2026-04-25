@@ -243,6 +243,7 @@ function pickBestCompanion(
       case CompanionId.Contractor: score += player.hero === HeroId.Assassin ? 5 : 1; break;
       case CompanionId.NightShadow: score += player.gold >= 3 ? 4 : 2; break;
       case CompanionId.TreasureTrader: score += 3; break;
+      case CompanionId.Interceptor: score += 4; break; // strong if you draft Assassin/Thief tomorrow
     }
 
     if (score > bestScore) {

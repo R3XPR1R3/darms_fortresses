@@ -125,6 +125,28 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
   // --- Passive companion bonuses ---
   const cp = newPlayers[playerIdx];
 
+  // Interceptor: if this player is at turnOrder[0] (going first this day),
+  // draw +2 cards. The matching speed-bump for the next player happens in
+  // buildTurnOrder when the order is built, so by the time this passive
+  // fires the slowdown has already taken effect.
+  if (cp.companion === CompanionId.Interceptor && !cp.companionDisabled) {
+    const isFirst = state.turnOrder && state.turnOrder.length > 0 && state.turnOrder[0] === playerIdx;
+    if (isFirst) {
+      newDeck = [...state.deck];
+      const drawn = newDeck.splice(0, Math.min(2, newDeck.length));
+      const freeSlots = Math.max(0, MAX_HAND_CARDS - cp.hand.length);
+      const accepted = drawn.slice(0, freeSlots);
+      const overflow = drawn.length - accepted.length;
+      newPlayers[playerIdx] = { ...newPlayers[playerIdx], hand: [...cp.hand, ...accepted] };
+      if (accepted.length > 0) {
+        log = addLog({ ...state, log }, `${cp.name} — перехватчик: +${accepted.length}🃏 (идёт первым)`);
+      }
+      if (overflow > 0) {
+        log = addLog({ ...state, log }, `💥 ${cp.name}: ${overflow} карт(ы) рассыпались (лимит руки ${MAX_HAND_CARDS})`);
+      }
+    }
+  }
+
   // Farmer: scaling early-game stipend. If you have NO building of cost ≥ 3,
   // +2 gold at the start of your turn. Stops paying out once you've built
   // anything sizeable, so it's a comeback / catch-up tool, not perma-income.
