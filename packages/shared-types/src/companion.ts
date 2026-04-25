@@ -39,6 +39,7 @@ export enum CompanionId {
   Contractor = "contractor",
   NightShadow = "night_shadow",
   Interceptor = "interceptor",
+  Agent = "agent",
 }
 
 export interface CompanionDefinition {
@@ -101,6 +102,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Contractor, name: "Заказчик", description: "Назначьте цель-героя. Если Ассасин убивает её в этот день — крадёте фиолетовые карты жертвы", emoji: "📋", passive: false, targetType: "hero" },
   { id: CompanionId.NightShadow, name: "Ночная тень", description: "За 2💰: убейте неназванного персонажа", emoji: "🌑", passive: false, useCost: 2, targetType: "hero" },
   { id: CompanionId.Interceptor, name: "Перехватчик", description: "Если ходите первым — берёте +2 карты, скорость следующего игрока +1", emoji: "🏇", passive: true },
+  { id: CompanionId.Agent, name: "Агент", description: "За 2💰: превращается в копию компаньона выбранного игрока, который ещё не ходил. Уходит из пула.", emoji: "🕵️", passive: false, targetType: "player", useCost: 2, leavesPool: true },
 ] as const;
 
 /** Name constant for flame cards (Pyromancer) */

@@ -580,6 +580,41 @@ function useCompanion(
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — торговец сокровищами: получена ${purple.name}`), rng: rng.getSeed() };
     }
 
+    case CompanionId.Agent: {
+      // 2💰: copy a chosen player's companion. The target must:
+      //   - exist (targetPlayerId valid, not self)
+      //   - still be on a future turn this day (posInOrder > currentTurnIndex)
+      //   - have a current companion that isn't Agent itself (no recursion)
+      // After the swap the OWNER's companion field becomes the copy and
+      // companionUsed is RESET so they can use the copied active this turn.
+      // Agent's slot in the personal deck is markedGone (one-shot per match).
+      // This publicly reveals what the targeted player picked — that's the
+      // espionage angle of the design.
+      if (player.gold < 2) return null;
+      if (!targetPlayerId) return null;
+      const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
+      if (targetIdx === -1 || targetIdx === playerIdx) return null;
+      const target = state.players[targetIdx];
+      if (!target.companion) return null;
+      if (target.companion === CompanionId.Agent) return null;
+      // Has the target already acted this day? Block if so.
+      if (state.turnOrder) {
+        const pos = state.turnOrder.indexOf(targetIdx);
+        if (pos === -1) return null;
+        if (pos <= state.currentTurnIndex) return null; // current or past
+      } else {
+        return null; // no turn order yet → can't pick in advance
+      }
+
+      const copiedCompanion = target.companion;
+      const copiedName = COMPANIONS.find((c) => c.id === copiedCompanion)?.name ?? "?";
+      newPlayers[playerIdx] = markCompanionGone(
+        { ...player, gold: player.gold - 2, companion: copiedCompanion, companionUsed: false, companionDisabled: false },
+        CompanionId.Agent,
+      );
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: превратился в копию компаньона ${target.name} (${copiedName})`), rng: rng.getSeed() };
+    }
+
     // Passive companions — should not be used via action
     case CompanionId.Farmer:
     case CompanionId.Interceptor:

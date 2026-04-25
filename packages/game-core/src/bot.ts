@@ -244,6 +244,7 @@ function pickBestCompanion(
       case CompanionId.NightShadow: score += player.gold >= 3 ? 4 : 2; break;
       case CompanionId.TreasureTrader: score += 3; break;
       case CompanionId.Interceptor: score += 4; break; // strong if you draft Assassin/Thief tomorrow
+      case CompanionId.Agent: score += 4; break; // copies a powerful companion of an opponent
     }
 
     if (score > bestScore) {
@@ -524,6 +525,25 @@ function pickCompanionAction(
     case CompanionId.Pyromancer:
     case CompanionId.UnluckyMage:
       return null;
+
+    case CompanionId.Agent: {
+      // Pick the not-yet-acted opponent whose companion is most useful to copy.
+      // Cheap heuristic: prefer non-passive, non-Agent companions; passives are
+      // OK fallback. If nothing fits or we lack 2g — skip.
+      if (player.gold < 2) return null;
+      if (!state.turnOrder) return null;
+      const candidates = state.players
+        .map((p, i) => ({ p, i }))
+        .filter(({ p, i }) => {
+          if (i === playerIdx || !p.companion) return false;
+          if (p.companion === CompanionId.Agent) return false;
+          const pos = state.turnOrder!.indexOf(i);
+          return pos > state.currentTurnIndex;
+        });
+      if (candidates.length === 0) return null;
+      const best = candidates.find(({ p }) => !isPassiveCompanion(p.companion!)) ?? candidates[0];
+      return { type: "use_companion", playerId: player.id, targetPlayerId: best.p.id };
+    }
 
     default:
       return null;
