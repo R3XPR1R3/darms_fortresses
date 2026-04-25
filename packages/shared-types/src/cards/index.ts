@@ -84,6 +84,7 @@ import { arsenal } from "./districts/arsenal/index.js";
 import { citadel } from "./districts/citadel/index.js";
 import { tradeChamber } from "./districts/trade_chamber/index.js";
 import { warCouncil } from "./districts/war_council/index.js";
+import { templarOrder } from "./districts/templar_order/index.js";
 import { observatory } from "./purple-basic/observatory/index.js";
 import { laboratory } from "./purple-basic/laboratory/index.js";
 import { smithy } from "./purple-basic/smithy/index.js";
@@ -117,6 +118,7 @@ export const ALL_DISTRICTS: readonly DistrictDef[] = [
   tavern, market, tradingPost, harbor, townHall,
   outpost, prison, fortress, arsenal, citadel,
   tradeChamber, warCouncil,
+  templarOrder,
 ];
 
 export const ALL_PURPLE_BASIC: readonly PurpleBasicDef[] = [
