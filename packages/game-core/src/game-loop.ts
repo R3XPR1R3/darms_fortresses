@@ -232,17 +232,17 @@ function useCompanion(
       if (damageable.length === 0) return null;
       const distIdx = damageable[rng.int(0, damageable.length - 1)].i;
       const targetDist = opp.builtDistricts[distIdx];
-      const newHp = targetDist.hp - 2;
+      const newCost = targetDist.cost - 2;
       const newOppDistricts = [...opp.builtDistricts];
       let discardPile = state.discardPile;
       let msg: string;
-      if (newHp < 1) {
+      if (newCost < 1) {
         newOppDistricts.splice(distIdx, 1);
         discardPile = [...discardPile, targetDist];
         msg = `${player.name} — канонир: сжёг ${burnedCard.name}, разрушил ${targetDist.name} у ${opp.name}!`;
       } else {
-        newOppDistricts[distIdx] = { ...targetDist, hp: newHp };
-        msg = `${player.name} — канонир: сжёг ${burnedCard.name}, повредил ${targetDist.name} у ${opp.name} (HP ${targetDist.hp}→${newHp})`;
+        newOppDistricts[distIdx] = { ...targetDist, cost: newCost, hp: newCost };
+        msg = `${player.name} — канонир: сжёг ${burnedCard.name}, повредил ${targetDist.name} у ${opp.name} (${targetDist.cost}→${newCost})`;
       }
       newPlayers[playerIdx] = { ...player, hand: newHand, companionUsed: true };
       newPlayers[oppPick.i] = { ...opp, builtDistricts: newOppDistricts };
@@ -693,17 +693,17 @@ function activateBuilding(
       if (validTargets.length === 0) return null;
       const distIdx = validTargets[rng.int(0, validTargets.length - 1)].i;
       const dist = target.builtDistricts[distIdx];
-      const newHp = dist.hp - 1;
+      const newCost = dist.cost - 1;
       const newOppDistricts = [...target.builtDistricts];
       let discardPile = state.discardPile;
       let msg: string;
-      if (newHp < 1) {
+      if (newCost < 1) {
         newOppDistricts.splice(distIdx, 1);
         discardPile = [...discardPile, dist];
         msg = `${player.name} — пушка: разрушил ${dist.name} у ${target.name}!`;
       } else {
-        newOppDistricts[distIdx] = { ...dist, hp: newHp };
-        msg = `${player.name} — пушка: ${dist.name} у ${target.name} HP ${dist.hp}→${newHp}`;
+        newOppDistricts[distIdx] = { ...dist, cost: newCost, hp: newCost };
+        msg = `${player.name} — пушка: ${dist.name} у ${target.name} ${dist.cost}→${newCost}`;
       }
       newPlayers[playerIdx] = { ...player, gold: player.gold - 1 };
       newPlayers[opp.i] = { ...target, builtDistricts: newOppDistricts };

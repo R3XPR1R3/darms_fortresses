@@ -342,19 +342,19 @@ export function useAbility(
       // Stronghold cannot be damaged or destroyed
       if (card.purpleAbility === "stronghold") return null;
 
-      // General spends gold to deal damage to district HP
+      // General spends gold to deal damage to district cost (which is HP/value).
       if (player.gold < 1) return null;
-      const damage = Math.min(player.gold, card.hp);
+      const damage = Math.min(player.gold, card.cost);
 
       const newTargetDistricts = [...target.builtDistricts];
-      const newHp = card.hp - damage;
+      const newCost = card.cost - damage;
 
       // Fort: defender's other districts have -1 effective HP, but on destroy gets gold back
       const hasFort = target.builtDistricts.some((d) => d.purpleAbility === "fort" && d.id !== card.id);
 
       let newDiscardPile = state.discardPile;
       let fortGoldRefund = 0;
-      if (newHp < 1) {
+      if (newCost < 1) {
         // District destroyed — add to discard pile
         newTargetDistricts.splice(cardIdx, 1);
         newDiscardPile = [...state.discardPile, card];
@@ -388,9 +388,9 @@ export function useAbility(
           log = addLog({ ...state, log }, `⚰️ Склеп ${target.name} разрушен — получено 2 фиолетовые карты`);
         }
       } else {
-        // District damaged but survives
-        newTargetDistricts[cardIdx] = { ...card, hp: newHp };
-        log = addLog({ ...state, log }, `${player.name} (Генерал) повредил ${card.name} у ${target.name} (${card.hp}→${newHp} HP) за ${damage} золота`);
+        // District damaged but survives — its cost (= HP/value) drops.
+        newTargetDistricts[cardIdx] = { ...card, cost: newCost, hp: newCost };
+        log = addLog({ ...state, log }, `${player.name} (Генерал) повредил ${card.name} у ${target.name} (${card.cost}→${newCost}) за ${damage} золота`);
       }
 
       newPlayers[playerIdx] = { ...player, gold: player.gold - damage, abilityUsed: true };
@@ -442,7 +442,7 @@ export function checkWinCondition(state: GameState): GameState {
 }
 
 /** Calculate final scores and determine winner. Called at end of last day.
- *  Scoring: sum of district HP (not cost). */
+ *  Scoring: sum of each district's current cost (the unified HP/value/cost number). */
 export function calculateScores(state: GameState): GameState {
   let maxScore = -1;
   let winnerIdx = -1;
@@ -453,12 +453,12 @@ export function calculateScores(state: GameState): GameState {
     const p = state.players[i];
     let score = 0;
 
-    // Sum of district HP (current HP on the table)
+    // Sum of each district's current cost (= HP/value).
     const hasFort = p.builtDistricts.some((d) => d.purpleAbility === "fort");
     for (const d of p.builtDistricts) {
-      // Fort: other buildings worth -1
+      // Fort: other buildings score -1 (matches the in-hand HP penalty).
       const fortPenalty = (hasFort && d.purpleAbility !== "fort") ? 1 : 0;
-      score += Math.max(0, d.hp - fortPenalty);
+      score += Math.max(0, d.cost - fortPenalty);
     }
 
     // Bonus for finishing first

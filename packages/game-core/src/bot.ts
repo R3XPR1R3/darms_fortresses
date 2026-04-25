@@ -590,9 +590,9 @@ function pickAbility(
       if (targets.length === 0) return null;
       const target = targets[0];
       const destroyable = [...target.builtDistricts]
-        .filter((d) => d.hp <= player.gold)
-        .sort((a, b) => a.hp - b.hp)[0];
-      const pick = destroyable ?? [...target.builtDistricts].sort((a, b) => a.hp - b.hp)[0];
+        .filter((d) => d.cost <= player.gold)
+        .sort((a, b) => a.cost - b.cost)[0];
+      const pick = destroyable ?? [...target.builtDistricts].sort((a, b) => a.cost - b.cost)[0];
       if (pick) {
         return {
           type: "ability",

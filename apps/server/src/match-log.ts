@@ -27,7 +27,8 @@ export interface MatchPlayerSummary {
   isBot: boolean;
   score: number;
   gold: number;
-  districts: { name: string; cost: number; hp: number; colors: string[] }[];
+  /** `cost` is the unified value (also serves as HP/score per district). */
+  districts: { name: string; cost: number; colors: string[] }[];
   districtCount: number;
   finishedFirst: boolean;
   allColors: boolean;
@@ -35,7 +36,7 @@ export interface MatchPlayerSummary {
 
 function computeScore(p: GameState["players"][number]): number {
   let score = 0;
-  for (const d of p.builtDistricts) score += d.hp;
+  for (const d of p.builtDistricts) score += d.cost;
   if (p.finishedFirst) score += 4;
   const colors = new Set(p.builtDistricts.flatMap((d) => d.colors));
   if (colors.has("yellow") && colors.has("blue") && colors.has("green") && colors.has("red")) {
@@ -65,7 +66,6 @@ export function generateMatchSummary(
       districts: p.builtDistricts.map((d) => ({
         name: d.name,
         cost: d.cost,
-        hp: d.hp,
         colors: [...d.colors],
       })),
       districtCount: p.builtDistricts.length,
@@ -147,7 +147,7 @@ function formatSummaryText(s: MatchSummary): string {
     lines.push(`    ${p.name}:`);
     for (const d of p.districts) {
       const colorEmoji = d.colors.map((c) => ({ yellow: "🟡", blue: "🔵", green: "🟢", red: "🔴" }[c] ?? "⚪")).join("");
-      lines.push(`      ${colorEmoji} ${d.name} (стоимость: ${d.cost}, HP: ${d.hp})`);
+      lines.push(`      ${colorEmoji} ${d.name} (${d.cost}💰)`);
     }
   }
 

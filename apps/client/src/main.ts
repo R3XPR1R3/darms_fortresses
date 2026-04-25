@@ -677,19 +677,18 @@ function buildingTextureUrl(d: { colors: string[]; cost: number; spellAbility?: 
 
 function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string }, opts: { info?: boolean } = {}): string {
   const cs = colorStyle(d.colors);
-  const hpLabel = d.hp != null && d.hp !== d.cost ? `<div class="card-hp">HP ${d.hp}</div>` : "";
   const spellClass = d.spellAbility ? "spell-card" : "";
   const spellLabel = d.spellAbility ? `<div class="spell-badge">✦ ${kwHtml("spell")} ✦</div>` : "";
   const texUrl = buildingTextureUrl(d);
   const infoBtn = opts.info !== false
     ? `<button class="card-info-btn" data-card-info="${encodeCardPayload(d)}" title="Info">ℹ</button>`
     : "";
+  // Cost is the unified HP/value/cost number — no separate HP label.
   return `<div class="district-card ${cs.cls} ${spellClass}" style="${cs.style}">
     <img class="card-texture" src="${texUrl}" alt="" />
     <div class="card-cost-badge">${d.cost}</div>
     ${spellLabel}
     <div class="card-name">${tDistrict(d.name)}</div>
-    ${hpLabel}
     ${infoBtn}
   </div>`;
 }
@@ -754,9 +753,7 @@ function showCardInfoPopover(card: { name: string; cost: number; colors: string[
   }
 
   const colorDots = card.colors.map((c) => districtColorDot(c)).join(" ");
-  const hpLine = card.hp != null && card.hp !== card.cost
-    ? `<div class="cip-line">❤️ HP: <b>${card.hp}</b> / ${card.cost}</div>`
-    : "";
+  // Cost is unified — no separate HP line.
 
   overlay.innerHTML = `
     <div class="cip-backdrop"></div>
@@ -769,7 +766,6 @@ function showCardInfoPopover(card: { name: string; cost: number; colors: string[
           <div class="cip-meta">${colorDots} &nbsp; ${card.cost}💰 ${extraTag ? `&nbsp; <span class="db-tag">${extraTag}</span>` : ""}</div>
         </div>
       </div>
-      ${hpLine}
       ${desc ? `<div class="cip-desc">${desc}</div>` : `<div class="cip-desc cip-desc-muted">${t("info.plain_district") ?? "Обычный квартал — без особых эффектов."}</div>`}
     </div>
   `;

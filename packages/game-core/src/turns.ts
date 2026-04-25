@@ -460,7 +460,8 @@ export function buildDistrict(
     return { ...state, players: newPlayers, log, plagueDaysLeft: card.spellAbility === "plague" ? 3 : (state.plagueDaysLeft ?? 0) };
   }
 
-  // Monument: on table always 5 cost / 5 HP
+  // Built card: cost is the unified value (HP/score). Original cost is preserved
+  // for refunds/discounts. Monument bumps to 5 on the table (special card rule).
   let builtCard = { ...card, hp: card.cost, originalCost: card.originalCost ?? card.cost, baseColors: card.baseColors ?? card.colors };
   if (card.purpleAbility === "monument") {
     builtCard = { ...card, cost: 5, hp: 5, originalCost: card.originalCost ?? 5, baseColors: card.baseColors ?? card.colors };
@@ -702,17 +703,17 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
         const owner = plaguePlayers[picked.pIdx];
         const districts = [...owner.builtDistricts];
         const target = districts[picked.dIdx];
-        const newHp = target.hp - 1;
-        if (newHp < 1) {
+        const newCost = target.cost - 1;
+        if (newCost < 1) {
           const destroyed = districts[picked.dIdx];
           districts.splice(picked.dIdx, 1);
           plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
           state = { ...state, discardPile: [...state.discardPile, destroyed] };
           plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} разрушен ${destroyed.name}` }];
         } else {
-          districts[picked.dIdx] = { ...target, hp: newHp };
+          districts[picked.dIdx] = { ...target, cost: newCost, hp: newCost };
           plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
-          plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.hp}→${newHp})` }];
+          plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.cost}→${newCost})` }];
         }
       }
 
