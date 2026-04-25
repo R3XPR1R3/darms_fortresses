@@ -109,7 +109,8 @@ export function addBot(roomId: string, requesterId: string): LobbyPlayer[] | str
   const botName = BOT_NAMES[botCounter % BOT_NAMES.length];
   botCounter++;
   const botId = "bot-" + Math.random().toString(36).slice(2, 8);
-  // Assign a random pre-built archetype so the bot has a ready deck-build.
+  // Random preset archetype, but the label is NOT exposed to other players —
+  // we don't want lobby/board UI to leak the bot's strategy.
   const archetype = BOT_BUILDS[Math.floor(Math.random() * BOT_BUILDS.length)];
   room.players.push({
     id: botId,
@@ -119,7 +120,6 @@ export function addBot(roomId: string, requesterId: string): LobbyPlayer[] | str
     ws: null,
     disconnectTimer: null,
     build: { purple: [...archetype.build.purple], companions: [...archetype.build.companions] },
-    buildLabel: archetype.name,
   });
   return getLobbyPlayers(room);
 }
@@ -494,7 +494,6 @@ export function getLobbyPlayers(room: Room): LobbyPlayer[] {
     isBot: p.isBot,
     isHost: p.id === room.hostId,
     deckReady: !!p.build,
-    buildLabel: p.buildLabel,
   }));
 }
 

@@ -9,7 +9,7 @@ export const altarDarkness: PurpleSpecialDef = {
   emoji: "🌑",
   name: { ru: "Алтарь тьмы", en: "Altar of Darkness" },
   description: {
-    ru: "{kw:altar}: постройте 4 алтаря тьмы для победы. Можно строить дубликаты",
-    en: "{kw:altar}: build 4 Altars of Darkness to win. Duplicates allowed",
+    ru: "{kw:altar}: постройте 4 алтаря тьмы для победы",
+    en: "{kw:altar}: build 4 Altars of Darkness to win",
   },
 };

@@ -430,7 +430,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   strange_merchant: { en: "Discard a card → gain gold = its cost. 🟢 only. {kw:leaves}", ru: "Сбросить карту → получить золото = её цена. Только 🟢. {kw:leaves}", id: "Buang kartu → dapat emas = harganya. Hanya 🟢. {kw:leaves}" },
   gravedigger: { en: "{kw:passive} On {kw:kill}: gain the victim's hero ability", ru: "{kw:passive} При {kw:kill}: получаете способность убитого героя", id: "{kw:passive} Saat {kw:kill}: dapatkan kemampuan hero korban" },
   jester: { en: "{kw:passive} Shuffle all players' hands. 🟡 only.", ru: "{kw:passive} Перемешивает руки всех игроков. Только 🟡.", id: "{kw:passive} Acak kartu tangan semua pemain. Hanya 🟡." },
-  pyromancer: { en: "Card → 🔥 Flame. Flames multiply each turn!", ru: "Карта → 🔥 Пламя. Пламя множится каждый ход!", id: "Kartu → 🔥 Api. Api berkembang tiap giliran!" },
+  pyromancer: { en: "Plant 🔥 Flame in any player's hand (random card). Flames multiply each turn!", ru: "Подбрасывает 🔥 Пламя в руку любого игрока (случайной картой). Пламя множится каждый ход!", id: "Tanam 🔥 Api di tangan pemain mana pun (kartu acak). Api berkembang tiap giliran!" },
   sun_fanatic: { en: "Only blue buildings, or 2💰 to replace next player's companion. 🔵 only", ru: "Только синие постройки, или 2💰 заменить компаньона следующего. Только 🔵", id: "Hanya bangunan biru, atau 2💰 untuk ganti companion pemain berikut. Hanya 🔵" },
   sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}", id: "Hapus permanen companion lawan dari pool. {kw:leaves}" },
   knight: { en: "{kw:passive} Richest loses 1💰 → poorest gains 1💰", ru: "{kw:passive} Богатейший теряет 1💰 → беднейший получает 1💰", id: "{kw:passive} Pemain terkaya kehilangan 1💰 → termiskin dapat 1💰" },
@@ -481,7 +481,7 @@ const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
   tnt_storage: { en: "{kw:activate} 2💰: self-destroy, {kw:destroy} 2 random districts for each player", ru: "{kw:activate} За 2💰: самоуничтожение, {kw:destroy} 2 случайных квартала у каждого", id: "{kw:activate} 2💰: hancurkan diri, {kw:destroy} 2 distrik acak tiap pemain" },
   mine: { en: "{kw:passive} +1💰 at end of day (Merchant: end of each turn)", ru: "{kw:passive} +1💰 в конце дня (Казначей: в конце каждого хода)", id: "{kw:passive} +1💰 di akhir hari (Pedagang: tiap giliran)" },
   cult: { en: "{kw:activate} Blue hero only: replace a random opponent's district with a copy of Cult", ru: "{kw:activate} Только синий герой: заменяет случайный квартал оппа на Секту", id: "{kw:activate} Hanya hero biru: ganti distrik lawan acak dengan salinan Kultus" },
-  altar_darkness: { en: "{kw:altar} 4 Altars → alternate win condition. Duplicates allowed", ru: "{kw:altar} 4 алтаря → альтернативная победа. Разрешены дубликаты", id: "{kw:altar} 4 Altar → kondisi menang alternatif. Duplikat diizinkan" },
+  altar_darkness: { en: "{kw:altar} Build 4 Altars → alternate win condition", ru: "{kw:altar} Постройте 4 алтаря → альтернативная победа", id: "{kw:altar} Bangun 4 Altar → kondisi menang alternatif" },
 };
 
 // ---- Canonical spell translations ----
@@ -491,6 +491,7 @@ const SPELL_NAMES: Record<string, TranslationEntry> = {
   holy_day: { en: "Holy Day", ru: "Священный день", id: "Hari suci" },
   flood: { en: "Flood", ru: "Потоп", id: "Banjir" },
   plague: { en: "Plague", ru: "Чума", id: "Wabah" },
+  fire_ritual: { en: "Fire Ritual", ru: "Ритуал огня", id: "Ritual api" },
 };
 
 const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
@@ -499,6 +500,7 @@ const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
   holy_day: { en: "{kw:spell} Until end of day: all districts become blue", ru: "{kw:spell} До конца дня: все кварталы синие", id: "{kw:spell} Hingga akhir hari: semua distrik jadi biru" },
   flood: { en: "{kw:spell} Up to 4 random districts from each player return to hand", ru: "{kw:spell} До 4 случайных кварталов у каждого возвращаются в руку", id: "{kw:spell} Sampai 4 distrik acak tiap pemain kembali ke tangan" },
   plague: { en: "{kw:spell} 3-day effect: each day a random player loses gold, a random district takes damage", ru: "{kw:spell} Эффект 3 дня: каждый день случайный игрок теряет золото, случайный квартал получает урон", id: "{kw:spell} Efek 3 hari: tiap hari pemain acak kehilangan emas, distrik acak kena damage" },
+  fire_ritual: { en: "{kw:spell} Burn one of your built districts. For every gold of its cost, plant a 🔥 Flame in a random opponent's hand", ru: "{kw:spell} Сожгите вашу постройку. За каждое золото её цены подбрасывает 🔥 Пламя в руку случайного противника", id: "{kw:spell} Bakar bangunan Anda. Untuk tiap emas dari biayanya, tanam 🔥 Api di tangan lawan acak" },
 };
 
 // ---- Placeholder stub name ----
@@ -512,19 +514,96 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /💀 (.+?) \((.+?)\) был убит! Ход пропущен\./, en: (_, name, pname) => `💀 ${name} (${pname}) was killed! Turn skipped.`, id: (_, name, pname) => `💀 ${name} (${pname}) terbunuh! Giliran dilewati.` },
   { pattern: /(.+?) украл (\d+) золота у убитого (.+)/, en: (_, a, g, b) => `${a} stole ${g} gold from killed ${b}`, id: (_, a, g, b) => `${a} mencuri ${g} emas dari ${b} yang terbunuh` },
   { pattern: /(.+?) украл (\d+) золота у (.+)/, en: (_, a, g, b) => `${a} stole ${g} gold from ${b}`, id: (_, a, g, b) => `${a} mencuri ${g} emas dari ${b}` },
-  { pattern: /(.+?) \(Король\) \+(\d+) золота за жёлтые кварталы/, en: (_, n, g) => `${n} (King) +${g} gold for yellow districts` },
-  { pattern: /(.+?) \(Клерик\) \+(\d+) золота за синие кварталы/, en: (_, n, g) => `${n} (Cleric) +${g} gold for blue districts` },
-  { pattern: /(.+?) \(Казначей\) \+(\d+) золота \((\d+) зелёных \+1 бонус\)/, en: (_, n, g, c) => `${n} (Treasurer) +${g} gold (${c} green +1 bonus)` },
-  { pattern: /(.+?) \(Архитектор\) берёт (\d+) карты, может строить до 3/, en: (_, n, c) => `${n} (Architect) draws ${c} cards, can build up to 3` },
-  { pattern: /(.+?) \(Генерал\) \+(\d+) золота за красные кварталы/, en: (_, n, g) => `${n} (General) +${g} gold for red districts` },
-  { pattern: /(.+?) совершил убийство\.\.\./, en: (_, n) => `${n} committed murder...` },
-  { pattern: /(.+?) готовит ограбление\.\.\./, en: (_, n) => `${n} prepares a robbery...` },
-  { pattern: /(.+?) \(Чародей\) сбросил (\d+) карт, взял (\d+)/, en: (_, n, d, w) => `${n} (Sorcerer) discarded ${d} cards, drew ${w}` },
-  { pattern: /(.+?) \(Чародей\) обменялся рукой с (.+)/, en: (_, n, t) => `${n} (Sorcerer) swapped hands with ${t}` },
-  { pattern: /(.+?) \(Генерал\) разрушил (.+?) у (.+?) за (\d+) золота/, en: (_, n, d, t, g) => `${n} (General) destroyed ${tDistrict(d)} from ${t} for ${g} gold` },
-  { pattern: /(.+?) \(Генерал\) повредил (.+?) у (.+?) \((\d+)→(\d+) HP\) за (\d+) золота/, en: (_, n, d, t, hp1, hp2, g) => `${n} (General) damaged ${tDistrict(d)} of ${t} (${hp1}→${hp2} HP) for ${g} gold` },
-  { pattern: /(.+?) построил (\d+) кварталов! Последний день\./, en: (_, n, c) => `${n} built ${c} districts! Final day.` },
-  { pattern: /(.+?): (\d+) очков/, en: (_, n, s) => `${n}: ${s} points` },
+  { pattern: /(.+?) \(Король\) \+(\d+) золота за жёлтые кварталы/, en: (_, n, g) => `${n} (King) +${g} gold for yellow districts`, id: (_, n, g) => `${n} (Raja) +${g} emas untuk distrik kuning` },
+  { pattern: /(.+?) \(Клерик\) \+(\d+) золота за синие кварталы/, en: (_, n, g) => `${n} (Cleric) +${g} gold for blue districts`, id: (_, n, g) => `${n} (Klerik) +${g} emas untuk distrik biru` },
+  { pattern: /(.+?) \(Казначей\) \+(\d+) золота \((\d+) зелёных \+1 бонус\)/, en: (_, n, g, c) => `${n} (Treasurer) +${g} gold (${c} green +1 bonus)`, id: (_, n, g, c) => `${n} (Bendahara) +${g} emas (${c} hijau +1 bonus)` },
+  { pattern: /(.+?) \(Архитектор\) берёт (\d+) карты, может строить до 3/, en: (_, n, c) => `${n} (Architect) draws ${c} cards, can build up to 3`, id: (_, n, c) => `${n} (Arsitek) ambil ${c} kartu, boleh bangun hingga 3` },
+  { pattern: /(.+?) \(Генерал\) \+(\d+) золота за красные кварталы/, en: (_, n, g) => `${n} (General) +${g} gold for red districts`, id: (_, n, g) => `${n} (Jenderal) +${g} emas untuk distrik merah` },
+  { pattern: /(.+?) \(Лидер\) автоматически выставил Врата в город/, en: (_, n) => `${n} (Leader) auto-built City Gates`, id: (_, n) => `${n} (Pemimpin) otomatis membangun Gerbang Kota` },
+  { pattern: /(.+?) совершил убийство\.\.\./, en: (_, n) => `${n} committed murder...`, id: (_, n) => `${n} melakukan pembunuhan...` },
+  { pattern: /🗡️ Убийца выбрал (.+)/, en: (_, h) => `🗡️ Assassin targeted ${h}`, id: (_, h) => `🗡️ Pembunuh menargetkan ${h}` },
+  { pattern: /🪙 Вор выбрал (.+)/, en: (_, h) => `🪙 Thief targeted ${h}`, id: (_, h) => `🪙 Pencuri menargetkan ${h}` },
+  { pattern: /🟣 (.+?) разыграл заглушку — выбирает (\d+) из (\d+)/, en: (_, n, k, m) => `🟣 ${n} plays the placeholder — picks ${k} of ${m}`, id: (_, n, k, m) => `🟣 ${n} memainkan placeholder — pilih ${k} dari ${m}` },
+  { pattern: /🟣 (.+?) разыграл заглушку — последняя карта из пула/, en: (_, n) => `🟣 ${n} plays the placeholder — last card from the pool`, id: (_, n) => `🟣 ${n} memainkan placeholder — kartu terakhir dari pool` },
+  { pattern: /🟣 (.+?) разыграл заглушку — пул пуст, заглушка возвращается в колоду/, en: (_, n) => `🟣 ${n} plays the placeholder — pool empty, stub returns to deck`, id: (_, n) => `🟣 ${n} memainkan placeholder — pool kosong, stub kembali ke dek` },
+  { pattern: /🟣 (.+?) выбрал карту/, en: (_, n) => `🟣 ${n} picked a card`, id: (_, n) => `🟣 ${n} memilih kartu` },
+  { pattern: /(.+?) \(Чародей\) сбросил (\d+) карт, взял (\d+)/, en: (_, n, d, w) => `${n} (Sorcerer) discarded ${d} cards, drew ${w}`, id: (_, n, d, w) => `${n} (Penyihir) buang ${d} kartu, ambil ${w}` },
+  { pattern: /(.+?) \(Чародей\) обменялся рукой с (.+)/, en: (_, n, t) => `${n} (Sorcerer) swapped hands with ${t}`, id: (_, n, t) => `${n} (Penyihir) tukar tangan dengan ${t}` },
+  { pattern: /(.+?) \(Генерал\) разрушил (.+?) у (.+?) за (\d+) золота/, en: (_, n, d, t, g) => `${n} (General) destroyed ${tDistrict(d)} from ${t} for ${g} gold`, id: (_, n, d, t, g) => `${n} (Jenderal) menghancurkan ${tDistrict(d)} milik ${t} seharga ${g} emas` },
+  { pattern: /(.+?) \(Генерал\) повредил (.+?) у (.+?) \((\d+)→(\d+)\) за (\d+) золота/, en: (_, n, d, t, c1, c2, g) => `${n} (General) damaged ${tDistrict(d)} of ${t} (${c1}→${c2}) for ${g} gold`, id: (_, n, d, t, c1, c2, g) => `${n} (Jenderal) merusak ${tDistrict(d)} milik ${t} (${c1}→${c2}) seharga ${g} emas` },
+  { pattern: /(.+?) построил (\d+) кварталов! Последний день\./, en: (_, n, c) => `${n} built ${c} districts! Final day.`, id: (_, n, c) => `${n} membangun ${c} distrik! Hari terakhir.` },
+  { pattern: /(.+?) построил 4 алтаря тьмы! Последний день\./, en: (_, n) => `${n} built 4 Altars of Darkness! Final day.`, id: (_, n) => `${n} membangun 4 Altar Kegelapan! Hari terakhir.` },
+  { pattern: /(.+?): (\d+) очков/, en: (_, n, s) => `${n}: ${s} points`, id: (_, n, s) => `${n}: ${s} poin` },
+
+  // Income / hand events
+  { pattern: /💰 (.+?) берёт \+2 золота/, en: (_, n) => `💰 ${n} takes +2 gold`, id: (_, n) => `💰 ${n} ambil +2 emas` },
+  { pattern: /🃏 (.+?) берёт 2 карты \(выбирает 1\)/, en: (_, n) => `🃏 ${n} draws 2 cards (picks 1)`, id: (_, n) => `🃏 ${n} ambil 2 kartu (pilih 1)` },
+  { pattern: /🃏 (.+?) выбрал карту/, en: (_, n) => `🃏 ${n} picked a card`, id: (_, n) => `🃏 ${n} memilih kartu` },
+  { pattern: /(.+?) — шулер: \+2💰 и выбор из 2 карт/, en: (_, n) => `${n} — Swindler: +2💰 and choice of 2 cards`, id: (_, n) => `${n} — Penipu: +2💰 dan pilih 2 kartu` },
+  { pattern: /💥 (.+?): (\d+) карт\(ы\) рассыпались \(лимит руки 10\)/, en: (_, n, c) => `💥 ${n}: ${c} card(s) overflowed (hand limit 10)`, id: (_, n, c) => `💥 ${n}: ${c} kartu meluap (batas tangan 10)` },
+  { pattern: /💥 (.+?): 1 карт\(ы\) рассыпались \(лимит руки 10\)/, en: (_, n) => `💥 ${n}: 1 card overflowed (hand limit 10)`, id: (_, n) => `💥 ${n}: 1 kartu meluap (batas tangan 10)` },
+  { pattern: /🏗️ (.+?) построил (.+)/, en: (_, n, d) => `🏗️ ${n} built ${tDistrict(d)}`, id: (_, n, d) => `🏗️ ${n} membangun ${tDistrict(d)}` },
+
+  // Spells
+  { pattern: /🔥 (.+?) применил Поджигание к (.+)/, en: (_, n, t) => `🔥 ${n} cast Ignite on ${t}`, id: (_, n, t) => `🔥 ${n} memantra Pembakaran pada ${t}` },
+  { pattern: /🌧️ (.+?) применил Золотой дождь: все получили \+1💰/, en: (_, n) => `🌧️ ${n} cast Gold Rain: everyone got +1💰`, id: (_, n) => `🌧️ ${n} memantra Hujan Emas: semua dapat +1💰` },
+  { pattern: /✨ (.+?) применил Священный день: до конца дня все кварталы синие/, en: (_, n) => `✨ ${n} cast Holy Day: all districts turn blue until end of day`, id: (_, n) => `✨ ${n} memantra Hari Suci: semua distrik jadi biru sampai akhir hari` },
+  { pattern: /🌊 (.+?) применил Потоп: до 4 случайных кварталов у каждого вернулись в руку/, en: (_, n) => `🌊 ${n} cast Flood: up to 4 random districts per player returned to hand`, id: (_, n) => `🌊 ${n} memantra Banjir: sampai 4 distrik acak tiap pemain kembali ke tangan` },
+  { pattern: /☣️ (.+?) применил Чуму: эффект активен 3 дня/, en: (_, n) => `☣️ ${n} cast Plague: 3-day effect active`, id: (_, n) => `☣️ ${n} memantra Wabah: efek 3 hari aktif` },
+  { pattern: /🔥 (.+?) применил Ритуал огня: сжёг (.+?), разослал (\d+) 🔥 случайным противникам/, en: (_, n, d, c) => `🔥 ${n} cast Fire Ritual: burned ${tDistrict(d)}, planted ${c} 🔥 in random opponents`, id: (_, n, d, c) => `🔥 ${n} memantra Ritual Api: bakar ${tDistrict(d)}, tanam ${c} 🔥 ke lawan acak` },
+
+  // Plague effects
+  { pattern: /☣️ Чума: (.+?) потерял 1💰/, en: (_, n) => `☣️ Plague: ${n} lost 1💰`, id: (_, n) => `☣️ Wabah: ${n} kehilangan 1💰` },
+  { pattern: /☣️ Чума: у (.+?) разрушен (.+)/, en: (_, n, d) => `☣️ Plague: ${tDistrict(d)} of ${n} destroyed`, id: (_, n, d) => `☣️ Wabah: ${tDistrict(d)} milik ${n} hancur` },
+  { pattern: /☣️ Чума: у (.+?) повреждён (.+?) \((\d+)→(\d+)\)/, en: (_, n, d, c1, c2) => `☣️ Plague: ${tDistrict(d)} of ${n} damaged (${c1}→${c2})`, id: (_, n, d, c1, c2) => `☣️ Wabah: ${tDistrict(d)} milik ${n} rusak (${c1}→${c2})` },
+
+  // Mine / city gates
+  { pattern: /⛏️ (.+?) — шахта: \+(\d+)💰/, en: (_, n, g) => `⛏️ ${n} — Mine: +${g}💰`, id: (_, n, g) => `⛏️ ${n} — Tambang: +${g}💰` },
+  { pattern: /⛏️ (.+?) — шахта \(торговец\): \+(\d+)💰/, en: (_, n, g) => `⛏️ ${n} — Mine (Merchant): +${g}💰`, id: (_, n, g) => `⛏️ ${n} — Tambang (Pedagang): +${g}💰` },
+  { pattern: /🚪 Врата в город у (.+?) в руке: стоимость → (\d+)/, en: (_, n, c) => `🚪 City Gates in ${n}'s hand: cost → ${c}`, id: (_, n, c) => `🚪 Gerbang Kota di tangan ${n}: harga → ${c}` },
+
+  // Pyromancer flames at end of turn
+  { pattern: /🔥 Пламя у (.+?): сгорело карт (\d+), новых огней (\d+)/, en: (_, n, b, s) => `🔥 Flames in ${n}'s hand: ${b} cards burned, ${s} new flames`, id: (_, n, b, s) => `🔥 Api di tangan ${n}: ${b} kartu terbakar, ${s} api baru` },
+  { pattern: /🧨 (.+?) потерял: (.+)/, en: (_, n, list) => `🧨 ${n} lost: ${list}`, id: (_, n, list) => `🧨 ${n} kehilangan: ${list}` },
+
+  // Treasurer companion eod
+  { pattern: /(.+?) — торговец: (.+?) отдал (\d+)💰/, en: (_, n, src, g) => `${n} — Trader: ${src} gave ${g}💰`, id: (_, n, src, g) => `${n} — Pedagang: ${src} memberi ${g}💰` },
+  { pattern: /(.+?) — торговец: (.+?) отдал (\d+)💰 и карту/, en: (_, n, src, g) => `${n} — Trader: ${src} gave ${g}💰 and a card`, id: (_, n, src, g) => `${n} — Pedagang: ${src} memberi ${g}💰 dan satu kartu` },
+  { pattern: /(.+?) — шут: все карты перемешаны!/, en: (_, n) => `${n} — Jester: all hands shuffled!`, id: (_, n) => `${n} — Badut: semua tangan diacak!` },
+
+  // Companion uses
+  { pattern: /(.+?) — фермер приносит \+1 золото/, en: (_, n) => `${n} — Farmer brings +1 gold`, id: (_, n) => `${n} — Petani membawa +1 emas` },
+  { pattern: /(.+?) — охотник: (.+?) сбросил (\d+) карт/, en: (_, n, t, c) => `${n} — Hunter: ${t} discarded ${c} cards`, id: (_, n, t, c) => `${n} — Pemburu: ${t} membuang ${c} kartu` },
+  { pattern: /(.+?) — каменщик: (.+)/, en: (_, n, rest) => `${n} — Mason: ${rest}`, id: (_, n, rest) => `${n} — Tukang batu: ${rest}` },
+  { pattern: /(.+?) — диверсант: компаньон (.+?) отключён на сегодня/, en: (_, n, t) => `${n} — Saboteur: ${t}'s companion disabled for today`, id: (_, n, t) => `${n} — Penyabotase: companion ${t} dinonaktifkan hari ini` },
+  { pattern: /(.+?) — кузнец: (.+?) → (.+?) у (.+)/, en: (_, n, before, after, owner) => `${n} — Blacksmith: ${tDistrict(before)} → ${tDistrict(after)} on ${owner}`, id: (_, n, before, after, owner) => `${n} — Pandai besi: ${tDistrict(before)} → ${tDistrict(after)} di ${owner}` },
+  { pattern: /(.+?) — алхимик: (.+?) → (.+)/, en: (_, n, before, after) => `${n} — Alchemist: ${tDistrict(before)} → ${tDistrict(after)}`, id: (_, n, before, after) => `${n} — Alkemis: ${tDistrict(before)} → ${tDistrict(after)}` },
+  { pattern: /(.+?) — бард: убрал компаньона (.+)/, en: (_, n, t) => `${n} — Bard: removed ${t}'s companion`, id: (_, n, t) => `${n} — Pujangga: hapus companion ${t}` },
+  { pattern: /(.+?) — канонир: сжёг (.+?), разрушил (.+?) у (.+?)!/, en: (_, n, hand, d, owner) => `${n} — Cannoneer: burned ${tDistrict(hand)}, destroyed ${tDistrict(d)} on ${owner}!`, id: (_, n, hand, d, owner) => `${n} — Penembak meriam: bakar ${tDistrict(hand)}, hancurkan ${tDistrict(d)} milik ${owner}!` },
+  { pattern: /(.+?) — канонир: сжёг (.+?), повредил (.+?) у (.+?) \((\d+)→(\d+)\)/, en: (_, n, hand, d, owner, c1, c2) => `${n} — Cannoneer: burned ${tDistrict(hand)}, damaged ${tDistrict(d)} on ${owner} (${c1}→${c2})`, id: (_, n, hand, d, owner, c1, c2) => `${n} — Penembak meriam: bakar ${tDistrict(hand)}, rusak ${tDistrict(d)} milik ${owner} (${c1}→${c2})` },
+  { pattern: /(.+?) — реконструктор: восстановил (.+?)!/, en: (_, n, d) => `${n} — Reconstructor: rebuilt ${tDistrict(d)}!`, id: (_, n, d) => `${n} — Rekonstruktor: bangun ulang ${tDistrict(d)}!` },
+  { pattern: /(.+?) — сомнительный делец: всё стало (.+?)!/, en: (_, n, color) => `${n} — Dubious Dealer: everything turned ${color}!`, id: (_, n, color) => `${n} — Pedagang mencurigakan: semua jadi ${color}!` },
+  { pattern: /(.+?) — ученик чародея: построил (.+?) из сброса/, en: (_, n, d) => `${n} — Apprentice: built ${tDistrict(d)} from discard`, id: (_, n, d) => `${n} — Murid penyihir: bangun ${tDistrict(d)} dari buangan` },
+  { pattern: /(.+?) — странный торговец: продал (.+?) за (\d+)💰/, en: (_, n, d, g) => `${n} — Strange Merchant: sold ${tDistrict(d)} for ${g}💰`, id: (_, n, d, g) => `${n} — Pedagang aneh: jual ${tDistrict(d)} seharga ${g}💰` },
+  { pattern: /(.+?) — пиромант: подбросил 🔥 Пламя в руку (.+)/, en: (_, n, t) => `${n} — Pyromancer: planted 🔥 Flame in ${t}'s hand`, id: (_, n, t) => `${n} — Penyihir api: tanam 🔥 Api di tangan ${t}` },
+  { pattern: /(.+?) — пиромант: (.+?) → 🔥 Пламя/, en: (_, n, d) => `${n} — Pyromancer: ${tDistrict(d)} → 🔥 Flame`, id: (_, n, d) => `${n} — Penyihir api: ${tDistrict(d)} → 🔥 Api` },
+  { pattern: /(.+?) — снайпер: навсегда убрал (.+?) у (.+?)!/, en: (_, n, comp, t) => `${n} — Sniper: permanently removed ${comp} from ${t}!`, id: (_, n, comp, t) => `${n} — Penembak jitu: hapus permanen ${comp} dari ${t}!` },
+  { pattern: /(.+?) — фанатик солнца: заменил компаньона (.+?) на (.+)/, en: (_, n, t, c) => `${n} — Sun Fanatic: replaced ${t}'s companion with ${c}`, id: (_, n, t, c) => `${n} — Fanatik matahari: ganti companion ${t} dengan ${c}` },
+  { pattern: /(.+?) — рыбак: построил (.+?) \(2💰\)/, en: (_, n, d) => `${n} — Fisherman: built ${tDistrict(d)} (2💰)`, id: (_, n, d) => `${n} — Nelayan: bangun ${tDistrict(d)} (2💰)` },
+  { pattern: /(.+?) — неудачный маг: случайно сброшена (.+?), все постройки стали ей!/, en: (_, n, d) => `${n} — Unlucky Mage: randomly discarded ${tDistrict(d)}, all districts became it!`, id: (_, n, d) => `${n} — Penyihir sial: buang acak ${tDistrict(d)}, semua distrik jadi itu!` },
+  { pattern: /(.+?) — дизайнер: (.+?) → (.+)/, en: (_, n, before, after) => `${n} — Designer: ${tDistrict(before)} → ${tDistrict(after)}`, id: (_, n, before, after) => `${n} — Desainer: ${tDistrict(before)} → ${tDistrict(after)}` },
+  { pattern: /(.+?) — трактирщик: (.+)/, en: (_, n, rest) => `${n} — Innkeeper: ${rest}`, id: (_, n, rest) => `${n} — Penjaga penginapan: ${rest}` },
+  { pattern: /(.+?) — миротворец: (.+)/, en: (_, n, rest) => `${n} — Peacemaker: ${rest}`, id: (_, n, rest) => `${n} — Pembawa damai: ${rest}` },
+  { pattern: /(.+?) — заказчик: цель назначена/, en: (_, n) => `${n} — Contractor: target assigned`, id: (_, n) => `${n} — Kontraktor: target ditetapkan` },
+  { pattern: /(.+?) — ночная тень: убийство за 2💰\.\.\./, en: (_, n) => `${n} — Night Shadow: assassination for 2💰...`, id: (_, n) => `${n} — Bayangan malam: pembunuhan seharga 2💰...` },
+  { pattern: /(.+?) — торговец сокровищами: получена (.+)/, en: (_, n, d) => `${n} — Treasure Trader: received ${tDistrict(d)}`, id: (_, n, d) => `${n} — Pedagang harta: terima ${tDistrict(d)}` },
+
+  // Activated buildings
+  { pattern: /(.+?) — пушка: разрушил (.+?) у (.+?)!/, en: (_, n, d, t) => `${n} — Cannon: destroyed ${tDistrict(d)} on ${t}!`, id: (_, n, d, t) => `${n} — Meriam: hancurkan ${tDistrict(d)} milik ${t}!` },
+  { pattern: /(.+?) — пушка: (.+?) у (.+?) (\d+)→(\d+)/, en: (_, n, d, t, c1, c2) => `${n} — Cannon: ${tDistrict(d)} on ${t} ${c1}→${c2}`, id: (_, n, d, t, c1, c2) => `${n} — Meriam: ${tDistrict(d)} milik ${t} ${c1}→${c2}` },
+  { pattern: /🕯️ (.+?) активировал Секту: (.+?) у (.+?) превращён в Секту/, en: (_, n, d, t) => `🕯️ ${n} activated Cult: ${tDistrict(d)} on ${t} turned into Cult`, id: (_, n, d, t) => `🕯️ ${n} mengaktifkan Kultus: ${tDistrict(d)} milik ${t} jadi Kultus` },
+  { pattern: /(.+?) — склеп: уничтожен, получено 2 фиолетовые постройки/, en: (_, n) => `${n} — Crypt: destroyed, gained 2 random purple buildings`, id: (_, n) => `${n} — Makam: hancur, dapat 2 bangunan ungu acak` },
+  { pattern: /⚰️ Склеп (.+?) разрушен — получено 2 фиолетовые карты/, en: (_, n) => `⚰️ ${n}'s Crypt destroyed — gained 2 purple cards`, id: (_, n) => `⚰️ Makam ${n} hancur — dapat 2 kartu ungu` },
 ];
 
 export function tLog(message: string): string {

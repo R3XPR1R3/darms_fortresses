@@ -3,11 +3,20 @@ import type { CardColor } from "./hero.js";
 export interface DistrictCard {
   id: string;
   name: string;
+  /**
+   * Unified value: this is the card's *cost* (gold to build) AND its current HP/score
+   * once on the table. Damage decrements this number; destruction at < 1. Score sums it.
+   * Some effects (e.g. Monument on build) reset it to a special table value.
+   */
   cost: number;
-  /** Original printed cost (used for refunds/effects when current cost changes). */
+  /** Original printed cost — used for Fort refunds and Monument re-evaluation. Immutable. */
   originalCost?: number;
-  /** Current HP on the table. Defaults to cost when built. Destroyed when < 1. */
-  hp: number;
+  /**
+   * Legacy synonym kept in sync with `cost` so older readers don't crash. Treat as
+   * deprecated: new code should read/write `cost` only.
+   * @deprecated Use `cost` instead — they always carry the same value.
+   */
+  hp?: number;
   /** One or more colors. Multi-color cards count for all listed colors. */
   colors: CardColor[];
   /** Original colors before temporary effects (e.g. holy day) */
@@ -20,7 +29,7 @@ export interface DistrictCard {
   placeholder?: "purple";
 }
 
-export type SpellAbility = "ignite" | "gold_rain" | "holy_day" | "flood" | "plague";
+export type SpellAbility = "ignite" | "gold_rain" | "holy_day" | "flood" | "plague" | "fire_ritual";
 
 /** Identifiers for special purple building abilities */
 export type PurpleAbility =

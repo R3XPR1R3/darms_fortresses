@@ -264,6 +264,7 @@ export function buildDistrict(
   state: GameState,
   playerId: string,
   cardId: string,
+  targetCardId?: string,
 ): GameState | null {
   const playerIdx = state.players.findIndex((p) => p.id === playerId);
   if (playerIdx === -1) return null;
@@ -333,12 +334,11 @@ export function buildDistrict(
     return null;
   }
 
-  // Duplicate check — Official (red hero) allows duplicates; altar_darkness always allows duplicates
+  // Duplicate check — only Official companion (red hero) allows duplicates.
   const allowDuplicates =
-    card.purpleAbility === "altar_darkness"
-    || (player.companion === CompanionId.Official
-      && !player.companionDisabled
-      && heroColor === "red");
+    player.companion === CompanionId.Official
+    && !player.companionDisabled
+    && heroColor === "red";
 
   if (!allowDuplicates && player.builtDistricts.some((d) => d.name === card.name)) return null;
 
@@ -409,6 +409,46 @@ export function buildDistrict(
       log = [...log, { day: state.day, message: `🌊 ${player.name} применил Потоп: до 4 случайных кварталов у каждого вернулись в руку` }];
     } else if (card.spellAbility === "plague") {
       log = [...log, { day: state.day, message: `☣️ ${player.name} применил Чуму: эффект активен 3 дня` }];
+    } else if (card.spellAbility === "fire_ritual") {
+      // Sacrifice ONE of the caster's own built districts (chosen via targetCardId).
+      // For every gold of its cost, plant a 🔥 Flame in a random opponent's hand
+      // (each iteration rolls a fresh random opponent, so flames spread across
+      // multiple players probabilistically).
+      if (!targetCardId) return null;
+      const sacrificedIdx = newPlayers[playerIdx].builtDistricts.findIndex((d) => d.id === targetCardId);
+      if (sacrificedIdx === -1) return null;
+      const sacrificed = newPlayers[playerIdx].builtDistricts[sacrificedIdx];
+      const newDistricts = [...newPlayers[playerIdx].builtDistricts];
+      newDistricts.splice(sacrificedIdx, 1);
+      newPlayers[playerIdx] = { ...newPlayers[playerIdx], builtDistricts: newDistricts };
+      const flameCount = Math.max(0, sacrificed.cost);
+      const opponentIdxs = state.players
+        .map((_, i) => i)
+        .filter((i) => i !== playerIdx);
+      for (let i = 0; i < flameCount && opponentIdxs.length > 0; i++) {
+        const targetOpp = opponentIdxs[randomInt(0, opponentIdxs.length - 1)];
+        const flameCard: DistrictCard = {
+          id: `flame-fr-${Date.now()}-${i}-${randomInt(0, 9999)}`,
+          name: FLAME_CARD_NAME,
+          cost: 2,
+          originalCost: 2,
+          hp: 0,
+          colors: ["red"],
+          baseColors: ["red"],
+        };
+        newPlayers[targetOpp] = { ...newPlayers[targetOpp], hand: [...newPlayers[targetOpp].hand, flameCard] };
+      }
+      // Sacrificed district goes to the discard pile (so Reconstructor/Sorcerer's
+      // Apprentice could later raise it back).
+      const newDiscardPile = [...state.discardPile, sacrificed];
+      log = [...log, { day: state.day, message: `🔥 ${player.name} применил Ритуал огня: сжёг ${sacrificed.name}, разослал ${flameCount} 🔥 случайным противникам` }];
+      newPlayers[playerIdx] = {
+        ...newPlayers[playerIdx],
+        gold: player.gold - effectiveCost,
+        hand: newHand,
+        buildsRemaining: player.buildsRemaining - 1,
+      };
+      return { ...state, players: newPlayers, log, discardPile: newDiscardPile };
     }
 
     newPlayers[playerIdx] = {
@@ -420,7 +460,8 @@ export function buildDistrict(
     return { ...state, players: newPlayers, log, plagueDaysLeft: card.spellAbility === "plague" ? 3 : (state.plagueDaysLeft ?? 0) };
   }
 
-  // Monument: on table always 5 cost / 5 HP
+  // Built card: cost is the unified value (HP/score). Original cost is preserved
+  // for refunds/discounts. Monument bumps to 5 on the table (special card rule).
   let builtCard = { ...card, hp: card.cost, originalCost: card.originalCost ?? card.cost, baseColors: card.baseColors ?? card.colors };
   if (card.purpleAbility === "monument") {
     builtCard = { ...card, cost: 5, hp: 5, originalCost: card.originalCost ?? 5, baseColors: card.baseColors ?? card.colors };
@@ -662,17 +703,17 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
         const owner = plaguePlayers[picked.pIdx];
         const districts = [...owner.builtDistricts];
         const target = districts[picked.dIdx];
-        const newHp = target.hp - 1;
-        if (newHp < 1) {
+        const newCost = target.cost - 1;
+        if (newCost < 1) {
           const destroyed = districts[picked.dIdx];
           districts.splice(picked.dIdx, 1);
           plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
           state = { ...state, discardPile: [...state.discardPile, destroyed] };
           plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} разрушен ${destroyed.name}` }];
         } else {
-          districts[picked.dIdx] = { ...target, hp: newHp };
+          districts[picked.dIdx] = { ...target, cost: newCost, hp: newCost };
           plaguePlayers[picked.pIdx] = { ...owner, builtDistricts: districts };
-          plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.hp}→${newHp})` }];
+          plagueLog = [...plagueLog, { day: state.day, message: `☣️ Чума: у ${owner.name} повреждён ${target.name} (${target.cost}→${newCost})` }];
         }
       }
 
@@ -683,12 +724,15 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     state = applyTreasurerEndOfDay(state, rng);
     state = applyRoyalGuardEndOfDay(state);
 
-    // Wake all sleeping companions back to available for next day.
+    // Wake companions whose sleepEndDay has reached today. Companions picked today
+    // were given sleepEndDay = state.day + 1, so they stay asleep through tomorrow.
     {
       const wakePlayers = state.players.map((p) => ({
         ...p,
         companionDeck: p.companionDeck.map((s) =>
-          s.state === "sleeping" ? { ...s, state: "available" as const } : s,
+          s.state === "sleeping" && s.sleepEndDay !== undefined && s.sleepEndDay <= state.day
+            ? { id: s.id, state: "available" as const }
+            : s,
         ),
       }));
       state = { ...state, players: wakePlayers };

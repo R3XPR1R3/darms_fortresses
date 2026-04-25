@@ -232,17 +232,17 @@ function useCompanion(
       if (damageable.length === 0) return null;
       const distIdx = damageable[rng.int(0, damageable.length - 1)].i;
       const targetDist = opp.builtDistricts[distIdx];
-      const newHp = targetDist.hp - 2;
+      const newCost = targetDist.cost - 2;
       const newOppDistricts = [...opp.builtDistricts];
       let discardPile = state.discardPile;
       let msg: string;
-      if (newHp < 1) {
+      if (newCost < 1) {
         newOppDistricts.splice(distIdx, 1);
         discardPile = [...discardPile, targetDist];
         msg = `${player.name} — канонир: сжёг ${burnedCard.name}, разрушил ${targetDist.name} у ${opp.name}!`;
       } else {
-        newOppDistricts[distIdx] = { ...targetDist, hp: newHp };
-        msg = `${player.name} — канонир: сжёг ${burnedCard.name}, повредил ${targetDist.name} у ${opp.name} (HP ${targetDist.hp}→${newHp})`;
+        newOppDistricts[distIdx] = { ...targetDist, cost: newCost, hp: newCost };
+        msg = `${player.name} — канонир: сжёг ${burnedCard.name}, повредил ${targetDist.name} у ${opp.name} (${targetDist.cost}→${newCost})`;
       }
       newPlayers[playerIdx] = { ...player, hand: newHand, companionUsed: true };
       newPlayers[oppPick.i] = { ...opp, builtDistricts: newOppDistricts };
@@ -324,12 +324,18 @@ function useCompanion(
     }
 
     case CompanionId.Pyromancer: {
-      // Burns a card from hand and replaces it with a Flame card
-      if (!targetCardId) return null;
-      const cardIdx = player.hand.findIndex((c) => c.id === targetCardId);
-      if (cardIdx === -1) return null;
-      const burned = player.hand[cardIdx];
-      const newHand = [...player.hand];
+      // Burns a random card from any chosen player's hand (revealed or not).
+      // The Pyromancer's owner picks the target player (targetPlayerId) — the
+      // burned card is rolled randomly from that player's hand to keep things
+      // hidden if the target hasn't acted yet. Replaces the rolled card with 🔥 Flame.
+      if (!targetPlayerId) return null;
+      const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
+      if (targetIdx === -1) return null;
+      const target = state.players[targetIdx];
+      if (target.hand.length === 0) return null;
+      const cardIdx = rng.int(0, target.hand.length - 1);
+      const burned = target.hand[cardIdx];
+      const newTargetHand = [...target.hand];
       const flameCard: DistrictCard = {
         id: `flame-${Date.now()}-${rng.int(0, 9999)}`,
         name: FLAME_CARD_NAME,
@@ -339,9 +345,14 @@ function useCompanion(
         colors: ["red"],
         baseColors: ["red"],
       };
-      newHand[cardIdx] = flameCard;
-      newPlayers[playerIdx] = { ...player, hand: newHand, companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — пиромант: ${burned.name} → ${FLAME_CARD_NAME}`), rng: rng.getSeed() };
+      newTargetHand[cardIdx] = flameCard;
+      newPlayers[targetIdx] = { ...target, hand: newTargetHand };
+      newPlayers[playerIdx] = { ...newPlayers[playerIdx], companionUsed: true };
+      const targetIsSelf = targetIdx === playerIdx;
+      const msg = targetIsSelf
+        ? `${player.name} — пиромант: ${burned.name} → ${FLAME_CARD_NAME}`
+        : `${player.name} — пиромант: подбросил ${FLAME_CARD_NAME} в руку ${target.name}`;
+      return { ...addLog({ ...state, players: newPlayers }, msg), rng: rng.getSeed() };
     }
 
     case CompanionId.SunFanatic: {
@@ -617,7 +628,7 @@ export function processAction(state: GameState, action: GameAction): GameState |
       return finish(pickIncomeCard(state, action.playerId, action.cardId));
 
     case "build": {
-      return finish(buildDistrict(state, action.playerId, action.cardId));
+      return finish(buildDistrict(state, action.playerId, action.cardId, action.targetCardId));
     }
 
     case "ability":
@@ -682,17 +693,17 @@ function activateBuilding(
       if (validTargets.length === 0) return null;
       const distIdx = validTargets[rng.int(0, validTargets.length - 1)].i;
       const dist = target.builtDistricts[distIdx];
-      const newHp = dist.hp - 1;
+      const newCost = dist.cost - 1;
       const newOppDistricts = [...target.builtDistricts];
       let discardPile = state.discardPile;
       let msg: string;
-      if (newHp < 1) {
+      if (newCost < 1) {
         newOppDistricts.splice(distIdx, 1);
         discardPile = [...discardPile, dist];
         msg = `${player.name} — пушка: разрушил ${dist.name} у ${target.name}!`;
       } else {
-        newOppDistricts[distIdx] = { ...dist, hp: newHp };
-        msg = `${player.name} — пушка: ${dist.name} у ${target.name} HP ${dist.hp}→${newHp}`;
+        newOppDistricts[distIdx] = { ...dist, cost: newCost, hp: newCost };
+        msg = `${player.name} — пушка: ${dist.name} у ${target.name} ${dist.cost}→${newCost}`;
       }
       newPlayers[playerIdx] = { ...player, gold: player.gold - 1 };
       newPlayers[opp.i] = { ...target, builtDistricts: newOppDistricts };

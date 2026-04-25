@@ -85,7 +85,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.StrangeMerchant, name: "Странный торговец", description: "Сбрасывает карту из руки и получает её стоимость (только 🟢). Уходит", emoji: "🧳", passive: false, targetType: "own_hand_card", heroColor: "green", leavesPool: true },
   { id: CompanionId.Gravedigger, name: "Могильщик", description: "При убийстве героя — получаете его способность", emoji: "⚰️", passive: true },
   { id: CompanionId.Jester, name: "Шут", description: "Перемешивает карты всех игроков (только 🟡). Дебафф!", emoji: "🤡", passive: true, heroColor: "yellow" },
-  { id: CompanionId.Pyromancer, name: "Пиромант", description: "Карта из руки → 🔥Пламя. В конце хода пламя множится. Дебафф!", emoji: "🔥", passive: false, targetType: "own_hand_card" },
+  { id: CompanionId.Pyromancer, name: "Пиромант", description: "Подбросьте 🔥Пламя в руку любого игрока (случайной картой). Пламя множится в конце хода. Дебафф!", emoji: "🔥", passive: false, targetType: "player" },
   { id: CompanionId.SunFanatic, name: "Фанатик солнца", description: "Только синие постройки, или 2💰 чтобы заменить компаньона следующего (только 🔵)", emoji: "🌅", passive: false, heroColor: "blue", useCost: 2 },
   { id: CompanionId.Sniper, name: "Снайпер", description: "Навсегда убирает компаньона противника из пула", emoji: "🎯", passive: false, targetType: "player" },
   { id: CompanionId.Knight, name: "Рыцарь", description: "Забирает 1💰 у богатейшего, отдаёт беднейшему", emoji: "⚜️", passive: true },
