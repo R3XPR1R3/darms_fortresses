@@ -125,12 +125,25 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
   // --- Passive companion bonuses ---
   const cp = newPlayers[playerIdx];
 
-  // Artist: all 4 colors on table → +4 gold
+  // Farmer: scaling early-game stipend. If you have NO building of cost ≥ 3,
+  // +2 gold at the start of your turn. Stops paying out once you've built
+  // anything sizeable, so it's a comeback / catch-up tool, not perma-income.
+  if (cp.companion === CompanionId.Farmer && !cp.companionDisabled) {
+    const hasBigBuilding = cp.builtDistricts.some((d) => d.cost >= 3);
+    if (!hasBigBuilding) {
+      newPlayers[playerIdx] = { ...cp, gold: cp.gold + 2 };
+      log = addLog({ ...state, log }, `${cp.name} — фермер: нет построек ≥3💰 → +2💰`);
+    }
+  }
+
+  // Artist: all 4 colors on table → +6 gold (the all-colors condition is
+  // expensive to set up — it usually delays a turn or two, so the payoff
+  // is bumped from +4 to +6 to make the build worth pursuing).
   if (cp.companion === CompanionId.Artist && !cp.companionDisabled) {
     const colors = new Set(cp.builtDistricts.flatMap((d) => d.colors));
     if (colors.has("yellow") && colors.has("blue") && colors.has("green") && colors.has("red")) {
-      newPlayers[playerIdx] = { ...cp, gold: cp.gold + 4 };
-      log = addLog({ ...state, log }, `${cp.name} — художник: все 4 цвета → +4💰`);
+      newPlayers[playerIdx] = { ...cp, gold: cp.gold + 6 };
+      log = addLog({ ...state, log }, `${cp.name} — художник: все 4 цвета → +6💰`);
     }
   }
 
@@ -144,7 +157,10 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
     }
   }
 
-  // Knight: takes 1 gold from richest, gives to poorest
+  // Knight: takes UP TO 3 gold from richest and hands the same amount to the
+  // poorest. If the richest has fewer than 3, everyone they have is taken
+  // (transfer = min(3, richest.gold)), so the effect scales gracefully early
+  // game when nobody's rich yet but still bites at peak gold.
   if (cp.companion === CompanionId.Knight && !cp.companionDisabled) {
     let richestIdx = -1, poorestIdx = -1;
     let maxGold = -1, minGold = Infinity;
@@ -153,13 +169,16 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
       if (newPlayers[j].gold < minGold) { minGold = newPlayers[j].gold; poorestIdx = j; }
     }
     if (richestIdx !== -1 && poorestIdx !== -1 && richestIdx !== poorestIdx && maxGold > 0) {
-      newPlayers[richestIdx] = { ...newPlayers[richestIdx], gold: newPlayers[richestIdx].gold - 1 };
-      newPlayers[poorestIdx] = { ...newPlayers[poorestIdx], gold: newPlayers[poorestIdx].gold + 1 };
-      log = addLog({ ...state, log }, `${cp.name} — рыцарь: ${newPlayers[richestIdx].name} −1💰 → ${newPlayers[poorestIdx].name} +1💰`);
+      const transfer = Math.min(3, maxGold);
+      newPlayers[richestIdx] = { ...newPlayers[richestIdx], gold: newPlayers[richestIdx].gold - transfer };
+      newPlayers[poorestIdx] = { ...newPlayers[poorestIdx], gold: newPlayers[poorestIdx].gold + transfer };
+      log = addLog({ ...state, log }, `${cp.name} — рыцарь: ${newPlayers[richestIdx].name} −${transfer}💰 → ${newPlayers[poorestIdx].name} +${transfer}💰`);
     }
   }
 
-  // Nobility: richest gets +1 card, non-richest get -1 card -1 gold
+  // Nobility: richest gets +4 cards, non-richest get -1 card AND -2 gold.
+  // Steeper swing than the old +1 / -1 / -1g version to make the "stay
+  // richest" pressure actually mean something — being a step behind costs.
   if (cp.companion === CompanionId.Nobility && !cp.companionDisabled) {
     let maxGold = -1;
     let richestIdx = -1;
@@ -167,12 +186,13 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
       if (newPlayers[j].gold > maxGold) { maxGold = newPlayers[j].gold; richestIdx = j; }
     }
     if (richestIdx !== -1) {
-      // Richest gets +1 card
-      if (newDeck.length > 0) {
-        const drawn = newDeck.splice(0, 1);
+      // Richest gets +4 cards (capped by deck supply + hand limit elsewhere).
+      const drawCount = Math.min(4, newDeck.length);
+      if (drawCount > 0) {
+        const drawn = newDeck.splice(0, drawCount);
         newPlayers[richestIdx] = { ...newPlayers[richestIdx], hand: [...newPlayers[richestIdx].hand, ...drawn] };
       }
-      // Non-richest lose 1 card and 1 gold
+      // Non-richest lose 1 card and 2 gold.
       for (let j = 0; j < newPlayers.length; j++) {
         if (j === richestIdx) continue;
         const p = newPlayers[j];
@@ -180,9 +200,9 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
         if (newHand.length > 0) {
           newHand.splice(rng.int(0, newHand.length - 1), 1);
         }
-        newPlayers[j] = { ...p, hand: newHand, gold: Math.max(0, p.gold - 1) };
+        newPlayers[j] = { ...p, hand: newHand, gold: Math.max(0, p.gold - 2) };
       }
-      log = addLog({ ...state, log }, `${cp.name} — знать: ${newPlayers[richestIdx].name} +1🃏, остальные −1🃏 −1💰`);
+      log = addLog({ ...state, log }, `${cp.name} — знать: ${newPlayers[richestIdx].name} +${drawCount}🃏, остальные −1🃏 −2💰`);
     }
   }
 

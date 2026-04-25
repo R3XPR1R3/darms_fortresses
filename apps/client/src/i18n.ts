@@ -407,7 +407,7 @@ const COMPANION_NAMES: Record<string, TranslationEntry> = {
 };
 
 const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
-  farmer: { en: "+1💰", ru: "+1💰", id: "+1💰" },
+  farmer: { en: "{kw:passive} +2💰 at turn start if you have no district ≥ 3💰", ru: "{kw:passive} +2💰 в начале хода если нет построек ≥ 3💰", id: "{kw:passive} +2💰 di awal giliran jika tidak ada distrik ≥ 3💰" },
   treasurer: { en: "{kw:passive} End of day: richest gives you 1💰 and 1🃏. 🟢 only", ru: "{kw:passive} Конец дня: богатейший даёт 1💰 и 1🃏. Только 🟢", id: "{kw:passive} Akhir hari: pemain terkaya memberi 1💰 dan 1🃏. Hanya 🟢" },
   hunter: { en: "2💰: opponent discards 2 random cards", ru: "За 2💰: противник сбрасывает 2 случайные карты", id: "2💰: lawan membuang 2 kartu acak" },
   mason: { en: "1💰: split an expensive card into two cheaper ones", ru: "За 1💰: разделяет дорогую карту из руки на две", id: "1💰: pisahkan kartu mahal menjadi dua kartu murah" },
@@ -418,7 +418,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   courier: { en: "{kw:passive} Hero speed −2", ru: "{kw:passive} Скорость героя −2", id: "{kw:passive} Kecepatan hero −2" },
   royal_guard: { en: "{kw:passive} +2💰 per 🟡 district. Next draft: pick from all 8 heroes. 🟡 only", ru: "{kw:passive} +2💰 за 🟡 квартал. Следующий драфт: выбор из 8 героев. Только 🟡", id: "{kw:passive} +2💰 per distrik 🟡. Draft berikut: pilih dari 8 hero. Hanya 🟡" },
   swindler: { en: "{kw:passive} Income gives both options + extra draw", ru: "{kw:passive} Доход даёт оба варианта + ещё карту", id: "{kw:passive} Pendapatan memberi kedua opsi + 1 kartu ekstra" },
-  artist: { en: "{kw:passive} All 4 colors on board → +4💰", ru: "{kw:passive} Все 4 цвета на столе → +4💰", id: "{kw:passive} Ke-4 warna di meja → +4💰" },
+  artist: { en: "{kw:passive} All 4 colors on board → +6💰", ru: "{kw:passive} Все 4 цвета на столе → +6💰", id: "{kw:passive} Ke-4 warna di meja → +6💰" },
   druid: { en: "{kw:passive} All drawn cards gain a random second color", ru: "{kw:passive} Все взятые карты становятся двухцветными", id: "{kw:passive} Kartu yang diambil mendapat warna kedua acak" },
   marauder: { en: "{kw:passive} On {kw:kill}: steal victim's cards", ru: "{kw:passive} При {kw:kill}: крадёте карты жертвы", id: "{kw:passive} Saat {kw:kill}: curi kartu korban" },
   bard: { en: "Remove a player's companion permanently (cost grows)", ru: "Убирает компаньона игрока навсегда (цена растёт)", id: "Hapus companion pemain secara permanen (harga naik)" },
@@ -433,10 +433,10 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   pyromancer: { en: "Plant 🔥 Flame in any player's hand (random card). Flames multiply each turn!", ru: "Подбрасывает 🔥 Пламя в руку любого игрока (случайной картой). Пламя множится каждый ход!", id: "Tanam 🔥 Api di tangan pemain mana pun (kartu acak). Api berkembang tiap giliran!" },
   sun_fanatic: { en: "Only blue buildings, or 2💰 to replace next player's companion. 🔵 only", ru: "Только синие постройки, или 2💰 заменить компаньона следующего. Только 🔵", id: "Hanya bangunan biru, atau 2💰 untuk ganti companion pemain berikut. Hanya 🔵" },
   sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}", id: "Hapus permanen companion lawan dari pool. {kw:leaves}" },
-  knight: { en: "{kw:passive} Richest loses 1💰 → poorest gains 1💰", ru: "{kw:passive} Богатейший теряет 1💰 → беднейший получает 1💰", id: "{kw:passive} Pemain terkaya kehilangan 1💰 → termiskin dapat 1💰" },
+  knight: { en: "{kw:passive} Richest loses up to 3💰 (all they have if less) → poorest gains the same", ru: "{kw:passive} Богатейший теряет до 3💰 (всё что есть если меньше) → беднейший получает столько же", id: "{kw:passive} Terkaya kehilangan hingga 3💰 (semuanya kalau kurang) → termiskin dapat jumlah yang sama" },
   fisherman: { en: "1💰: build a random cost-2 district (allows duplicates)", ru: "За 1💰: строит случайный квартал за 2 (дубликаты OK)", id: "1💰: bangun distrik acak berharga 2 (duplikat boleh)" },
-  unlucky_mage: { en: "3💰: discard a RANDOM hand card — your districts take its identity (name, colors, ability) but keep their own value. {kw:leaves}", ru: "За 3💰: сбрасывает СЛУЧАЙНУЮ карту из руки — ваши постройки получают её имя/цвета/способность, но сохраняют свою цену. {kw:leaves}", id: "3💰: buang kartu ACAK dari tangan — distrik Anda ambil identitasnya (nama/warna/kemampuan) tapi tetap nilai sendiri. {kw:leaves}" },
-  nobility: { en: "{kw:passive} Richest → +1🃏. Not richest → −1🃏 −1💰", ru: "{kw:passive} Богатейший → +1🃏. Не богатейший → −1🃏 −1💰", id: "{kw:passive} Terkaya → +1🃏. Bukan terkaya → −1🃏 −1💰" },
+  unlucky_mage: { en: "3💰: discard a RANDOM hand card — all your districts become EXACT copies of it. {kw:leaves}", ru: "За 3💰: сбрасывает СЛУЧАЙНУЮ карту из руки — все ваши постройки становятся её ТОЧНОЙ копией. {kw:leaves}", id: "3💰: buang kartu ACAK dari tangan — semua distrik Anda jadi salinan PERSIS. {kw:leaves}" },
+  nobility: { en: "{kw:passive} Richest → +4🃏. Not richest → −1🃏 −2💰", ru: "{kw:passive} Богатейший → +4🃏. Не богатейший → −1🃏 −2💰", id: "{kw:passive} Terkaya → +4🃏. Bukan terkaya → −1🃏 −2💰" },
   treasure_trader: { en: "Gain a random purple building in hand. {kw:leaves}", ru: "Даёт случайную фиолетовую постройку в руку. {kw:leaves}", id: "Dapatkan bangunan ungu acak di tangan. {kw:leaves}" },
   designer: { en: "Turn one of your districts into a random purple building", ru: "Превращает выбранный ваш район в случайную фиолетовую постройку", id: "Ubah distrik Anda jadi bangunan ungu acak" },
   innkeeper: { en: "Reveal all opponents' purple cards in hand", ru: "Показывает все фиолетовые карты противников в руке", id: "Tampilkan semua kartu ungu di tangan lawan" },
@@ -573,7 +573,10 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /(.+?) — шут: все карты перемешаны!/, en: (_, n) => `${n} — Jester: all hands shuffled!`, id: (_, n) => `${n} — Badut: semua tangan diacak!` },
 
   // Companion uses
-  { pattern: /(.+?) — фермер приносит \+1 золото/, en: (_, n) => `${n} — Farmer brings +1 gold`, id: (_, n) => `${n} — Petani membawa +1 emas` },
+  { pattern: /(.+?) — фермер: нет построек ≥3💰 → \+(\d+)💰/, en: (_, n, g) => `${n} — Farmer: no districts ≥3💰 → +${g}💰`, id: (_, n, g) => `${n} — Petani: tidak ada distrik ≥3💰 → +${g}💰` },
+  { pattern: /(.+?) — рыцарь: (.+?) −(\d+)💰 → (.+?) \+(\d+)💰/, en: (_, n, rich, lost, poor, got) => `${n} — Knight: ${rich} −${lost}💰 → ${poor} +${got}💰`, id: (_, n, rich, lost, poor, got) => `${n} — Ksatria: ${rich} −${lost}💰 → ${poor} +${got}💰` },
+  { pattern: /(.+?) — художник: все 4 цвета → \+(\d+)💰/, en: (_, n, g) => `${n} — Artist: all 4 colors → +${g}💰`, id: (_, n, g) => `${n} — Seniman: 4 warna → +${g}💰` },
+  { pattern: /(.+?) — знать: (.+?) \+(\d+)🃏, остальные −1🃏 −2💰/, en: (_, n, rich, c) => `${n} — Nobility: ${rich} +${c}🃏, others −1🃏 −2💰`, id: (_, n, rich, c) => `${n} — Bangsawan: ${rich} +${c}🃏, lainnya −1🃏 −2💰` },
   { pattern: /(.+?) — охотник: (.+?) сбросил (\d+) карт/, en: (_, n, t, c) => `${n} — Hunter: ${t} discarded ${c} cards`, id: (_, n, t, c) => `${n} — Pemburu: ${t} membuang ${c} kartu` },
   { pattern: /(.+?) — каменщик: (.+)/, en: (_, n, rest) => `${n} — Mason: ${rest}`, id: (_, n, rest) => `${n} — Tukang batu: ${rest}` },
   { pattern: /(.+?) — диверсант: компаньон (.+?) отключён на сегодня/, en: (_, n, t) => `${n} — Saboteur: ${t}'s companion disabled for today`, id: (_, n, t) => `${n} — Penyabotase: companion ${t} dinonaktifkan hari ini` },

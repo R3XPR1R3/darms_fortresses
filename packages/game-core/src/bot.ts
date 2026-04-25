@@ -356,8 +356,7 @@ function pickCompanionAction(
   const opponents = state.players.filter((p, i) => i !== playerIdx && !p.assassinated);
 
   switch (player.companion) {
-    case CompanionId.Farmer:
-      return { type: "use_companion", playerId: player.id };
+    // Farmer is passive — no use_companion action needed.
 
     case CompanionId.Hunter: {
       if (player.gold < 2) return null;

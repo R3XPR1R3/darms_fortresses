@@ -61,7 +61,7 @@ export interface CompanionDefinition {
 
 export const COMPANIONS: readonly CompanionDefinition[] = [
   // --- Wave 1 ---
-  { id: CompanionId.Farmer, name: "Фермер", description: "+1 золото", emoji: "🧑‍🌾", passive: false },
+  { id: CompanionId.Farmer, name: "Фермер", description: "Если у вас нет построек дороже 2💰 — +2💰 в начале хода (пассив)", emoji: "🧑‍🌾", passive: true },
   { id: CompanionId.Treasurer, name: "Торговец", description: "В конце дня богатейший даёт вам 1💰 и 1🃏 (только 🟢)", emoji: "💰", passive: true, heroColor: "green", indicatorColor: "#2ecc71" },
   { id: CompanionId.Hunter, name: "Охотник", description: "За 2💰: противник сбрасывает 2 случайные карты", emoji: "🏹", passive: false, targetType: "player", useCost: 2 },
   { id: CompanionId.Mason, name: "Каменщик", description: "За 1💰: разделяет дорогую карту из руки на две", emoji: "🧱", passive: false, useCost: 1 },
@@ -72,7 +72,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Courier, name: "Курьер", description: "Скорость героя −2", emoji: "📨", passive: true },
   { id: CompanionId.RoyalGuard, name: "Королевский страж", description: "+2💰 за жёлтый квартал. Следующий драфт: выбор из 8 (только 🟡)", emoji: "🛡️", passive: true, heroColor: "yellow", indicatorColor: "#f1c40f" },
   { id: CompanionId.Swindler, name: "Шулер", description: "Доход даёт оба варианта + ещё одно взятие", emoji: "🎰", passive: true },
-  { id: CompanionId.Artist, name: "Художник", description: "Все 4 цвета на столе → +4💰", emoji: "🎨", passive: true },
+  { id: CompanionId.Artist, name: "Художник", description: "Все 4 цвета на столе → +6💰", emoji: "🎨", passive: true },
   { id: CompanionId.Druid, name: "Друид", description: "Все взятые карты становятся двухцветными", emoji: "🌿", passive: true },
   { id: CompanionId.Marauder, name: "Мародёр", description: "При убийстве героя — крадёте его карты", emoji: "⚔️", passive: true },
   { id: CompanionId.Bard, name: "Бард", description: "Убирает компаньона выбранного игрока (цена растёт)", emoji: "🎵", passive: false, targetType: "player", useCost: 1 },
@@ -88,10 +88,10 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Pyromancer, name: "Пиромант", description: "Подбросьте 🔥Пламя в руку любого игрока (случайной картой). Пламя множится в конце хода. Дебафф!", emoji: "🔥", passive: false, targetType: "player" },
   { id: CompanionId.SunFanatic, name: "Фанатик солнца", description: "Только синие постройки, или 2💰 чтобы заменить компаньона следующего (только 🔵)", emoji: "🌅", passive: false, heroColor: "blue", useCost: 2 },
   { id: CompanionId.Sniper, name: "Снайпер", description: "Навсегда убирает компаньона противника из пула", emoji: "🎯", passive: false, targetType: "player" },
-  { id: CompanionId.Knight, name: "Рыцарь", description: "Забирает 1💰 у богатейшего, отдаёт беднейшему", emoji: "⚜️", passive: true },
+  { id: CompanionId.Knight, name: "Рыцарь", description: "Забирает до 3💰 у богатейшего и отдаёт беднейшему (всё что есть, если меньше 3)", emoji: "⚜️", passive: true },
   { id: CompanionId.Fisherman, name: "Рыбак", description: "За 1💰 строит случайную постройку за 2 (дубликаты)", emoji: "🐟", passive: false, useCost: 1 },
-  { id: CompanionId.UnluckyMage, name: "Неудачный маг", description: "За 3💰: сбрасывает случайную карту из руки — ваши постройки получают её имя/цвета/способность, но сохраняют свою цену. Уходит из пула после использования.", emoji: "💫", passive: false, useCost: 3, leavesPool: true },
-  { id: CompanionId.Nobility, name: "Знать", description: "Самый богатый → +1🃏. Не самый богатый → −1🃏 и −1💰", emoji: "👑", passive: true },
+  { id: CompanionId.UnluckyMage, name: "Неудачный маг", description: "За 3💰: сбрасывает случайную карту из руки — все ваши постройки становятся её точной копией. Уходит из пула после использования.", emoji: "💫", passive: false, useCost: 3, leavesPool: true },
+  { id: CompanionId.Nobility, name: "Знать", description: "Самый богатый → +4🃏. Не самый богатый → −1🃏 и −2💰", emoji: "👑", passive: true },
   // --- Wave 3 (purple-themed) ---
   { id: CompanionId.TreasureTrader, name: "Торговец сокровищами", description: "Даёт случайную фиолетовую постройку в руку. Уходит из пула", emoji: "💎", passive: false, useCost: 0, leavesPool: true },
   { id: CompanionId.Designer, name: "Дизайнер", description: "Выбранный ваш район превращается в случайную фиолетовую постройку", emoji: "📐", passive: false, targetType: "own_card" },

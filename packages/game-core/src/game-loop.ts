@@ -1,5 +1,5 @@
 import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
-import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, WIN_DISTRICTS } from "@darms/shared-types";
+import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, MAX_GOLD, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, companionSkip } from "./draft.js";
 import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer, canAddDistrict, pushBuiltDistrict, markCompanionGone } from "./turns.js";
@@ -10,6 +10,20 @@ import { generateRandomCard, generateDifferentColorCard, generateCard } from "./
 
 function addLog(state: GameState, message: string): GameState {
   return { ...state, log: [...state.log, { day: state.day, message }] };
+}
+
+/** Trim every player's gold to MAX_GOLD. Called at the action boundary so any
+ *  source — passive income, companion effects, robberies, hero ability, mine,
+ *  treasurer end-of-day — gets capped without each call site needing to know. */
+function enforceGoldCap(state: GameState): GameState {
+  let changed = false;
+  const players = state.players.map((p) => {
+    if (p.gold <= MAX_GOLD) return p;
+    changed = true;
+    return { ...p, gold: MAX_GOLD };
+  });
+  if (!changed) return state;
+  return { ...state, players };
 }
 
 function enforceHandLimit(state: GameState): GameState {
@@ -79,10 +93,8 @@ function useCompanion(
   let newState = state;
 
   switch (player.companion) {
-    case CompanionId.Farmer: {
-      newPlayers[playerIdx] = { ...player, gold: player.gold + 1, companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers, rng: rng.getSeed() }, `${player.name} — фермер приносит +1 золото`), rng: rng.getSeed() };
-    }
+    // Farmer is passive now (handled in applyPassiveAbility on turn start) —
+    // intentionally not callable via use_companion any more.
 
     case CompanionId.Hunter: {
       // Costs 2 gold, target opponent discards 2 random cards
@@ -410,13 +422,15 @@ function useCompanion(
     }
 
     case CompanionId.Fisherman: {
-      // For 1 gold, builds a random cost-2 district (allows duplicates)
-      if (player.gold < 1) return null;
+      // For 2 gold, builds a random cost-2 district (allows duplicates).
+      // Net-zero on resources (2💰 in, 2💰 of value out) but bypasses the
+      // duplicate rule and can land you a colour you're missing.
+      if (player.gold < 2) return null;
       if (!canAddDistrict(player)) return null;
       const newCard = generateRandomCard(2, rng);
       newCard.hp = 2;
       newPlayers[playerIdx] = pushBuiltDistrict(
-        { ...player, gold: player.gold - 1, companionUsed: true },
+        { ...player, gold: player.gold - 2, companionUsed: true },
         newCard,
       );
       let s = addLog({ ...state, players: newPlayers }, `${player.name} — рыбак: построил ${newCard.name} (2💰)`);
@@ -425,13 +439,14 @@ function useCompanion(
     }
 
     case CompanionId.UnluckyMage: {
-      // Once per game (leavesPool) and costs 3💰. The sacrificed card is chosen
-      // AT RANDOM from hand — the player has no say. All own built districts
-      // take on the sacrificed card's IDENTITY (name, colors, purpleAbility,
-      // spellAbility), but each district KEEPS ITS OWN current cost (= HP /
-      // value). The 4-altar alt-win still triggers if the random roll lands on
-      // an altar; the 3-gold cost + once-per-game gate stops the trick from
-      // being spammed across the match.
+      // 3💰 once per game (leavesPool). The sacrificed card is chosen AT RANDOM
+      // from hand — the player has no say. Every own built district becomes a
+      // FULL COPY of the rolled card: name, colors, purpleAbility, spellAbility
+      // AND cost/HP/value. The 4-altar alt-win still triggers when the roll
+      // lands on an altar; the 3-gold cost + once-per-game gate is the
+      // balancing mechanism. Keeps each district's ORIGINAL printed cost as
+      // the new originalCost (reset baseline) so Fort refunds work correctly
+      // for any subsequent destruction.
       if (player.gold < 3) return null;
       if (player.hand.length === 0) return null;
       const cardIdx = rng.int(0, player.hand.length - 1);
@@ -440,9 +455,9 @@ function useCompanion(
       newHand.splice(cardIdx, 1);
       const newDistricts = player.builtDistricts.map((d) => ({
         id: d.id,
-        cost: d.cost,                              // preserve own current value
-        hp: d.cost,                                // legacy alias kept in sync
-        originalCost: d.originalCost ?? d.cost,    // keep refund baseline
+        cost: template.cost,
+        hp: template.cost,
+        originalCost: template.originalCost ?? template.cost,
         name: template.name,
         colors: [...template.colors],
         baseColors: template.baseColors ? [...template.baseColors] : [...template.colors],
@@ -453,7 +468,7 @@ function useCompanion(
         { ...player, gold: player.gold - 3, hand: newHand, builtDistricts: newDistricts, companionUsed: true },
         CompanionId.UnluckyMage,
       );
-      let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: случайно сброшена ${template.name}, все постройки стали ей!`);
+      let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: случайно сброшена ${template.name}, все постройки стали её точной копией!`);
       s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);
     }
@@ -566,6 +581,7 @@ function useCompanion(
     }
 
     // Passive companions — should not be used via action
+    case CompanionId.Farmer:
     case CompanionId.Treasurer:
     case CompanionId.Official:
     case CompanionId.SunPriestess:
@@ -594,7 +610,7 @@ export function processAction(state: GameState, action: GameAction): GameState |
   const rng = createRng(state.rng);
   const finish = (next: GameState | null): GameState | null => {
     if (!next) return null;
-    return enforceHandLimit(next);
+    return enforceHandLimit(enforceGoldCap(next));
   };
 
   switch (action.type) {
