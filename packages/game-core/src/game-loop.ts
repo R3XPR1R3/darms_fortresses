@@ -425,15 +425,14 @@ function useCompanion(
     }
 
     case CompanionId.UnluckyMage: {
-      // "Unlucky" because the sacrificed card is chosen AT RANDOM from hand —
-      // the player has no say. All own built districts then take on the
-      // sacrificed card's IDENTITY (name, colors, purpleAbility, spellAbility),
-      // but each district KEEPS ITS OWN current cost / HP / value. Otherwise
-      // sacrificing an 8-cost City Gates from hand would inflate every cheap
-      // district to 8 score, and the companion turns into a strict upgrade
-      // instead of the debuff it's labelled as. With the cap, the alt-win
-      // path (sacrifice an altar to convert all districts into altars) still
-      // works and counts toward the 4-altar win, but you don't multiply value.
+      // Once per game (leavesPool) and costs 3💰. The sacrificed card is chosen
+      // AT RANDOM from hand — the player has no say. All own built districts
+      // take on the sacrificed card's IDENTITY (name, colors, purpleAbility,
+      // spellAbility), but each district KEEPS ITS OWN current cost (= HP /
+      // value). The 4-altar alt-win still triggers if the random roll lands on
+      // an altar; the 3-gold cost + once-per-game gate stops the trick from
+      // being spammed across the match.
+      if (player.gold < 3) return null;
       if (player.hand.length === 0) return null;
       const cardIdx = rng.int(0, player.hand.length - 1);
       const template = player.hand[cardIdx];
@@ -450,7 +449,10 @@ function useCompanion(
         purpleAbility: template.purpleAbility,
         spellAbility: template.spellAbility,
       }));
-      newPlayers[playerIdx] = { ...player, hand: newHand, builtDistricts: newDistricts, companionUsed: true };
+      newPlayers[playerIdx] = markCompanionGone(
+        { ...player, gold: player.gold - 3, hand: newHand, builtDistricts: newDistricts, companionUsed: true },
+        CompanionId.UnluckyMage,
+      );
       let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: случайно сброшена ${template.name}, все постройки стали ей!`);
       s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);
