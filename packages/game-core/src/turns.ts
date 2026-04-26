@@ -691,46 +691,21 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   state = { ...state, players, log };
 
   if (nextIdx >= turnOrder.length) {
-    // End-of-day flame/fire resolution:
-    //   - Each remaining Flame burns 1 random non-flame, non-fire hand card
-    //     (the Flame itself stays in hand; you must clear it via "play for 1💰"
-    //     to stop future-day burns or feed the combine).
-    //   - All Fires self-discard (their per-turn burn already happened during
-    //     each turn this day).
+    // End-of-day fire cleanup: every Fire still in a hand self-discards.
+    // Flames stay put — they don't do anything on their own; they just clog
+    // the hand until cleared (1💰) or combined (3 → 1 Fire) on a turn end.
     {
-      const flamePlayers = [...state.players];
+      const firePlayers = [...state.players];
       let fLog = state.log;
-      for (let i = 0; i < flamePlayers.length; i++) {
-        const p = flamePlayers[i];
-        const flameCount = p.hand.filter((c) => c.name === FLAME_CARD_NAME).length;
-        const hasFire = p.hand.some((c) => c.name === FIRE_CARD_NAME);
-        if (flameCount === 0 && !hasFire) continue;
-        let hand = [...p.hand];
-        const burnedNames: string[] = [];
-        for (let f = 0; f < flameCount; f++) {
-          const burnableIdxs: number[] = [];
-          for (let h = 0; h < hand.length; h++) {
-            if (hand[h].name !== FLAME_CARD_NAME && hand[h].name !== FIRE_CARD_NAME) {
-              burnableIdxs.push(h);
-            }
-          }
-          if (burnableIdxs.length === 0) break;
-          const pickIdx = burnableIdxs[rng.int(0, burnableIdxs.length - 1)];
-          burnedNames.push(hand[pickIdx].name);
-          hand.splice(pickIdx, 1);
-        }
-        // Fires self-discard at end of day.
-        const removedFires = hand.filter((c) => c.name === FIRE_CARD_NAME).length;
-        hand = hand.filter((c) => c.name !== FIRE_CARD_NAME);
-        if (burnedNames.length > 0) {
-          fLog = [...fLog, { day: state.day, message: `🔥 Пламя у ${p.name} сожгло: ${burnedNames.join(", ")}` }];
-        }
-        if (removedFires > 0) {
-          fLog = [...fLog, { day: state.day, message: `🔥 Пожар у ${p.name} догорел и исчез` }];
-        }
-        flamePlayers[i] = { ...p, hand };
+      for (let i = 0; i < firePlayers.length; i++) {
+        const p = firePlayers[i];
+        const fireCount = p.hand.filter((c) => c.name === FIRE_CARD_NAME).length;
+        if (fireCount === 0) continue;
+        const handWithoutFires = p.hand.filter((c) => c.name !== FIRE_CARD_NAME);
+        firePlayers[i] = { ...p, hand: handWithoutFires };
+        fLog = [...fLog, { day: state.day, message: `🔥 Пожар у ${p.name} догорел и исчез` }];
       }
-      state = { ...state, players: flamePlayers, log: fLog };
+      state = { ...state, players: firePlayers, log: fLog };
     }
 
     // End-of-day cleanup for Holy Day spell: restore original district colors.
