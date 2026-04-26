@@ -109,6 +109,7 @@ import { flood } from "./spells/flood/index.js";
 import { plague } from "./spells/plague/index.js";
 import { fireRitual } from "./spells/fire_ritual/index.js";
 import { flame } from "./spells/flame/index.js";
+import { fire } from "./spells/fire/index.js";
 
 import type { DistrictDef, PurpleBasicDef, PurpleSpecialDef, SpellDef, SpecialDef } from "./types.js";
 
@@ -134,7 +135,7 @@ export const ALL_SPELLS: readonly SpellDef[] = [
   ignite, goldRain, holyDay, flood, plague, fireRitual,
 ];
 
-export const ALL_SPECIALS: readonly SpecialDef[] = [flame];
+export const ALL_SPECIALS: readonly SpecialDef[] = [flame, fire];
 
 /** Lookup: Russian card name → card definition (for translating runtime DistrictCard.name) */
 const _nameIndex = new Map<string, DistrictDef | PurpleBasicDef | PurpleSpecialDef | SpellDef | SpecialDef>();

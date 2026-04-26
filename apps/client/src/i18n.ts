@@ -130,6 +130,24 @@ const dict: Record<string, TranslationEntry> = {
   // Hand
   "my.play_placeholder": { en: "Play", ru: "Разыграть", id: "Mainkan" },
 
+  // Flame & Fire info popover
+  "flame.title": { en: "🔥 Flame", ru: "🔥 Пламя", id: "🔥 Api" },
+  "flame.tag": { en: "fire spawn", ru: "очаг", id: "percikan" },
+  "flame.desc": {
+    en: "At end of day each Flame in hand discards 1 random non-flame, non-fire card. Pay 1💰 to play it early and stop the burn. If THREE Flames pile up in the same hand at end of any turn, they collapse into a 🔥 Fire (turn-by-turn burn) instead.",
+    ru: "В конце дня каждое Пламя в руке сжигает 1 случайную карту (не считая Пламя/Пожары). Заплатите 1💰 чтобы сбросить досрочно. Если в конце любого хода в руке накопилось 3 Пламени — они сольются в 🔥 Пожар (сжигает каждый ход).",
+    id: "Di akhir hari setiap Api di tangan membakar 1 kartu acak (kecuali Api/Kebakaran). Bayar 1💰 untuk membuang lebih awal. Jika TIGA Api menumpuk di akhir giliran mana pun, mereka menyatu jadi 🔥 Kebakaran (membakar tiap giliran).",
+  },
+  "fire.title": { en: "🔥 Fire", ru: "🔥 Пожар", id: "🔥 Kebakaran" },
+  "fire.tag": { en: "hazard", ru: "угроза", id: "bahaya" },
+  "fire.desc": {
+    en: "At the end of EVERY turn (any player's turn) the Fire discards 1 random non-flame, non-fire card from its owner's hand. At end of day the Fire self-discards. Owner can play it for 3💰 to extinguish early instead of waiting.",
+    ru: "В конце КАЖДОГО хода (любого игрока) Пожар сбрасывает 1 случайную карту из руки владельца (не считая Пламя/Пожары). В конце дня сам исчезает. Владелец может заплатить 3💰, чтобы потушить досрочно.",
+    id: "Di akhir SETIAP giliran (siapa pun) Kebakaran membuang 1 kartu acak dari tangan pemiliknya (kecuali Api/Kebakaran). Di akhir hari hilang sendiri. Pemilik bisa bayar 3💰 untuk memadamkan lebih awal.",
+  },
+  "my.clear_flame": { en: "Snuff out", ru: "Погасить", id: "Padamkan" },
+  "my.clear_fire": { en: "Extinguish", ru: "Потушить", id: "Padamkan kebakaran" },
+
   // Draft / companion skip
   "draft.skip_companion": { en: "Skip companion", ru: "Пропустить выбор" },
 
@@ -432,7 +450,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   strange_merchant: { en: "Discard a card → gain gold = its cost. 🟢 only. {kw:leaves}", ru: "Сбросить карту → получить золото = её цена. Только 🟢. {kw:leaves}", id: "Buang kartu → dapat emas = harganya. Hanya 🟢. {kw:leaves}" },
   gravedigger: { en: "{kw:passive} On {kw:kill}: gain the victim's hero ability", ru: "{kw:passive} При {kw:kill}: получаете способность убитого героя", id: "{kw:passive} Saat {kw:kill}: dapatkan kemampuan hero korban" },
   jester: { en: "{kw:passive} Shuffle all players' hands. 🟡 only.", ru: "{kw:passive} Перемешивает руки всех игроков. Только 🟡.", id: "{kw:passive} Acak kartu tangan semua pemain. Hanya 🟡." },
-  pyromancer: { en: "Plant 🔥 Flame in any player's hand (random card). Flames multiply each turn!", ru: "Подбрасывает 🔥 Пламя в руку любого игрока (случайной картой). Пламя множится каждый ход!", id: "Tanam 🔥 Api di tangan pemain mana pun (kartu acak). Api berkembang tiap giliran!" },
+  pyromancer: { en: "Plant 🔥 Flame in any player's hand AND your own. Flame burns 1 card at end of day; clear early for 1💰. 3 Flames combine into 🔥 Fire (burns 1 card per turn, vanishes at end of day, or extinguish early for 3💰).", ru: "Подбрасывает 🔥 Пламя в руку любого игрока И себе. Пламя сжигает 1 карту в конце дня; потушите за 1💰. 3 Пламени → 🔥 Пожар (1 карта/ход, исчезает в конце дня, можно потушить за 3💰).", id: "Tanam 🔥 Api di tangan pemain mana pun DAN tangan sendiri. Api bakar 1 kartu di akhir hari; padamkan seharga 1💰. 3 Api → 🔥 Kebakaran (1 kartu/giliran, hilang di akhir hari, atau padamkan seharga 3💰)." },
   sun_fanatic: { en: "Only blue buildings, or 2💰 to replace next player's companion. 🔵 only", ru: "Только синие постройки, или 2💰 заменить компаньона следующего. Только 🔵", id: "Hanya bangunan biru, atau 2💰 untuk ganti companion pemain berikut. Hanya 🔵" },
   sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}", id: "Hapus permanen companion lawan dari pool. {kw:leaves}" },
   knight: { en: "{kw:passive} Richest loses up to 3💰 (all they have if less) → poorest gains the same", ru: "{kw:passive} Богатейший теряет до 3💰 (всё что есть если меньше) → беднейший получает столько же", id: "{kw:passive} Terkaya kehilangan hingga 3💰 (semuanya kalau kurang) → termiskin dapat jumlah yang sama" },
@@ -446,7 +464,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   contractor: { en: "Name a hero (not from open ban). If Assassin {kw:kill}s them → steal their purple cards", ru: "Назовите героя (не из открытого бана). Если Убийца совершит {kw:kill} → крадёте его фиолетовые карты", id: "Sebutkan hero (bukan dari ban terbuka). Jika Assassin {kw:kill} → curi kartu ungunya" },
   night_shadow: { en: "2💰: {kw:kill} an unrevealed hero", ru: "За 2💰: {kw:kill} нераскрытого героя", id: "2💰: {kw:kill} hero yang belum terbuka" },
   interceptor: { en: "{kw:passive} If first in turn order: draw 2 cards and slow the next player by +1 speed", ru: "{kw:passive} Если ходите первым — берёте 2 карты, скорость следующего +1", id: "{kw:passive} Jika urutan giliran pertama: ambil 2 kartu dan turunkan giliran berikutnya +1 kecepatan" },
-  agent: { en: "2💰: copy a chosen not-yet-acted player's companion this day. Reveals their pick. {kw:leaves}", ru: "За 2💰: становится копией компаньона выбранного игрока, который ещё не ходил. Раскрывает его. {kw:leaves}", id: "2💰: jadi salinan companion pemain terpilih yang belum bertindak. Mengungkap pilihannya. {kw:leaves}" },
+  agent: { en: "1💰: copy a chosen not-yet-acted player's companion. Only colourless non-Agent companions can be copied — otherwise reconnaissance fails. {kw:leaves}", ru: "За 1💰: становится копией компаньона выбранного игрока, который ещё не ходил. Только бесцветный и не Агент — иначе разведка не удалась. {kw:leaves}", id: "1💰: salin companion pemain terpilih yang belum bertindak. Hanya companion tanpa warna dan bukan Agen — kalau tidak, pengintaian gagal. {kw:leaves}" },
 };
 
 export function tCompanionName(id: string, fallback?: string): string {
@@ -567,7 +585,12 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /🚪 Врата в город у (.+?) в руке: стоимость → (\d+)/, en: (_, n, c) => `🚪 City Gates in ${n}'s hand: cost → ${c}`, id: (_, n, c) => `🚪 Gerbang Kota di tangan ${n}: harga → ${c}` },
 
   // Pyromancer flames at end of turn
-  { pattern: /🔥 Пламя у (.+?): сгорело карт (\d+), новых огней (\d+)/, en: (_, n, b, s) => `🔥 Flames in ${n}'s hand: ${b} cards burned, ${s} new flames`, id: (_, n, b, s) => `🔥 Api di tangan ${n}: ${b} kartu terbakar, ${s} api baru` },
+  { pattern: /🔥 (.+?): 3 Пламени слились в 🔥 Пожар \(×(\d+)\)/, en: (_, n, c) => `🔥 ${n}: 3 Flames combined into 🔥 Fire (×${c})`, id: (_, n, c) => `🔥 ${n}: 3 Api menyatu jadi 🔥 Kebakaran (×${c})` },
+  { pattern: /🔥 Пожар у (.+?) сжёг: (.+)/, en: (_, n, list) => `🔥 ${n}'s Fire burned: ${list}`, id: (_, n, list) => `🔥 Kebakaran ${n} membakar: ${list}` },
+  { pattern: /🔥 Пламя у (.+?) сожгло: (.+)/, en: (_, n, list) => `🔥 ${n}'s Flame burned: ${list}`, id: (_, n, list) => `🔥 Api ${n} membakar: ${list}` },
+  { pattern: /🔥 Пожар у (.+?) догорел и исчез/, en: (_, n) => `🔥 ${n}'s Fire burned out and vanished`, id: (_, n) => `🔥 Kebakaran ${n} padam dan menghilang` },
+  { pattern: /(.+?) погасил 🔥 Пламя за (\d+)💰/, en: (_, n, g) => `${n} cleared 🔥 Flame for ${g}💰`, id: (_, n, g) => `${n} memadamkan 🔥 Api seharga ${g}💰` },
+  { pattern: /(.+?) потушил 🔥 Пожар за (\d+)💰/, en: (_, n, g) => `${n} extinguished 🔥 Fire for ${g}💰`, id: (_, n, g) => `${n} memadamkan 🔥 Kebakaran seharga ${g}💰` },
   { pattern: /🧨 (.+?) потерял: (.+)/, en: (_, n, list) => `🧨 ${n} lost: ${list}`, id: (_, n, list) => `🧨 ${n} kehilangan: ${list}` },
   { pattern: /🧨 (.+?) взорвал Склад тротила: (\d+) урона распределено между постройками/, en: (_, n, d) => `🧨 ${n} blew up TNT Storage: ${d} damage spread across districts`, id: (_, n, d) => `🧨 ${n} meledakkan Gudang TNT: ${d} damage tersebar di distrik` },
 
@@ -580,7 +603,7 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /(.+?) — фермер: нет построек ≥3💰 → \+(\d+)💰/, en: (_, n, g) => `${n} — Farmer: no districts ≥3💰 → +${g}💰`, id: (_, n, g) => `${n} — Petani: tidak ada distrik ≥3💰 → +${g}💰` },
   { pattern: /(.+?) — перехватчик: \+(\d+)🃏 \(идёт первым\)/, en: (_, n, c) => `${n} — Interceptor: +${c}🃏 (going first)`, id: (_, n, c) => `${n} — Pencegat: +${c}🃏 (giliran pertama)` },
   { pattern: /(.+?) — агент: превратился в копию компаньона (.+?) \((.+?)\)/, en: (_, n, t, c) => `${n} — Agent: copied ${t}'s companion (${c})`, id: (_, n, t, c) => `${n} — Agen: salin companion ${t} (${c})` },
-  { pattern: /(.+?) — агент: разведка не увенчалась успехом — у (.+?) нет компаньона/, en: (_, n, t) => `${n} — Agent: reconnaissance failed — ${t} has no companion`, id: (_, n, t) => `${n} — Agen: pengintaian gagal — ${t} tidak punya companion` },
+  { pattern: /(.+?) — агент: разведка не увенчалась успехом$/, en: (_, n) => `${n} — Agent: reconnaissance failed`, id: (_, n) => `${n} — Agen: pengintaian gagal` },
   { pattern: /(.+?) — рыцарь: (.+?) −(\d+)💰 → (.+?) \+(\d+)💰/, en: (_, n, rich, lost, poor, got) => `${n} — Knight: ${rich} −${lost}💰 → ${poor} +${got}💰`, id: (_, n, rich, lost, poor, got) => `${n} — Ksatria: ${rich} −${lost}💰 → ${poor} +${got}💰` },
   { pattern: /(.+?) — художник: все 4 цвета → \+(\d+)💰/, en: (_, n, g) => `${n} — Artist: all 4 colors → +${g}💰`, id: (_, n, g) => `${n} — Seniman: 4 warna → +${g}💰` },
   { pattern: /(.+?) — знать: (.+?) \+(\d+)🃏, остальные −1🃏 −2💰/, en: (_, n, rich, c) => `${n} — Nobility: ${rich} +${c}🃏, others −1🃏 −2💰`, id: (_, n, rich, c) => `${n} — Bangsawan: ${rich} +${c}🃏, lainnya −1🃏 −2💰` },
@@ -596,8 +619,8 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /(.+?) — сомнительный делец: всё стало (.+?)!/, en: (_, n, color) => `${n} — Dubious Dealer: everything turned ${color}!`, id: (_, n, color) => `${n} — Pedagang mencurigakan: semua jadi ${color}!` },
   { pattern: /(.+?) — ученик чародея: построил (.+?) из сброса/, en: (_, n, d) => `${n} — Apprentice: built ${tDistrict(d)} from discard`, id: (_, n, d) => `${n} — Murid penyihir: bangun ${tDistrict(d)} dari buangan` },
   { pattern: /(.+?) — странный торговец: продал (.+?) за (\d+)💰/, en: (_, n, d, g) => `${n} — Strange Merchant: sold ${tDistrict(d)} for ${g}💰`, id: (_, n, d, g) => `${n} — Pedagang aneh: jual ${tDistrict(d)} seharga ${g}💰` },
-  { pattern: /(.+?) — пиромант: подбросил 🔥 Пламя в руку (.+)/, en: (_, n, t) => `${n} — Pyromancer: planted 🔥 Flame in ${t}'s hand`, id: (_, n, t) => `${n} — Penyihir api: tanam 🔥 Api di tangan ${t}` },
-  { pattern: /(.+?) — пиромант: (.+?) → 🔥 Пламя/, en: (_, n, d) => `${n} — Pyromancer: ${tDistrict(d)} → 🔥 Flame`, id: (_, n, d) => `${n} — Penyihir api: ${tDistrict(d)} → 🔥 Api` },
+  { pattern: /(.+?) — пиромант: подбросил 🔥 Пламя в руку (.+?) и себе/, en: (_, n, t) => `${n} — Pyromancer: planted 🔥 Flame in ${t}'s hand and own hand`, id: (_, n, t) => `${n} — Penyihir api: tanam 🔥 Api di tangan ${t} dan tangan sendiri` },
+  { pattern: /(.+?) — пиромант: подбросил 🔥 Пламя себе в руку \(двойную дозу\)/, en: (_, n) => `${n} — Pyromancer: planted 🔥 Flame in own hand (double dose)`, id: (_, n) => `${n} — Penyihir api: tanam 🔥 Api di tangan sendiri (dosis ganda)` },
   { pattern: /(.+?) — снайпер: навсегда убрал (.+?) у (.+?)!/, en: (_, n, comp, t) => `${n} — Sniper: permanently removed ${comp} from ${t}!`, id: (_, n, comp, t) => `${n} — Penembak jitu: hapus permanen ${comp} dari ${t}!` },
   { pattern: /(.+?) — фанатик солнца: заменил компаньона (.+?) на (.+)/, en: (_, n, t, c) => `${n} — Sun Fanatic: replaced ${t}'s companion with ${c}`, id: (_, n, t, c) => `${n} — Fanatik matahari: ganti companion ${t} dengan ${c}` },
   { pattern: /(.+?) — рыбак: построил (.+?) \(2💰\)/, en: (_, n, d) => `${n} — Fisherman: built ${tDistrict(d)} (2💰)`, id: (_, n, d) => `${n} — Nelayan: bangun ${tDistrict(d)} (2💰)` },

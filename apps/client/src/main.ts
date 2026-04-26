@@ -739,6 +739,16 @@ function showCardInfoPopover(card: { name: string; cost: number; colors: string[
     title = tDistrict(card.name); // already i18n-aware
     desc = t("purple.placeholder_desc");
     extraTag = t("deck.placeholder") ?? "placeholder";
+  } else if (card.name === "🔥 Пламя") {
+    emoji = "🔥";
+    title = t("flame.title") ?? "🔥 Пламя";
+    desc = t("flame.desc");
+    extraTag = t("flame.tag") ?? "spawn";
+  } else if (card.name === "🔥 Пожар") {
+    emoji = "🔥";
+    title = t("fire.title") ?? "🔥 Пожар";
+    desc = t("fire.desc");
+    extraTag = t("fire.tag") ?? "hazard";
   } else if (card.purpleAbility) {
     const tpl = PURPLE_CARD_TEMPLATES.find((t) => t.ability === card.purpleAbility);
     emoji = tpl?.emoji ?? "🔮";
@@ -1835,9 +1845,21 @@ function renderMyBoard() {
       const cs = colorStyle(c.colors);
       const texUrl = buildingTextureUrl(c);
       const placeholderAction = c.placeholder === "purple" && myTurnNow && !getPendingPurpleOffer();
-      const buildBtn = c.placeholder === "purple"
-        ? (placeholderAction ? `<button class="btn btn-primary btn-build" data-build="${c.id}">🟣 ${t("my.play_placeholder") ?? "Разыграть"}</button>` : "")
-        : (buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : "");
+      // Custom labels for special "play to discard" cards: Flame & Fire.
+      const isFlame = c.name === "🔥 Пламя";
+      const isFire = c.name === "🔥 Пожар";
+      let buildBtn = "";
+      if (c.placeholder === "purple") {
+        buildBtn = placeholderAction ? `<button class="btn btn-primary btn-build" data-build="${c.id}">🟣 ${t("my.play_placeholder") ?? "Разыграть"}</button>` : "";
+      } else if (isFlame) {
+        buildBtn = (myTurnNow && me.gold >= 1 && me.buildsRemaining > 0)
+          ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.clear_flame") ?? "Погасить"} (1💰)</button>` : "";
+      } else if (isFire) {
+        buildBtn = (myTurnNow && me.gold >= 3 && me.buildsRemaining > 0)
+          ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.clear_fire") ?? "Потушить"} (3💰)</button>` : "";
+      } else {
+        buildBtn = buildable ? `<button class="btn btn-primary btn-build" data-build="${c.id}">${t("my.build")}</button>` : "";
+      }
       return `
         <div class="hand-card ${cs.cls} ${c.placeholder === "purple" ? "placeholder-card" : ""}" style="${cs.style}">
           <img class="card-texture" src="${texUrl}" alt="" />

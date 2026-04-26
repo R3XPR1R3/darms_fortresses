@@ -243,7 +243,10 @@ describe("turn phase", () => {
     expect(onTableAfter.hp).toBe(8);
   });
 
-  it("flame burns two cards at end of turn, then gets replaced by new flames", () => {
+  it("a single Flame stays in hand at end of turn (does not burn or self-replicate)", () => {
+    // New flame mechanic: Flames stay in hand untouched at end of each turn.
+    // They only burn at end of DAY. To get a Fire (per-turn burn) you need 3+
+    // Flames in the same hand to combine.
     const { state, rng } = draftAll(42);
     const ordered = buildTurnOrder(state, rng);
     const playerIdx = currentPlayer(ordered)!;
@@ -252,7 +255,7 @@ describe("turn phase", () => {
     const flame: DistrictCard = {
       id: "flame-a",
       name: FLAME_CARD_NAME,
-      cost: 2,
+      cost: 1,
       hp: 0,
       colors: ["red"],
     };
@@ -265,9 +268,8 @@ describe("turn phase", () => {
     const next = advanceTurn(withFlame, rng);
     const hand = next.players[playerIdx].hand;
     const flames = hand.filter((c) => c.name === FLAME_CARD_NAME);
-    // 1 old flame removed, 2 burned cards become 2 new flames
-    expect(flames.length).toBe(2);
-    expect(hand.length).toBe(player.hand.length); // +1 old flame -2 burned +2 new
+    expect(flames.length).toBe(1); // Flame still here, no replication
+    expect(hand.length).toBe(player.hand.length + 1); // hand size unchanged after the +1 flame addition
   });
 
   it("mine pays at end of day for non-merchant and each turn for merchant", () => {

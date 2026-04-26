@@ -87,7 +87,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.StrangeMerchant, name: "Странный торговец", description: "Сбрасывает карту из руки и получает её стоимость (только 🟢). Уходит", emoji: "🧳", passive: false, targetType: "own_hand_card", heroColor: "green", leavesPool: true },
   { id: CompanionId.Gravedigger, name: "Могильщик", description: "При убийстве героя — получаете его способность", emoji: "⚰️", passive: true },
   { id: CompanionId.Jester, name: "Шут", description: "Перемешивает карты всех игроков (только 🟡). Дебафф!", emoji: "🤡", passive: true, heroColor: "yellow" },
-  { id: CompanionId.Pyromancer, name: "Пиромант", description: "Подбросьте 🔥Пламя в руку любого игрока (случайной картой). Пламя множится в конце хода. Дебафф!", emoji: "🔥", passive: false, targetType: "player" },
+  { id: CompanionId.Pyromancer, name: "Пиромант", description: "Подбросьте 🔥 Пламя в руку выбранного игрока И себе. Пламя сжигает 1 карту в конце дня. 3 Пламени сливаются в 🔥 Пожар (1 карта/ход, исчезает в конце дня). Дебафф себе и сопернику!", emoji: "🔥", passive: false, targetType: "player" },
   { id: CompanionId.SunFanatic, name: "Фанатик солнца", description: "Только синие постройки, или 2💰 чтобы заменить компаньона следующего (только 🔵)", emoji: "🌅", passive: false, heroColor: "blue", useCost: 2 },
   { id: CompanionId.Sniper, name: "Снайпер", description: "Навсегда убирает компаньона противника из пула", emoji: "🎯", passive: false, targetType: "player" },
   { id: CompanionId.Knight, name: "Рыцарь", description: "Забирает до 3💰 у богатейшего и отдаёт беднейшему (всё что есть, если меньше 3)", emoji: "⚜️", passive: true },
@@ -102,11 +102,13 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Contractor, name: "Заказчик", description: "Назначьте цель-героя. Если Ассасин убивает её в этот день — крадёте фиолетовые карты жертвы", emoji: "📋", passive: false, targetType: "hero" },
   { id: CompanionId.NightShadow, name: "Ночная тень", description: "За 2💰: убейте неназванного персонажа", emoji: "🌑", passive: false, useCost: 2, targetType: "hero" },
   { id: CompanionId.Interceptor, name: "Перехватчик", description: "Если ходите первым — берёте +2 карты, скорость следующего игрока +1", emoji: "🏇", passive: true },
-  { id: CompanionId.Agent, name: "Агент", description: "За 2💰: превращается в копию компаньона выбранного игрока, который ещё не ходил. Уходит из пула.", emoji: "🕵️", passive: false, targetType: "player", useCost: 2, leavesPool: true },
+  { id: CompanionId.Agent, name: "Агент", description: "За 1💰: становится копией компаньона выбранного игрока, который ещё не ходил. Работает только если компаньон бесцветный и не Агент — иначе разведка не удалась. Уходит из пула.", emoji: "🕵️", passive: false, targetType: "player", useCost: 1, leavesPool: true },
 ] as const;
 
-/** Name constant for flame cards (Pyromancer) */
+/** Name constant for flame cards (Pyromancer / Ignite / Fire Ritual). */
 export const FLAME_CARD_NAME = "🔥 Пламя";
+/** Name constant for fire cards — formed by 3 flames combining. */
+export const FIRE_CARD_NAME = "🔥 Пожар";
 
 /** Check if a companion is passive (auto-applied, no action needed) */
 export function isPassiveCompanion(id: CompanionId): boolean {

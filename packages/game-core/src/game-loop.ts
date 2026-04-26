@@ -336,34 +336,35 @@ function useCompanion(
     }
 
     case CompanionId.Pyromancer: {
-      // Burns a random card from any chosen player's hand (revealed or not).
-      // The Pyromancer's owner picks the target player (targetPlayerId) — the
-      // burned card is rolled randomly from that player's hand to keep things
-      // hidden if the target hasn't acted yet. Replaces the rolled card with 🔥 Flame.
+      // Plant 🔥 Flame in BOTH the chosen player's hand AND the Pyromancer
+      // owner's own hand — playing with fire burns yourself too. Cards are
+      // appended (not replacing existing cards). If a hand is at MAX_HAND_CARDS
+      // the new flame just overflows — enforceHandLimit handles the trim and
+      // the journal notes overflow there.
       if (!targetPlayerId) return null;
       const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
       if (targetIdx === -1) return null;
       const target = state.players[targetIdx];
-      if (target.hand.length === 0) return null;
-      const cardIdx = rng.int(0, target.hand.length - 1);
-      const burned = target.hand[cardIdx];
-      const newTargetHand = [...target.hand];
-      const flameCard: DistrictCard = {
-        id: `flame-${Date.now()}-${rng.int(0, 9999)}`,
+      const makeFlame = (suffix: string): DistrictCard => ({
+        id: `flame-${Date.now()}-${suffix}-${rng.int(0, 9999)}`,
         name: FLAME_CARD_NAME,
-        cost: 2,
-        originalCost: 2,
+        cost: 1,
+        originalCost: 1,
         hp: 0,
         colors: ["red"],
         baseColors: ["red"],
-      };
-      newTargetHand[cardIdx] = flameCard;
-      newPlayers[targetIdx] = { ...target, hand: newTargetHand };
-      newPlayers[playerIdx] = { ...newPlayers[playerIdx], companionUsed: true };
+      });
+      // Plant in target hand
+      const flameForTarget = makeFlame("t");
+      newPlayers[targetIdx] = { ...target, hand: [...target.hand, flameForTarget] };
+      // Plant in own hand (read from newPlayers in case target===self overwrote it)
+      const ownerAfter = newPlayers[playerIdx] ?? player;
+      const flameForOwner = makeFlame("o");
+      newPlayers[playerIdx] = { ...ownerAfter, hand: [...ownerAfter.hand, flameForOwner], companionUsed: true };
       const targetIsSelf = targetIdx === playerIdx;
       const msg = targetIsSelf
-        ? `${player.name} — пиромант: ${burned.name} → ${FLAME_CARD_NAME}`
-        : `${player.name} — пиромант: подбросил ${FLAME_CARD_NAME} в руку ${target.name}`;
+        ? `${player.name} — пиромант: подбросил 🔥 Пламя себе в руку (двойную дозу)`
+        : `${player.name} — пиромант: подбросил 🔥 Пламя в руку ${target.name} и себе`;
       return { ...addLog({ ...state, players: newPlayers }, msg), rng: rng.getSeed() };
     }
 
@@ -581,51 +582,56 @@ function useCompanion(
     }
 
     case CompanionId.Agent: {
-      // 2💰: copy a chosen not-yet-acted player's companion (one-shot per
+      // 1💰: copy a chosen not-yet-acted player's companion (one-shot per
       // match — markCompanionGone after).
       //
       // Validation (hard reject = no gold spent, no slot consumed):
       //   - targetPlayerId valid, not self
       //   - target is in turn order strictly AFTER the current turn
-      //   - target's companion is NOT Agent (no recursion / mirror loop)
-      //   - owner has at least 2💰
+      //   - owner has at least 1💰
       //
-      // Soft fail (gold spent, slot gone, journal logs "разведка не удалась"):
-      //   - target has no companion (e.g. they couldn't pick due to colour
-      //     restriction in their personal pool that day)
+      // Soft fail (gold spent, slot gone, journal logs the SAME generic
+      // "разведка не увенчалась успехом" without details — the player can't
+      // tell whether the target had no companion, a colour-locked one, or
+      // another Agent, which preserves the target's privacy):
+      //   - target has no companion at all
+      //   - target's companion is colour-locked (heroColor !== null)
+      //   - target's companion is Agent itself (no mirror copy)
       //
-      // Success: companion field is replaced, companionUsed reset so the
-      // copied active can fire this turn. Colour-restricted companions ARE
-      // copied — the colour rule still applies on use (a red hero copying
-      // SunPriestess won't get the blue discount, that's a known trade-off
-      // and part of the strategic choice when picking the target).
-      if (player.gold < 2) return null;
+      // Success: companion field is replaced with the target's companion,
+      // companionUsed reset so the copied active can fire this turn. Only
+      // colourless non-Agent companions are copyable — the spy persona can't
+      // fake a hero-class-locked role or recurse on another spy.
+      if (player.gold < 1) return null;
       if (!targetPlayerId) return null;
       const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
       if (targetIdx === -1 || targetIdx === playerIdx) return null;
       const target = state.players[targetIdx];
-      if (target.companion === CompanionId.Agent) return null;
       if (state.turnOrder) {
         const pos = state.turnOrder.indexOf(targetIdx);
         if (pos === -1) return null;
         if (pos <= state.currentTurnIndex) return null; // current or past
       } else {
-        return null; // no turn order yet → can't pick in advance
+        return null;
       }
 
-      // Soft-fail path: target has no companion at all.
-      if (!target.companion) {
+      const targetDef = target.companion ? COMPANIONS.find((c) => c.id === target.companion) : null;
+      const isColourLocked = !!targetDef?.heroColor;
+      const isAgentMirror = target.companion === CompanionId.Agent;
+
+      // Soft-fail: no companion OR colour-locked OR another Agent. Same log either way.
+      if (!target.companion || isColourLocked || isAgentMirror) {
         newPlayers[playerIdx] = markCompanionGone(
-          { ...player, gold: player.gold - 2, companionUsed: true },
+          { ...player, gold: player.gold - 1, companionUsed: true },
           CompanionId.Agent,
         );
-        return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: разведка не увенчалась успехом — у ${target.name} нет компаньона`), rng: rng.getSeed() };
+        return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: разведка не увенчалась успехом`), rng: rng.getSeed() };
       }
 
       const copiedCompanion = target.companion;
       const copiedName = COMPANIONS.find((c) => c.id === copiedCompanion)?.name ?? "?";
       newPlayers[playerIdx] = markCompanionGone(
-        { ...player, gold: player.gold - 2, companion: copiedCompanion, companionUsed: false, companionDisabled: false },
+        { ...player, gold: player.gold - 1, companion: copiedCompanion, companionUsed: false, companionDisabled: false },
         CompanionId.Agent,
       );
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: превратился в копию компаньона ${target.name} (${copiedName})`), rng: rng.getSeed() };
