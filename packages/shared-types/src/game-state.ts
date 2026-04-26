@@ -5,6 +5,8 @@ import { ALL_PURPLE_SPECIAL } from "./cards/index.js";
 
 export const WIN_DISTRICTS = 8;
 export const MAX_HAND_CARDS = 10;
+/** Hard cap on a player's gold purse — anything above is trimmed at the boundary. */
+export const MAX_GOLD = 10;
 /** Number of purple placeholder cards shuffled into each player's deck at match start. */
 export const PURPLE_PLACEHOLDERS_PER_MATCH = 24;
 /** Number of purple cards in a deck-build (repeats allowed). */

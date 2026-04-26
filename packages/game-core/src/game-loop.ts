@@ -1,5 +1,5 @@
 import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
-import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, WIN_DISTRICTS } from "@darms/shared-types";
+import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, MAX_GOLD, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, companionSkip } from "./draft.js";
 import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer, canAddDistrict, pushBuiltDistrict, markCompanionGone } from "./turns.js";
@@ -10,6 +10,20 @@ import { generateRandomCard, generateDifferentColorCard, generateCard } from "./
 
 function addLog(state: GameState, message: string): GameState {
   return { ...state, log: [...state.log, { day: state.day, message }] };
+}
+
+/** Trim every player's gold to MAX_GOLD. Called at the action boundary so any
+ *  source — passive income, companion effects, robberies, hero ability, mine,
+ *  treasurer end-of-day — gets capped without each call site needing to know. */
+function enforceGoldCap(state: GameState): GameState {
+  let changed = false;
+  const players = state.players.map((p) => {
+    if (p.gold <= MAX_GOLD) return p;
+    changed = true;
+    return { ...p, gold: MAX_GOLD };
+  });
+  if (!changed) return state;
+  return { ...state, players };
 }
 
 function enforceHandLimit(state: GameState): GameState {
@@ -79,10 +93,8 @@ function useCompanion(
   let newState = state;
 
   switch (player.companion) {
-    case CompanionId.Farmer: {
-      newPlayers[playerIdx] = { ...player, gold: player.gold + 1, companionUsed: true };
-      return { ...addLog({ ...state, players: newPlayers, rng: rng.getSeed() }, `${player.name} — фермер приносит +1 золото`), rng: rng.getSeed() };
-    }
+    // Farmer is passive now (handled in applyPassiveAbility on turn start) —
+    // intentionally not callable via use_companion any more.
 
     case CompanionId.Hunter: {
       // Costs 2 gold, target opponent discards 2 random cards
@@ -410,13 +422,15 @@ function useCompanion(
     }
 
     case CompanionId.Fisherman: {
-      // For 1 gold, builds a random cost-2 district (allows duplicates)
-      if (player.gold < 1) return null;
+      // For 2 gold, builds a random cost-2 district (allows duplicates).
+      // Net-zero on resources (2💰 in, 2💰 of value out) but bypasses the
+      // duplicate rule and can land you a colour you're missing.
+      if (player.gold < 2) return null;
       if (!canAddDistrict(player)) return null;
       const newCard = generateRandomCard(2, rng);
       newCard.hp = 2;
       newPlayers[playerIdx] = pushBuiltDistrict(
-        { ...player, gold: player.gold - 1, companionUsed: true },
+        { ...player, gold: player.gold - 2, companionUsed: true },
         newCard,
       );
       let s = addLog({ ...state, players: newPlayers }, `${player.name} — рыбак: построил ${newCard.name} (2💰)`);
@@ -425,10 +439,15 @@ function useCompanion(
     }
 
     case CompanionId.UnluckyMage: {
-      // "Unlucky" because the sacrificed card is chosen AT RANDOM from hand — the
-      // player has no say. All own built districts then become copies of that
-      // random card (identity fully copied so altars count, spells behave, etc.).
-      // Run checkWinCondition after in case the lucky roll lands on an altar.
+      // 3💰 once per game (leavesPool). The sacrificed card is chosen AT RANDOM
+      // from hand — the player has no say. Every own built district becomes a
+      // FULL COPY of the rolled card: name, colors, purpleAbility, spellAbility
+      // AND cost/HP/value. The 4-altar alt-win still triggers when the roll
+      // lands on an altar; the 3-gold cost + once-per-game gate is the
+      // balancing mechanism. Keeps each district's ORIGINAL printed cost as
+      // the new originalCost (reset baseline) so Fort refunds work correctly
+      // for any subsequent destruction.
+      if (player.gold < 3) return null;
       if (player.hand.length === 0) return null;
       const cardIdx = rng.int(0, player.hand.length - 1);
       const template = player.hand[cardIdx];
@@ -436,17 +455,20 @@ function useCompanion(
       newHand.splice(cardIdx, 1);
       const newDistricts = player.builtDistricts.map((d) => ({
         id: d.id,
-        hp: d.hp,
-        name: template.name,
         cost: template.cost,
+        hp: template.cost,
         originalCost: template.originalCost ?? template.cost,
+        name: template.name,
         colors: [...template.colors],
         baseColors: template.baseColors ? [...template.baseColors] : [...template.colors],
         purpleAbility: template.purpleAbility,
         spellAbility: template.spellAbility,
       }));
-      newPlayers[playerIdx] = { ...player, hand: newHand, builtDistricts: newDistricts, companionUsed: true };
-      let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: случайно сброшена ${template.name}, все постройки стали ей!`);
+      newPlayers[playerIdx] = markCompanionGone(
+        { ...player, gold: player.gold - 3, hand: newHand, builtDistricts: newDistricts, companionUsed: true },
+        CompanionId.UnluckyMage,
+      );
+      let s = addLog({ ...state, players: newPlayers }, `${player.name} — неудачный маг: случайно сброшена ${template.name}, все постройки стали её точной копией!`);
       s = { ...s, rng: rng.getSeed() };
       return checkWinCondition(s);
     }
@@ -558,7 +580,60 @@ function useCompanion(
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — торговец сокровищами: получена ${purple.name}`), rng: rng.getSeed() };
     }
 
+    case CompanionId.Agent: {
+      // 2💰: copy a chosen not-yet-acted player's companion (one-shot per
+      // match — markCompanionGone after).
+      //
+      // Validation (hard reject = no gold spent, no slot consumed):
+      //   - targetPlayerId valid, not self
+      //   - target is in turn order strictly AFTER the current turn
+      //   - target's companion is NOT Agent (no recursion / mirror loop)
+      //   - owner has at least 2💰
+      //
+      // Soft fail (gold spent, slot gone, journal logs "разведка не удалась"):
+      //   - target has no companion (e.g. they couldn't pick due to colour
+      //     restriction in their personal pool that day)
+      //
+      // Success: companion field is replaced, companionUsed reset so the
+      // copied active can fire this turn. Colour-restricted companions ARE
+      // copied — the colour rule still applies on use (a red hero copying
+      // SunPriestess won't get the blue discount, that's a known trade-off
+      // and part of the strategic choice when picking the target).
+      if (player.gold < 2) return null;
+      if (!targetPlayerId) return null;
+      const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
+      if (targetIdx === -1 || targetIdx === playerIdx) return null;
+      const target = state.players[targetIdx];
+      if (target.companion === CompanionId.Agent) return null;
+      if (state.turnOrder) {
+        const pos = state.turnOrder.indexOf(targetIdx);
+        if (pos === -1) return null;
+        if (pos <= state.currentTurnIndex) return null; // current or past
+      } else {
+        return null; // no turn order yet → can't pick in advance
+      }
+
+      // Soft-fail path: target has no companion at all.
+      if (!target.companion) {
+        newPlayers[playerIdx] = markCompanionGone(
+          { ...player, gold: player.gold - 2, companionUsed: true },
+          CompanionId.Agent,
+        );
+        return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: разведка не увенчалась успехом — у ${target.name} нет компаньона`), rng: rng.getSeed() };
+      }
+
+      const copiedCompanion = target.companion;
+      const copiedName = COMPANIONS.find((c) => c.id === copiedCompanion)?.name ?? "?";
+      newPlayers[playerIdx] = markCompanionGone(
+        { ...player, gold: player.gold - 2, companion: copiedCompanion, companionUsed: false, companionDisabled: false },
+        CompanionId.Agent,
+      );
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: превратился в копию компаньона ${target.name} (${copiedName})`), rng: rng.getSeed() };
+    }
+
     // Passive companions — should not be used via action
+    case CompanionId.Farmer:
+    case CompanionId.Interceptor:
     case CompanionId.Treasurer:
     case CompanionId.Official:
     case CompanionId.SunPriestess:
@@ -587,7 +662,7 @@ export function processAction(state: GameState, action: GameAction): GameState |
   const rng = createRng(state.rng);
   const finish = (next: GameState | null): GameState | null => {
     if (!next) return null;
-    return enforceHandLimit(next);
+    return enforceHandLimit(enforceGoldCap(next));
   };
 
   switch (action.type) {
@@ -760,7 +835,12 @@ function activateBuilding(
     }
 
     case "tnt_storage": {
-      // Self-destroy for 2 gold — destroys 2 random districts for each player
+      // Self-destroy for 2 gold — deals 8 total damage spread across the
+      // surviving districts of EVERY player (TNT-Storage owner included for
+      // post-self-destroy ones), one point at a time. Strongholds are immune
+      // and never picked. If all damageable districts are wiped before the 8
+      // points are spent, the rest is wasted (no overflow). This replaces the
+      // old "kill 2 random districts each" rule which was too swingy.
       if (player.gold < 2) return null;
       const newDistricts = [...player.builtDistricts];
       newDistricts.splice(cardIdx, 1);
@@ -768,25 +848,43 @@ function activateBuilding(
       let discardPile = [...state.discardPile, card];
       let log = state.log;
 
-      for (let i = 0; i < state.players.length; i++) {
-        const p = newPlayers[i];
-        const pDistricts = [...p.builtDistricts];
-        const destroyed: string[] = [];
-        for (let d = 0; d < 2 && pDistricts.length > 0; d++) {
-          const candidates = pDistricts
-            .map((dist, idx) => ({ dist, idx }))
-            .filter(({ dist }) => dist.purpleAbility !== "stronghold");
-          if (candidates.length === 0) break;
-          const idx = candidates[rng.int(0, candidates.length - 1)].idx;
-          destroyed.push(pDistricts[idx].name);
-          discardPile = [...discardPile, pDistricts[idx]];
-          pDistricts.splice(idx, 1);
+      // Track damage distribution per (player, district id) for log readability.
+      const totalDamage = 8;
+      const losses: Map<number, string[]> = new Map();
+      for (let dmg = 0; dmg < totalDamage; dmg++) {
+        // Build a fresh candidate list each tick so destroyed districts vanish.
+        const pool: Array<{ pIdx: number; dIdx: number }> = [];
+        for (let i = 0; i < newPlayers.length; i++) {
+          const districts = newPlayers[i].builtDistricts;
+          for (let j = 0; j < districts.length; j++) {
+            if (districts[j].purpleAbility === "stronghold") continue;
+            pool.push({ pIdx: i, dIdx: j });
+          }
         }
-        if (destroyed.length > 0) {
-          newPlayers[i] = { ...newPlayers[i], builtDistricts: pDistricts };
-          log = [...log, { day: state.day, message: `🧨 ${p.name} потерял: ${destroyed.join(", ")}` }];
+        if (pool.length === 0) break;
+        const pick = pool[rng.int(0, pool.length - 1)];
+        const owner = newPlayers[pick.pIdx];
+        const dList = [...owner.builtDistricts];
+        const target = dList[pick.dIdx];
+        const newCost = target.cost - 1;
+        if (newCost < 1) {
+          dList.splice(pick.dIdx, 1);
+          discardPile = [...discardPile, target];
+          const arr = losses.get(pick.pIdx) ?? [];
+          arr.push(target.name);
+          losses.set(pick.pIdx, arr);
+        } else {
+          dList[pick.dIdx] = { ...target, cost: newCost, hp: newCost };
         }
+        newPlayers[pick.pIdx] = { ...owner, builtDistricts: dList };
       }
+
+      // Log per-player destruction summary; survivors with damage are reflected
+      // in their cost/HP so no extra log line is needed for them.
+      losses.forEach((names, pIdx) => {
+        log = [...log, { day: state.day, message: `🧨 ${newPlayers[pIdx].name} потерял: ${names.join(", ")}` }];
+      });
+      log = [...log, { day: state.day, message: `🧨 ${player.name} взорвал Склад тротила: ${totalDamage} урона распределено между постройками` }];
       return { ...state, players: newPlayers, discardPile, log, rng: rng.getSeed() };
     }
 

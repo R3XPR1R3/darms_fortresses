@@ -33,34 +33,45 @@ export function markCompanionGone(player: PlayerState, companionId: CompanionId)
  * Also resets per-turn state and applies passive abilities for first player.
  */
 export function buildTurnOrder(state: GameState, rng: Rng): GameState {
-  const indexed = state.players
-    .map((p, i) => ({ idx: i, hero: p.hero }))
-    .filter((p) => p.hero !== null && !state.players[p.idx].assassinated);
+  // Compute each active hero's effective speed first (so we can post-modify it
+  // for Interceptor without rerunning the comparator).
+  const computeSpeed = (idx: number): number => {
+    const p = state.players[idx];
+    let speed = HEROES.find((h) => h.id === p.hero)!.speed;
+    if (p.companion === CompanionId.Courier && !p.companionDisabled) speed -= 2;
+    if (p.builtDistricts.some((d) => d.purpleAbility === "highway")) speed -= 1;
+    return speed;
+  };
+
+  const indexed: Array<{ idx: number; hero: typeof state.players[number]["hero"]; speed: number }> = state.players
+    .map((p, i) => ({ idx: i, hero: p.hero, speed: 0 }))
+    .filter((p) => p.hero !== null && !state.players[p.idx].assassinated)
+    .map((p) => ({ ...p, speed: computeSpeed(p.idx) }));
 
   indexed.sort((a, b) => {
-    let speedA = HEROES.find((h) => h.id === a.hero)!.speed;
-    let speedB = HEROES.find((h) => h.id === b.hero)!.speed;
-
-    // Courier companion: speed -2
-    const pA = state.players[a.idx];
-    if (pA.companion === CompanionId.Courier && !pA.companionDisabled) {
-      speedA -= 2;
-    }
-    // Highway purple building: speed -1
-    if (pA.builtDistricts.some((d) => d.purpleAbility === "highway")) {
-      speedA -= 1;
-    }
-    const pB = state.players[b.idx];
-    if (pB.companion === CompanionId.Courier && !pB.companionDisabled) {
-      speedB -= 2;
-    }
-    if (pB.builtDistricts.some((d) => d.purpleAbility === "highway")) {
-      speedB -= 1;
-    }
-
-    if (speedA !== speedB) return speedA - speedB;
+    if (a.speed !== b.speed) return a.speed - b.speed;
     return rng.next() - 0.5;
   });
+
+  // Interceptor: if the first-ordered player has Interceptor and is not the
+  // only active hero, apply +1 speed to whoever was second. Re-sort positions
+  // [1..] with the bumped speed so the slowdown can shift them past originally
+  // slower heroes; the Interceptor owner's lead is unchanged.
+  if (indexed.length >= 2) {
+    const first = state.players[indexed[0].idx];
+    if (first.companion === CompanionId.Interceptor && !first.companionDisabled) {
+      const slowedIdx = indexed[1].idx;
+      const tail = indexed.slice(1).map((p) => ({
+        ...p,
+        speed: p.idx === slowedIdx ? p.speed + 1 : p.speed,
+      }));
+      tail.sort((a, b) => {
+        if (a.speed !== b.speed) return a.speed - b.speed;
+        return rng.next() - 0.5;
+      });
+      indexed.splice(1, indexed.length - 1, ...tail);
+    }
+  }
 
   // Reset per-turn state
   let newPlayers = state.players.map((p) => ({

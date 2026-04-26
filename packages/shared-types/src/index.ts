@@ -4,6 +4,7 @@ export { CompanionId, type CompanionDefinition, COMPANIONS, isPassiveCompanion, 
 export {
   WIN_DISTRICTS,
   MAX_HAND_CARDS,
+  MAX_GOLD,
   PURPLE_CARD_TEMPLATES,
   PURPLE_PLACEHOLDERS_PER_MATCH,
   DECK_BUILD_PURPLE_SIZE,
