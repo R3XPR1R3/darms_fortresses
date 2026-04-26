@@ -21,7 +21,7 @@ export const BOT_BUILDS: readonly BotBuild[] = [
     id: "king_path",
     name: "Путь Короля",
     build: {
-      purple: ["city_gates", "city_gates", "mine", "fort", "cult", "gold_rain"],
+      purple: ["city_gates", "city_gates", "mine", "stronghold", "cult", "gold_rain"],
       companions: [CompanionId.RoyalGuard, CompanionId.Treasurer, CompanionId.Nobility],
     },
     preferredHeroes: [HeroId.King, HeroId.Merchant],
@@ -39,7 +39,7 @@ export const BOT_BUILDS: readonly BotBuild[] = [
     id: "cannon_siege",
     name: "Канонная осада",
     build: {
-      purple: ["cannon", "cannon", "cannon", "fort", "tnt_storage", "ignite"],
+      purple: ["cannon", "cannon", "cannon", "cannon", "tnt_storage", "ignite"],
       companions: [CompanionId.Cannoneer, CompanionId.Hunter, CompanionId.Sniper],
     },
     preferredHeroes: [HeroId.General, HeroId.Assassin],
@@ -48,7 +48,7 @@ export const BOT_BUILDS: readonly BotBuild[] = [
     id: "tnt_saboteur",
     name: "Диверсант ТНТ",
     build: {
-      purple: ["tnt_storage", "tnt_storage", "cannon", "fort", "plague", "flood"],
+      purple: ["tnt_storage", "tnt_storage", "cannon", "stronghold", "plague", "flood"],
       companions: [CompanionId.Saboteur, CompanionId.Peacemaker, CompanionId.Blacksmith],
     },
     preferredHeroes: [HeroId.General, HeroId.Thief],
@@ -66,7 +66,7 @@ export const BOT_BUILDS: readonly BotBuild[] = [
     id: "fortress_wall",
     name: "Крепостная стена",
     build: {
-      purple: ["fort", "fort", "stronghold", "stronghold", "monument", "holy_day"],
+      purple: ["stronghold", "stronghold", "stronghold", "stronghold", "monument", "holy_day"],
       companions: [CompanionId.Druid, CompanionId.Artist, CompanionId.Peacemaker],
     },
     preferredHeroes: [HeroId.Architect, HeroId.King],
@@ -93,7 +93,7 @@ export const BOT_BUILDS: readonly BotBuild[] = [
     id: "necropolis",
     name: "Некрополь",
     build: {
-      purple: ["crypt", "crypt", "crypt", "fort", "stronghold", "plague"],
+      purple: ["crypt", "crypt", "crypt", "crypt", "stronghold", "plague"],
       companions: [CompanionId.Gravedigger, CompanionId.Reconstructor, CompanionId.Marauder],
     },
     preferredHeroes: [HeroId.Assassin, HeroId.Thief],
@@ -102,7 +102,7 @@ export const BOT_BUILDS: readonly BotBuild[] = [
     id: "universal",
     name: "Универсал",
     build: {
-      purple: ["cannon", "tnt_storage", "fort", "mine", "cult", "gold_rain"],
+      purple: ["cannon", "tnt_storage", "stronghold", "mine", "cult", "gold_rain"],
       companions: [CompanionId.Designer, CompanionId.Alchemist, CompanionId.Innkeeper],
     },
     preferredHeroes: [HeroId.Architect, HeroId.Sorcerer],
@@ -120,7 +120,7 @@ export const BOT_BUILDS: readonly BotBuild[] = [
     id: "night_assassins",
     name: "Ночь убийц",
     build: {
-      purple: ["fort", "fort", "crypt", "crypt", "cannon", "ignite"],
+      purple: ["stronghold", "stronghold", "crypt", "crypt", "cannon", "ignite"],
       companions: [CompanionId.NightShadow, CompanionId.Contractor, CompanionId.Marauder],
     },
     preferredHeroes: [HeroId.Assassin, HeroId.Thief],

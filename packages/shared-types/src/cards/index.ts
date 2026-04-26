@@ -42,7 +42,6 @@ export { sacredGrove } from "./purple-basic/sacred_grove/index.js";
 
 // ---- Purple special (drafted, with abilities) ----
 export { cannon } from "./purple/cannon/index.js";
-export { fort } from "./purple/fort/index.js";
 export { stronghold } from "./purple/stronghold/index.js";
 export { monument } from "./purple/monument/index.js";
 export { highway } from "./purple/highway/index.js";
@@ -85,6 +84,31 @@ import { citadel } from "./districts/citadel/index.js";
 import { tradeChamber } from "./districts/trade_chamber/index.js";
 import { warCouncil } from "./districts/war_council/index.js";
 import { templarOrder } from "./districts/templar_order/index.js";
+// Twin districts — same stats as the originals, different names. One folder
+// per card so designers can drop unique textures keyed by card id later.
+import { watchHut } from "./districts/watch_hut/index.js";
+import { garrison } from "./districts/garrison/index.js";
+import { audienceHall } from "./districts/audience_hall/index.js";
+import { winterGarden } from "./districts/winter_garden/index.js";
+import { royalResidence } from "./districts/royal_residence/index.js";
+import { oratory } from "./districts/oratory/index.js";
+import { holySite } from "./districts/holy_site/index.js";
+import { hermitage } from "./districts/hermitage/index.js";
+import { reliquary } from "./districts/reliquary/index.js";
+import { basilica } from "./districts/basilica/index.js";
+import { innHouse } from "./districts/inn_house/index.js";
+import { butcherShop } from "./districts/butcher_shop/index.js";
+import { merchantYard } from "./districts/merchant_yard/index.js";
+import { wharf } from "./districts/wharf/index.js";
+import { exchange } from "./districts/exchange/index.js";
+import { sentry } from "./districts/sentry/index.js";
+import { dungeon } from "./districts/dungeon/index.js";
+import { barbican } from "./districts/barbican/index.js";
+import { armoury } from "./districts/armoury/index.js";
+import { bastion } from "./districts/bastion/index.js";
+import { merchantGuild } from "./districts/merchant_guild/index.js";
+import { headquarters } from "./districts/headquarters/index.js";
+import { hospitallers } from "./districts/hospitallers/index.js";
 import { observatory } from "./purple-basic/observatory/index.js";
 import { laboratory } from "./purple-basic/laboratory/index.js";
 import { smithy } from "./purple-basic/smithy/index.js";
@@ -92,7 +116,6 @@ import { library } from "./purple-basic/library/index.js";
 import { royalLibrary } from "./purple-basic/royal_library/index.js";
 import { sacredGrove } from "./purple-basic/sacred_grove/index.js";
 import { cannon } from "./purple/cannon/index.js";
-import { fort } from "./purple/fort/index.js";
 import { stronghold } from "./purple/stronghold/index.js";
 import { monument } from "./purple/monument/index.js";
 import { highway } from "./purple/highway/index.js";
@@ -114,12 +137,18 @@ import { fire } from "./spells/fire/index.js";
 import type { DistrictDef, PurpleBasicDef, PurpleSpecialDef, SpellDef, SpecialDef } from "./types.js";
 
 export const ALL_DISTRICTS: readonly DistrictDef[] = [
+  // Originals (yellow / blue / green / red / multi)
   watchtower, throneRoom, palace, guardBarracks, royalGarden,
   temple, chapel, monastery, cathedral, sanctuary,
   tavern, market, tradingPost, harbor, townHall,
   outpost, prison, fortress, arsenal, citadel,
-  tradeChamber, warCouncil,
-  templarOrder,
+  tradeChamber, warCouncil, templarOrder,
+  // Twins — same stats, different names — doubles the deck pool
+  watchHut, garrison, audienceHall, winterGarden, royalResidence,
+  oratory, holySite, hermitage, reliquary, basilica,
+  innHouse, butcherShop, merchantYard, wharf, exchange,
+  sentry, dungeon, barbican, armoury, bastion,
+  merchantGuild, headquarters, hospitallers,
 ];
 
 export const ALL_PURPLE_BASIC: readonly PurpleBasicDef[] = [
@@ -127,7 +156,7 @@ export const ALL_PURPLE_BASIC: readonly PurpleBasicDef[] = [
 ];
 
 export const ALL_PURPLE_SPECIAL: readonly PurpleSpecialDef[] = [
-  cannon, fort, stronghold, monument, highway, cityGates,
+  cannon, stronghold, monument, highway, cityGates,
   crypt, tntStorage, mine, cult, altarDarkness,
 ];
 

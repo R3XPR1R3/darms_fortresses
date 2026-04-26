@@ -391,19 +391,11 @@ export function useAbility(
       const newTargetDistricts = [...target.builtDistricts];
       const newCost = card.cost - damage;
 
-      // Fort: defender's other districts have -1 effective HP, but on destroy gets gold back
-      const hasFort = target.builtDistricts.some((d) => d.purpleAbility === "fort" && d.id !== card.id);
-
       let newDiscardPile = state.discardPile;
-      let fortGoldRefund = 0;
       if (newCost < 1) {
         // District destroyed — add to discard pile
         newTargetDistricts.splice(cardIdx, 1);
         newDiscardPile = [...state.discardPile, card];
-        // Fort: defender gets gold spent on destruction
-        if (hasFort && card.purpleAbility !== "fort") {
-          fortGoldRefund = damage;
-        }
         log = addLog({ ...state, log }, `${player.name} (Генерал) разрушил ${card.name} у ${target.name} за ${damage} золота`);
         // Crypt: on destroy → owner gets 2 random purple cards
         if (card.purpleAbility === "crypt") {
@@ -436,7 +428,7 @@ export function useAbility(
       }
 
       newPlayers[playerIdx] = { ...player, gold: player.gold - damage, abilityUsed: true };
-      newPlayers[targetIdx] = { ...newPlayers[targetIdx] ?? target, builtDistricts: newTargetDistricts, gold: (newPlayers[targetIdx]?.gold ?? target.gold) + fortGoldRefund };
+      newPlayers[targetIdx] = { ...newPlayers[targetIdx] ?? target, builtDistricts: newTargetDistricts };
       newDeck = state.deck; // preserve deck
       return { ...state, players: newPlayers, deck: newDeck, discardPile: newDiscardPile, log };
     }
@@ -496,11 +488,8 @@ export function calculateScores(state: GameState): GameState {
     let score = 0;
 
     // Sum of each district's current cost (= HP/value).
-    const hasFort = p.builtDistricts.some((d) => d.purpleAbility === "fort");
     for (const d of p.builtDistricts) {
-      // Fort: other buildings score -1 (matches the in-hand HP penalty).
-      const fortPenalty = (hasFort && d.purpleAbility !== "fort") ? 1 : 0;
-      score += Math.max(0, d.cost - fortPenalty);
+      score += Math.max(0, d.cost);
     }
 
     // Bonus for finishing first
