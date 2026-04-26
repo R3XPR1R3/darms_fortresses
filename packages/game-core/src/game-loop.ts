@@ -581,32 +581,31 @@ function useCompanion(
     }
 
     case CompanionId.Agent: {
-      // 2💰: copy a chosen not-yet-acted player's companion (one-shot per
+      // 1💰: copy a chosen not-yet-acted player's companion (one-shot per
       // match — markCompanionGone after).
       //
       // Validation (hard reject = no gold spent, no slot consumed):
       //   - targetPlayerId valid, not self
       //   - target is in turn order strictly AFTER the current turn
-      //   - target's companion is NOT Agent (no recursion / mirror loop)
-      //   - owner has at least 2💰
+      //   - owner has at least 1💰
       //
       // Soft fail (gold spent, slot gone, journal logs the SAME generic
       // "разведка не увенчалась успехом" without details — the player can't
-      // tell whether the target had no companion or a colour-locked one,
-      // which preserves the target's privacy):
+      // tell whether the target had no companion, a colour-locked one, or
+      // another Agent, which preserves the target's privacy):
       //   - target has no companion at all
       //   - target's companion is colour-locked (heroColor !== null)
+      //   - target's companion is Agent itself (no mirror copy)
       //
       // Success: companion field is replaced with the target's companion,
       // companionUsed reset so the copied active can fire this turn. Only
-      // colourless companions are copyable — the spy persona can't disguise
-      // as a hero-class-locked role.
-      if (player.gold < 2) return null;
+      // colourless non-Agent companions are copyable — the spy persona can't
+      // fake a hero-class-locked role or recurse on another spy.
+      if (player.gold < 1) return null;
       if (!targetPlayerId) return null;
       const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
       if (targetIdx === -1 || targetIdx === playerIdx) return null;
       const target = state.players[targetIdx];
-      if (target.companion === CompanionId.Agent) return null;
       if (state.turnOrder) {
         const pos = state.turnOrder.indexOf(targetIdx);
         if (pos === -1) return null;
@@ -617,11 +616,12 @@ function useCompanion(
 
       const targetDef = target.companion ? COMPANIONS.find((c) => c.id === target.companion) : null;
       const isColourLocked = !!targetDef?.heroColor;
+      const isAgentMirror = target.companion === CompanionId.Agent;
 
-      // Soft-fail: no companion OR colour-locked. Same log either way.
-      if (!target.companion || isColourLocked) {
+      // Soft-fail: no companion OR colour-locked OR another Agent. Same log either way.
+      if (!target.companion || isColourLocked || isAgentMirror) {
         newPlayers[playerIdx] = markCompanionGone(
-          { ...player, gold: player.gold - 2, companionUsed: true },
+          { ...player, gold: player.gold - 1, companionUsed: true },
           CompanionId.Agent,
         );
         return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: разведка не увенчалась успехом`), rng: rng.getSeed() };
@@ -630,7 +630,7 @@ function useCompanion(
       const copiedCompanion = target.companion;
       const copiedName = COMPANIONS.find((c) => c.id === copiedCompanion)?.name ?? "?";
       newPlayers[playerIdx] = markCompanionGone(
-        { ...player, gold: player.gold - 2, companion: copiedCompanion, companionUsed: false, companionDisabled: false },
+        { ...player, gold: player.gold - 1, companion: copiedCompanion, companionUsed: false, companionDisabled: false },
         CompanionId.Agent,
       );
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: превратился в копию компаньона ${target.name} (${copiedName})`), rng: rng.getSeed() };

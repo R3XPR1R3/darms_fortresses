@@ -527,16 +527,18 @@ function pickCompanionAction(
       return null;
 
     case CompanionId.Agent: {
-      // Pick the not-yet-acted opponent whose companion is most useful to copy.
-      // Cheap heuristic: prefer non-passive, non-Agent companions; passives are
-      // OK fallback. If nothing fits or we lack 2g — skip.
-      if (player.gold < 2) return null;
+      // Pick the not-yet-acted opponent whose colourless non-Agent companion
+      // is most useful to copy. Skip targets that would soft-fail (no
+      // companion, colour-locked, mirror Agent) — wasting 1💰 + the slot.
+      if (player.gold < 1) return null;
       if (!state.turnOrder) return null;
       const candidates = state.players
         .map((p, i) => ({ p, i }))
         .filter(({ p, i }) => {
           if (i === playerIdx || !p.companion) return false;
           if (p.companion === CompanionId.Agent) return false;
+          const def = COMPANIONS.find((c) => c.id === p.companion);
+          if (def?.heroColor) return false; // colour-locked → soft-fail
           const pos = state.turnOrder!.indexOf(i);
           return pos > state.currentTurnIndex;
         });
