@@ -1,5 +1,5 @@
 import type { GameState, DistrictCard, CardColor, PlayerState } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME, MAX_HAND_CARDS } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME, FIRE_CARD_NAME, MAX_HAND_CARDS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
 import { addRandomColor } from "./deck.js";
@@ -293,9 +293,10 @@ export function buildDistrict(
   // Placeholders are not buildable — they must be played via the dedicated action.
   if (card.placeholder === "purple") return null;
 
-  // Flame cards can be "played away" for 2 gold (discarded, not built).
+  // 🔥 Flame can be played away for 1💰. Stops a single Flame from contributing
+  // to the end-of-day hand-burn or from feeding the 3-Flames → Fire combine.
   if (card.name === FLAME_CARD_NAME) {
-    const flameClearCost = 2;
+    const flameClearCost = 1;
     if (player.gold < flameClearCost) return null;
     const newHand = [...player.hand];
     newHand.splice(cardIdx, 1);
@@ -306,7 +307,25 @@ export function buildDistrict(
       hand: newHand,
       buildsRemaining: player.buildsRemaining - 1,
     };
-    return { ...state, players: newPlayers };
+    return { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `${player.name} погасил 🔥 Пламя за ${flameClearCost}💰` }] };
+  }
+
+  // 🔥 Fire can be played away for 3💰 to stop the per-turn burn early. If
+  // not played, the Fire self-removes at end of day anyway, but each turn
+  // until then it eats one of the owner's hand cards.
+  if (card.name === FIRE_CARD_NAME) {
+    const fireClearCost = 3;
+    if (player.gold < fireClearCost) return null;
+    const newHand = [...player.hand];
+    newHand.splice(cardIdx, 1);
+    const newPlayers = [...state.players];
+    newPlayers[playerIdx] = {
+      ...player,
+      gold: player.gold - fireClearCost,
+      hand: newHand,
+      buildsRemaining: player.buildsRemaining - 1,
+    };
+    return { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `${player.name} потушил 🔥 Пожар за ${fireClearCost}💰` }] };
   }
 
   // Calculate effective cost
@@ -374,8 +393,8 @@ export function buildDistrict(
         targetHand[targetCardIdx] = {
           id: `flame-spell-${Date.now()}-${randomInt(0, 9999)}`,
           name: FLAME_CARD_NAME,
-          cost: 2,
-          originalCost: 2,
+          cost: 1,
+          originalCost: 1,
           hp: 0,
           colors: ["red"],
           baseColors: ["red"],
@@ -441,8 +460,8 @@ export function buildDistrict(
         const flameCard: DistrictCard = {
           id: `flame-fr-${Date.now()}-${i}-${randomInt(0, 9999)}`,
           name: FLAME_CARD_NAME,
-          cost: 2,
-          originalCost: 2,
+          cost: 1,
+          originalCost: 1,
           hp: 0,
           colors: ["red"],
           baseColors: ["red"],
@@ -590,38 +609,68 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     nextIdx++;
   }
 
-  // Flame spreading:
-  // each flame burns up to 2 random non-flame cards in the same hand,
-  // then disappears; each burned card becomes a new flame for next turn.
+  // 🔥 End-of-turn Flame/Fire bookkeeping:
+  //   1. Combine: any hand with 3+ Flames consumes 3 Flames and gains 1 Fire.
+  //      Repeats while hand still has 3+ Flames (a freshly seeded 6-Flame hand
+  //      collapses into 2 Fires immediately).
+  //   2. Fire burn: every Fire in a hand discards 1 random non-flame, non-fire
+  //      card from THAT hand at the end of every turn (any player's turn). If
+  //      the hand has nothing burnable, the Fire idles harmlessly.
+  // Flames themselves do NOT burn here — their burn fires only at end of day.
   for (let i = 0; i < players.length; i++) {
-    const p = players[i];
-    const flameCount = p.hand.filter((c) => c.name === FLAME_CARD_NAME).length;
-    if (flameCount > 0) {
-      const burnable = p.hand.filter((c) => c.name !== FLAME_CARD_NAME);
-      const spawnedFlames: DistrictCard[] = [];
-      let burnedTotal = 0;
+    let p = players[i];
+    let mutated = false;
+    let hand = [...p.hand];
 
-      for (let f = 0; f < flameCount; f++) {
-        for (let b = 0; b < 2; b++) {
-          if (burnable.length === 0) break;
-          const burnIdx = rng.int(0, burnable.length - 1);
-          burnable.splice(burnIdx, 1);
-          burnedTotal++;
-          spawnedFlames.push({
-            id: `flame-${Date.now()}-${i}-${f}-${b}-${rng.int(0, 9999)}`,
-            name: FLAME_CARD_NAME,
-            cost: 2,
-            originalCost: 2,
-            hp: 0,
-            colors: ["red"],
-            baseColors: ["red"],
-          });
+    // Combine Flames → Fire
+    let combinedFires = 0;
+    while (hand.filter((c) => c.name === FLAME_CARD_NAME).length >= 3) {
+      let removed = 0;
+      hand = hand.filter((c) => {
+        if (removed < 3 && c.name === FLAME_CARD_NAME) { removed++; return false; }
+        return true;
+      });
+      hand.push({
+        id: `fire-${Date.now()}-${i}-${combinedFires}-${rng.int(0, 9999)}`,
+        name: FIRE_CARD_NAME,
+        cost: 3,
+        originalCost: 3,
+        hp: 0,
+        colors: ["red"],
+        baseColors: ["red"],
+      });
+      combinedFires++;
+      mutated = true;
+    }
+    if (combinedFires > 0) {
+      log = [...log, { day: state.day, message: `🔥 ${p.name}: 3 Пламени слились в 🔥 Пожар (×${combinedFires})` }];
+    }
+
+    // Fire burns 1 random non-flame, non-fire card per Fire per turn
+    const fireCount = hand.filter((c) => c.name === FIRE_CARD_NAME).length;
+    if (fireCount > 0) {
+      const burnedNames: string[] = [];
+      for (let f = 0; f < fireCount; f++) {
+        const burnableIdxs: number[] = [];
+        for (let h = 0; h < hand.length; h++) {
+          if (hand[h].name !== FLAME_CARD_NAME && hand[h].name !== FIRE_CARD_NAME) {
+            burnableIdxs.push(h);
+          }
         }
+        if (burnableIdxs.length === 0) break;
+        const pickIdx = burnableIdxs[rng.int(0, burnableIdxs.length - 1)];
+        burnedNames.push(hand[pickIdx].name);
+        hand.splice(pickIdx, 1);
       }
+      if (burnedNames.length > 0) {
+        log = [...log, { day: state.day, message: `🔥 Пожар у ${p.name} сжёг: ${burnedNames.join(", ")}` }];
+        mutated = true;
+      }
+    }
 
+    if (mutated) {
       players = [...players];
-      players[i] = { ...p, hand: [...burnable, ...spawnedFlames] };
-      log = [...log, { day: state.day, message: `🔥 Пламя у ${p.name}: сгорело карт ${burnedTotal}, новых огней ${spawnedFlames.length}` }];
+      players[i] = { ...p, hand };
     }
   }
 
@@ -642,6 +691,48 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   state = { ...state, players, log };
 
   if (nextIdx >= turnOrder.length) {
+    // End-of-day flame/fire resolution:
+    //   - Each remaining Flame burns 1 random non-flame, non-fire hand card
+    //     (the Flame itself stays in hand; you must clear it via "play for 1💰"
+    //     to stop future-day burns or feed the combine).
+    //   - All Fires self-discard (their per-turn burn already happened during
+    //     each turn this day).
+    {
+      const flamePlayers = [...state.players];
+      let fLog = state.log;
+      for (let i = 0; i < flamePlayers.length; i++) {
+        const p = flamePlayers[i];
+        const flameCount = p.hand.filter((c) => c.name === FLAME_CARD_NAME).length;
+        const hasFire = p.hand.some((c) => c.name === FIRE_CARD_NAME);
+        if (flameCount === 0 && !hasFire) continue;
+        let hand = [...p.hand];
+        const burnedNames: string[] = [];
+        for (let f = 0; f < flameCount; f++) {
+          const burnableIdxs: number[] = [];
+          for (let h = 0; h < hand.length; h++) {
+            if (hand[h].name !== FLAME_CARD_NAME && hand[h].name !== FIRE_CARD_NAME) {
+              burnableIdxs.push(h);
+            }
+          }
+          if (burnableIdxs.length === 0) break;
+          const pickIdx = burnableIdxs[rng.int(0, burnableIdxs.length - 1)];
+          burnedNames.push(hand[pickIdx].name);
+          hand.splice(pickIdx, 1);
+        }
+        // Fires self-discard at end of day.
+        const removedFires = hand.filter((c) => c.name === FIRE_CARD_NAME).length;
+        hand = hand.filter((c) => c.name !== FIRE_CARD_NAME);
+        if (burnedNames.length > 0) {
+          fLog = [...fLog, { day: state.day, message: `🔥 Пламя у ${p.name} сожгло: ${burnedNames.join(", ")}` }];
+        }
+        if (removedFires > 0) {
+          fLog = [...fLog, { day: state.day, message: `🔥 Пожар у ${p.name} догорел и исчез` }];
+        }
+        flamePlayers[i] = { ...p, hand };
+      }
+      state = { ...state, players: flamePlayers, log: fLog };
+    }
+
     // End-of-day cleanup for Holy Day spell: restore original district colors.
     for (let i = 0; i < state.players.length; i++) {
       const p = state.players[i];

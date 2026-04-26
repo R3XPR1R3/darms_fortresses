@@ -336,34 +336,35 @@ function useCompanion(
     }
 
     case CompanionId.Pyromancer: {
-      // Burns a random card from any chosen player's hand (revealed or not).
-      // The Pyromancer's owner picks the target player (targetPlayerId) — the
-      // burned card is rolled randomly from that player's hand to keep things
-      // hidden if the target hasn't acted yet. Replaces the rolled card with 🔥 Flame.
+      // Plant 🔥 Flame in BOTH the chosen player's hand AND the Pyromancer
+      // owner's own hand — playing with fire burns yourself too. Cards are
+      // appended (not replacing existing cards). If a hand is at MAX_HAND_CARDS
+      // the new flame just overflows — enforceHandLimit handles the trim and
+      // the journal notes overflow there.
       if (!targetPlayerId) return null;
       const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
       if (targetIdx === -1) return null;
       const target = state.players[targetIdx];
-      if (target.hand.length === 0) return null;
-      const cardIdx = rng.int(0, target.hand.length - 1);
-      const burned = target.hand[cardIdx];
-      const newTargetHand = [...target.hand];
-      const flameCard: DistrictCard = {
-        id: `flame-${Date.now()}-${rng.int(0, 9999)}`,
+      const makeFlame = (suffix: string): DistrictCard => ({
+        id: `flame-${Date.now()}-${suffix}-${rng.int(0, 9999)}`,
         name: FLAME_CARD_NAME,
-        cost: 2,
-        originalCost: 2,
+        cost: 1,
+        originalCost: 1,
         hp: 0,
         colors: ["red"],
         baseColors: ["red"],
-      };
-      newTargetHand[cardIdx] = flameCard;
-      newPlayers[targetIdx] = { ...target, hand: newTargetHand };
-      newPlayers[playerIdx] = { ...newPlayers[playerIdx], companionUsed: true };
+      });
+      // Plant in target hand
+      const flameForTarget = makeFlame("t");
+      newPlayers[targetIdx] = { ...target, hand: [...target.hand, flameForTarget] };
+      // Plant in own hand (read from newPlayers in case target===self overwrote it)
+      const ownerAfter = newPlayers[playerIdx] ?? player;
+      const flameForOwner = makeFlame("o");
+      newPlayers[playerIdx] = { ...ownerAfter, hand: [...ownerAfter.hand, flameForOwner], companionUsed: true };
       const targetIsSelf = targetIdx === playerIdx;
       const msg = targetIsSelf
-        ? `${player.name} — пиромант: ${burned.name} → ${FLAME_CARD_NAME}`
-        : `${player.name} — пиромант: подбросил ${FLAME_CARD_NAME} в руку ${target.name}`;
+        ? `${player.name} — пиромант: подбросил 🔥 Пламя себе в руку (двойную дозу)`
+        : `${player.name} — пиромант: подбросил 🔥 Пламя в руку ${target.name} и себе`;
       return { ...addLog({ ...state, players: newPlayers }, msg), rng: rng.getSeed() };
     }
 

@@ -129,6 +129,8 @@ const dict: Record<string, TranslationEntry> = {
 
   // Hand
   "my.play_placeholder": { en: "Play", ru: "Разыграть", id: "Mainkan" },
+  "my.clear_flame": { en: "Snuff out", ru: "Погасить", id: "Padamkan" },
+  "my.clear_fire": { en: "Extinguish", ru: "Потушить", id: "Padamkan kebakaran" },
 
   // Draft / companion skip
   "draft.skip_companion": { en: "Skip companion", ru: "Пропустить выбор" },
@@ -432,7 +434,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   strange_merchant: { en: "Discard a card → gain gold = its cost. 🟢 only. {kw:leaves}", ru: "Сбросить карту → получить золото = её цена. Только 🟢. {kw:leaves}", id: "Buang kartu → dapat emas = harganya. Hanya 🟢. {kw:leaves}" },
   gravedigger: { en: "{kw:passive} On {kw:kill}: gain the victim's hero ability", ru: "{kw:passive} При {kw:kill}: получаете способность убитого героя", id: "{kw:passive} Saat {kw:kill}: dapatkan kemampuan hero korban" },
   jester: { en: "{kw:passive} Shuffle all players' hands. 🟡 only.", ru: "{kw:passive} Перемешивает руки всех игроков. Только 🟡.", id: "{kw:passive} Acak kartu tangan semua pemain. Hanya 🟡." },
-  pyromancer: { en: "Plant 🔥 Flame in any player's hand (random card). Flames multiply each turn!", ru: "Подбрасывает 🔥 Пламя в руку любого игрока (случайной картой). Пламя множится каждый ход!", id: "Tanam 🔥 Api di tangan pemain mana pun (kartu acak). Api berkembang tiap giliran!" },
+  pyromancer: { en: "Plant 🔥 Flame in any player's hand AND your own. Flame stays until cleared (1💰), burns 1 card at end of day. 3 Flames combine into 🔥 Fire (burns 1 card per turn).", ru: "Подбрасывает 🔥 Пламя в руку любого игрока И себе. Пламя остаётся до сброса (1💰), сжигает 1 карту в конце дня. 3 Пламени → 🔥 Пожар (1 карта/ход).", id: "Tanam 🔥 Api di tangan pemain mana pun DAN tangan sendiri. Api tetap sampai dibuang (1💰), bakar 1 kartu di akhir hari. 3 Api → 🔥 Kebakaran (1 kartu/giliran)." },
   sun_fanatic: { en: "Only blue buildings, or 2💰 to replace next player's companion. 🔵 only", ru: "Только синие постройки, или 2💰 заменить компаньона следующего. Только 🔵", id: "Hanya bangunan biru, atau 2💰 untuk ganti companion pemain berikut. Hanya 🔵" },
   sniper: { en: "Permanently remove opponent's companion from pool. {kw:leaves}", ru: "Навсегда убирает компаньона противника из пула. {kw:leaves}", id: "Hapus permanen companion lawan dari pool. {kw:leaves}" },
   knight: { en: "{kw:passive} Richest loses up to 3💰 (all they have if less) → poorest gains the same", ru: "{kw:passive} Богатейший теряет до 3💰 (всё что есть если меньше) → беднейший получает столько же", id: "{kw:passive} Terkaya kehilangan hingga 3💰 (semuanya kalau kurang) → termiskin dapat jumlah yang sama" },
@@ -567,7 +569,12 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /🚪 Врата в город у (.+?) в руке: стоимость → (\d+)/, en: (_, n, c) => `🚪 City Gates in ${n}'s hand: cost → ${c}`, id: (_, n, c) => `🚪 Gerbang Kota di tangan ${n}: harga → ${c}` },
 
   // Pyromancer flames at end of turn
-  { pattern: /🔥 Пламя у (.+?): сгорело карт (\d+), новых огней (\d+)/, en: (_, n, b, s) => `🔥 Flames in ${n}'s hand: ${b} cards burned, ${s} new flames`, id: (_, n, b, s) => `🔥 Api di tangan ${n}: ${b} kartu terbakar, ${s} api baru` },
+  { pattern: /🔥 (.+?): 3 Пламени слились в 🔥 Пожар \(×(\d+)\)/, en: (_, n, c) => `🔥 ${n}: 3 Flames combined into 🔥 Fire (×${c})`, id: (_, n, c) => `🔥 ${n}: 3 Api menyatu jadi 🔥 Kebakaran (×${c})` },
+  { pattern: /🔥 Пожар у (.+?) сжёг: (.+)/, en: (_, n, list) => `🔥 ${n}'s Fire burned: ${list}`, id: (_, n, list) => `🔥 Kebakaran ${n} membakar: ${list}` },
+  { pattern: /🔥 Пламя у (.+?) сожгло: (.+)/, en: (_, n, list) => `🔥 ${n}'s Flame burned: ${list}`, id: (_, n, list) => `🔥 Api ${n} membakar: ${list}` },
+  { pattern: /🔥 Пожар у (.+?) догорел и исчез/, en: (_, n) => `🔥 ${n}'s Fire burned out and vanished`, id: (_, n) => `🔥 Kebakaran ${n} padam dan menghilang` },
+  { pattern: /(.+?) погасил 🔥 Пламя за (\d+)💰/, en: (_, n, g) => `${n} cleared 🔥 Flame for ${g}💰`, id: (_, n, g) => `${n} memadamkan 🔥 Api seharga ${g}💰` },
+  { pattern: /(.+?) потушил 🔥 Пожар за (\d+)💰/, en: (_, n, g) => `${n} extinguished 🔥 Fire for ${g}💰`, id: (_, n, g) => `${n} memadamkan 🔥 Kebakaran seharga ${g}💰` },
   { pattern: /🧨 (.+?) потерял: (.+)/, en: (_, n, list) => `🧨 ${n} lost: ${list}`, id: (_, n, list) => `🧨 ${n} kehilangan: ${list}` },
   { pattern: /🧨 (.+?) взорвал Склад тротила: (\d+) урона распределено между постройками/, en: (_, n, d) => `🧨 ${n} blew up TNT Storage: ${d} damage spread across districts`, id: (_, n, d) => `🧨 ${n} meledakkan Gudang TNT: ${d} damage tersebar di distrik` },
 
@@ -596,8 +603,8 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /(.+?) — сомнительный делец: всё стало (.+?)!/, en: (_, n, color) => `${n} — Dubious Dealer: everything turned ${color}!`, id: (_, n, color) => `${n} — Pedagang mencurigakan: semua jadi ${color}!` },
   { pattern: /(.+?) — ученик чародея: построил (.+?) из сброса/, en: (_, n, d) => `${n} — Apprentice: built ${tDistrict(d)} from discard`, id: (_, n, d) => `${n} — Murid penyihir: bangun ${tDistrict(d)} dari buangan` },
   { pattern: /(.+?) — странный торговец: продал (.+?) за (\d+)💰/, en: (_, n, d, g) => `${n} — Strange Merchant: sold ${tDistrict(d)} for ${g}💰`, id: (_, n, d, g) => `${n} — Pedagang aneh: jual ${tDistrict(d)} seharga ${g}💰` },
-  { pattern: /(.+?) — пиромант: подбросил 🔥 Пламя в руку (.+)/, en: (_, n, t) => `${n} — Pyromancer: planted 🔥 Flame in ${t}'s hand`, id: (_, n, t) => `${n} — Penyihir api: tanam 🔥 Api di tangan ${t}` },
-  { pattern: /(.+?) — пиромант: (.+?) → 🔥 Пламя/, en: (_, n, d) => `${n} — Pyromancer: ${tDistrict(d)} → 🔥 Flame`, id: (_, n, d) => `${n} — Penyihir api: ${tDistrict(d)} → 🔥 Api` },
+  { pattern: /(.+?) — пиромант: подбросил 🔥 Пламя в руку (.+?) и себе/, en: (_, n, t) => `${n} — Pyromancer: planted 🔥 Flame in ${t}'s hand and own hand`, id: (_, n, t) => `${n} — Penyihir api: tanam 🔥 Api di tangan ${t} dan tangan sendiri` },
+  { pattern: /(.+?) — пиромант: подбросил 🔥 Пламя себе в руку \(двойную дозу\)/, en: (_, n) => `${n} — Pyromancer: planted 🔥 Flame in own hand (double dose)`, id: (_, n) => `${n} — Penyihir api: tanam 🔥 Api di tangan sendiri (dosis ganda)` },
   { pattern: /(.+?) — снайпер: навсегда убрал (.+?) у (.+?)!/, en: (_, n, comp, t) => `${n} — Sniper: permanently removed ${comp} from ${t}!`, id: (_, n, comp, t) => `${n} — Penembak jitu: hapus permanen ${comp} dari ${t}!` },
   { pattern: /(.+?) — фанатик солнца: заменил компаньона (.+?) на (.+)/, en: (_, n, t, c) => `${n} — Sun Fanatic: replaced ${t}'s companion with ${c}`, id: (_, n, t, c) => `${n} — Fanatik matahari: ganti companion ${t} dengan ${c}` },
   { pattern: /(.+?) — рыбак: построил (.+?) \(2💰\)/, en: (_, n, d) => `${n} — Fisherman: built ${tDistrict(d)} (2💰)`, id: (_, n, d) => `${n} — Nelayan: bangun ${tDistrict(d)} (2💰)` },
