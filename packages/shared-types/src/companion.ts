@@ -87,7 +87,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.StrangeMerchant, name: "Странный торговец", description: "Сбрасывает карту из руки и получает её стоимость (только 🟢). Уходит", emoji: "🧳", passive: false, targetType: "own_hand_card", heroColor: "green", leavesPool: true },
   { id: CompanionId.Gravedigger, name: "Могильщик", description: "При убийстве героя — получаете его способность", emoji: "⚰️", passive: true },
   { id: CompanionId.Jester, name: "Шут", description: "Перемешивает карты всех игроков (только 🟡). Дебафф!", emoji: "🤡", passive: true, heroColor: "yellow" },
-  { id: CompanionId.Pyromancer, name: "Пиромант", description: "Подбросьте 🔥 Пламя в руку выбранного игрока И себе. Пламя ничего не делает, но 3 Пламени сливаются в 🔥 Пожар (1 карта/ход, исчезает в конце дня). Дебафф себе и сопернику!", emoji: "🔥", passive: false, targetType: "player" },
+  { id: CompanionId.Pyromancer, name: "Пиромант", description: "Подбросьте 🔥 Пламя в руку выбранного игрока И себе. Пламя сжигает 1 карту в конце дня. 3 Пламени сливаются в 🔥 Пожар (1 карта/ход, исчезает в конце дня). Дебафф себе и сопернику!", emoji: "🔥", passive: false, targetType: "player" },
   { id: CompanionId.SunFanatic, name: "Фанатик солнца", description: "Только синие постройки, или 2💰 чтобы заменить компаньона следующего (только 🔵)", emoji: "🌅", passive: false, heroColor: "blue", useCost: 2 },
   { id: CompanionId.Sniper, name: "Снайпер", description: "Навсегда убирает компаньона противника из пула", emoji: "🎯", passive: false, targetType: "player" },
   { id: CompanionId.Knight, name: "Рыцарь", description: "Забирает до 3💰 у богатейшего и отдаёт беднейшему (всё что есть, если меньше 3)", emoji: "⚜️", passive: true },
