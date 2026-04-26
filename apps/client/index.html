@@ -1009,9 +1009,10 @@
 
       #turn-banner { font-size: 12px; padding: 4px 6px; min-height: 28px; }
 
-      /* Opponent tabs as horizontal scroll */
+      /* Opponent tabs as horizontal scroll, centered when they fit. */
       #opponent-tabs {
         display: flex; flex-direction: row; gap: 4px;
+        justify-content: center;
         overflow-x: auto; -webkit-overflow-scrolling: touch;
         padding: 4px 2px;
         border-bottom: 1px solid #0f3460;
@@ -1019,26 +1020,34 @@
       }
       .opp-tab { flex: 0 0 auto; min-width: 110px; padding: 6px 8px; font-size: 11px; }
 
-      /* Stack opponent + own boards */
+      /* Stack opponent + own boards. text-align centers any heading / "no districts" label. */
       #opponent-board, #my-board {
         width: 100%; max-width: 100%;
         padding: 4px 0;
         box-sizing: border-box;
+        text-align: center;
       }
 
       /* Hero portraits smaller */
       .my-hero-row .hero-icon-large .hero-portrait,
       .opp-hero-display .hero-icon-large .hero-portrait { width: 44px !important; height: 44px !important; }
 
-      /* Districts: 4-per-row max on phones */
-      .my-districts, .opp-districts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+      /* Districts: auto-fit grid with centered tracks so 1-2 cards aren't pinned to the left.
+       * Each card targets ~80px wide, max 90px so the row never explodes. */
+      .my-districts, .opp-districts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(72px, 90px));
+        gap: 4px;
+        justify-content: center;
+      }
       .district-card { font-size: 9px; min-width: 0; }
       .district-card .card-cost-badge { width: 20px; height: 20px; font-size: 11px; }
       .card-info-btn { width: 18px; height: 18px; font-size: 10px; }
 
-      /* Hand: horizontal scroll if too wide */
+      /* Hand: horizontal scroll if too wide, centered when the row fits. */
       #my-hand .hand-cards {
         display: flex; flex-direction: row; gap: 6px;
+        justify-content: center;
         overflow-x: auto; -webkit-overflow-scrolling: touch;
         padding: 4px 2px;
         scrollbar-width: thin;
