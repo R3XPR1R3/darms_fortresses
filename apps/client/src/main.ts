@@ -739,6 +739,16 @@ function showCardInfoPopover(card: { name: string; cost: number; colors: string[
     title = tDistrict(card.name); // already i18n-aware
     desc = t("purple.placeholder_desc");
     extraTag = t("deck.placeholder") ?? "placeholder";
+  } else if (card.name === "🔥 Пламя") {
+    emoji = "🔥";
+    title = t("flame.title") ?? "🔥 Пламя";
+    desc = t("flame.desc");
+    extraTag = t("flame.tag") ?? "spawn";
+  } else if (card.name === "🔥 Пожар") {
+    emoji = "🔥";
+    title = t("fire.title") ?? "🔥 Пожар";
+    desc = t("fire.desc");
+    extraTag = t("fire.tag") ?? "hazard";
   } else if (card.purpleAbility) {
     const tpl = PURPLE_CARD_TEMPLATES.find((t) => t.ability === card.purpleAbility);
     emoji = tpl?.emoji ?? "🔮";

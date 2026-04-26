@@ -129,6 +129,22 @@ const dict: Record<string, TranslationEntry> = {
 
   // Hand
   "my.play_placeholder": { en: "Play", ru: "Разыграть", id: "Mainkan" },
+
+  // Flame & Fire info popover
+  "flame.title": { en: "🔥 Flame", ru: "🔥 Пламя", id: "🔥 Api" },
+  "flame.tag": { en: "fire spawn", ru: "очаг", id: "percikan" },
+  "flame.desc": {
+    en: "Sits in your hand doing nothing on its own. Pay 1💰 to play it (discards safely). If THREE Flames pile up in the same hand at end of any turn, they collapse into a 🔥 Fire which actually burns cards.",
+    ru: "Сидит в руке и сама по себе ничего не делает. Заплатите 1💰 чтобы сбросить безопасно. Но если у вас в конце любого хода накопилось 3 Пламени — они сольются в 🔥 Пожар, который уже сжигает карты.",
+    id: "Diam di tangan, sendirinya tidak berbahaya. Bayar 1💰 untuk membuangnya. Jika TIGA Api menumpuk di tangan saat akhir giliran mana pun, mereka menyatu jadi 🔥 Kebakaran yang benar-benar membakar kartu.",
+  },
+  "fire.title": { en: "🔥 Fire", ru: "🔥 Пожар", id: "🔥 Kebakaran" },
+  "fire.tag": { en: "hazard", ru: "угроза", id: "bahaya" },
+  "fire.desc": {
+    en: "At the end of EVERY turn (any player's turn) the Fire discards 1 random non-flame, non-fire card from its owner's hand. At end of day the Fire self-discards. Owner can play it for 3💰 to extinguish early instead of waiting.",
+    ru: "В конце КАЖДОГО хода (любого игрока) Пожар сбрасывает 1 случайную карту из руки владельца (не считая Пламя/Пожары). В конце дня сам исчезает. Владелец может заплатить 3💰, чтобы потушить досрочно.",
+    id: "Di akhir SETIAP giliran (siapa pun) Kebakaran membuang 1 kartu acak dari tangan pemiliknya (kecuali Api/Kebakaran). Di akhir hari hilang sendiri. Pemilik bisa bayar 3💰 untuk memadamkan lebih awal.",
+  },
   "my.clear_flame": { en: "Snuff out", ru: "Погасить", id: "Padamkan" },
   "my.clear_fire": { en: "Extinguish", ru: "Потушить", id: "Padamkan kebakaran" },
 
