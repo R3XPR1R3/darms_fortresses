@@ -446,7 +446,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   contractor: { en: "Name a hero (not from open ban). If Assassin {kw:kill}s them → steal their purple cards", ru: "Назовите героя (не из открытого бана). Если Убийца совершит {kw:kill} → крадёте его фиолетовые карты", id: "Sebutkan hero (bukan dari ban terbuka). Jika Assassin {kw:kill} → curi kartu ungunya" },
   night_shadow: { en: "2💰: {kw:kill} an unrevealed hero", ru: "За 2💰: {kw:kill} нераскрытого героя", id: "2💰: {kw:kill} hero yang belum terbuka" },
   interceptor: { en: "{kw:passive} If first in turn order: draw 2 cards and slow the next player by +1 speed", ru: "{kw:passive} Если ходите первым — берёте 2 карты, скорость следующего +1", id: "{kw:passive} Jika urutan giliran pertama: ambil 2 kartu dan turunkan giliran berikutnya +1 kecepatan" },
-  agent: { en: "2💰: copy a chosen not-yet-acted player's companion this day. Reveals their pick. {kw:leaves}", ru: "За 2💰: становится копией компаньона выбранного игрока, который ещё не ходил. Раскрывает его. {kw:leaves}", id: "2💰: jadi salinan companion pemain terpilih yang belum bertindak. Mengungkap pilihannya. {kw:leaves}" },
+  agent: { en: "2💰: copy a chosen not-yet-acted player's companion. Only colourless companions can be copied — otherwise reconnaissance fails. {kw:leaves}", ru: "За 2💰: становится копией компаньона выбранного игрока, который ещё не ходил. Только если компаньон бесцветный — иначе разведка не удалась. {kw:leaves}", id: "2💰: salin companion pemain terpilih yang belum bertindak. Hanya companion tanpa warna yang dapat disalin — kalau tidak, pengintaian gagal. {kw:leaves}" },
 };
 
 export function tCompanionName(id: string, fallback?: string): string {
@@ -580,7 +580,7 @@ const LOG_PATTERNS: Array<{ pattern: RegExp; en: (...m: string[]) => string; id?
   { pattern: /(.+?) — фермер: нет построек ≥3💰 → \+(\d+)💰/, en: (_, n, g) => `${n} — Farmer: no districts ≥3💰 → +${g}💰`, id: (_, n, g) => `${n} — Petani: tidak ada distrik ≥3💰 → +${g}💰` },
   { pattern: /(.+?) — перехватчик: \+(\d+)🃏 \(идёт первым\)/, en: (_, n, c) => `${n} — Interceptor: +${c}🃏 (going first)`, id: (_, n, c) => `${n} — Pencegat: +${c}🃏 (giliran pertama)` },
   { pattern: /(.+?) — агент: превратился в копию компаньона (.+?) \((.+?)\)/, en: (_, n, t, c) => `${n} — Agent: copied ${t}'s companion (${c})`, id: (_, n, t, c) => `${n} — Agen: salin companion ${t} (${c})` },
-  { pattern: /(.+?) — агент: разведка не увенчалась успехом — у (.+?) нет компаньона/, en: (_, n, t) => `${n} — Agent: reconnaissance failed — ${t} has no companion`, id: (_, n, t) => `${n} — Agen: pengintaian gagal — ${t} tidak punya companion` },
+  { pattern: /(.+?) — агент: разведка не увенчалась успехом$/, en: (_, n) => `${n} — Agent: reconnaissance failed`, id: (_, n) => `${n} — Agen: pengintaian gagal` },
   { pattern: /(.+?) — рыцарь: (.+?) −(\d+)💰 → (.+?) \+(\d+)💰/, en: (_, n, rich, lost, poor, got) => `${n} — Knight: ${rich} −${lost}💰 → ${poor} +${got}💰`, id: (_, n, rich, lost, poor, got) => `${n} — Ksatria: ${rich} −${lost}💰 → ${poor} +${got}💰` },
   { pattern: /(.+?) — художник: все 4 цвета → \+(\d+)💰/, en: (_, n, g) => `${n} — Artist: all 4 colors → +${g}💰`, id: (_, n, g) => `${n} — Seniman: 4 warna → +${g}💰` },
   { pattern: /(.+?) — знать: (.+?) \+(\d+)🃏, остальные −1🃏 −2💰/, en: (_, n, rich, c) => `${n} — Nobility: ${rich} +${c}🃏, others −1🃏 −2💰`, id: (_, n, rich, c) => `${n} — Bangsawan: ${rich} +${c}🃏, lainnya −1🃏 −2💰` },

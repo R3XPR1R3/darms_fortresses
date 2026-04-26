@@ -590,15 +590,17 @@ function useCompanion(
       //   - target's companion is NOT Agent (no recursion / mirror loop)
       //   - owner has at least 2💰
       //
-      // Soft fail (gold spent, slot gone, journal logs "разведка не удалась"):
-      //   - target has no companion (e.g. they couldn't pick due to colour
-      //     restriction in their personal pool that day)
+      // Soft fail (gold spent, slot gone, journal logs the SAME generic
+      // "разведка не увенчалась успехом" without details — the player can't
+      // tell whether the target had no companion or a colour-locked one,
+      // which preserves the target's privacy):
+      //   - target has no companion at all
+      //   - target's companion is colour-locked (heroColor !== null)
       //
-      // Success: companion field is replaced, companionUsed reset so the
-      // copied active can fire this turn. Colour-restricted companions ARE
-      // copied — the colour rule still applies on use (a red hero copying
-      // SunPriestess won't get the blue discount, that's a known trade-off
-      // and part of the strategic choice when picking the target).
+      // Success: companion field is replaced with the target's companion,
+      // companionUsed reset so the copied active can fire this turn. Only
+      // colourless companions are copyable — the spy persona can't disguise
+      // as a hero-class-locked role.
       if (player.gold < 2) return null;
       if (!targetPlayerId) return null;
       const targetIdx = state.players.findIndex((p) => p.id === targetPlayerId);
@@ -610,16 +612,19 @@ function useCompanion(
         if (pos === -1) return null;
         if (pos <= state.currentTurnIndex) return null; // current or past
       } else {
-        return null; // no turn order yet → can't pick in advance
+        return null;
       }
 
-      // Soft-fail path: target has no companion at all.
-      if (!target.companion) {
+      const targetDef = target.companion ? COMPANIONS.find((c) => c.id === target.companion) : null;
+      const isColourLocked = !!targetDef?.heroColor;
+
+      // Soft-fail: no companion OR colour-locked. Same log either way.
+      if (!target.companion || isColourLocked) {
         newPlayers[playerIdx] = markCompanionGone(
           { ...player, gold: player.gold - 2, companionUsed: true },
           CompanionId.Agent,
         );
-        return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: разведка не увенчалась успехом — у ${target.name} нет компаньона`), rng: rng.getSeed() };
+        return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: разведка не увенчалась успехом`), rng: rng.getSeed() };
       }
 
       const copiedCompanion = target.companion;
