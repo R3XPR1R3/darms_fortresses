@@ -14,6 +14,7 @@ export type GameAction =
   | AbilityAction
   | UseCompanionAction
   | ActivateBuildingAction
+  | PlanPickAction
   | EndTurnAction;
 
 /** Player picks a hero during draft */
@@ -44,6 +45,8 @@ export interface BuildAction {
   cardId: string;
   /** Target district id (for spells like fire_ritual that sacrifice an own building). */
   targetCardId?: string;
+  /** Mode selector for spells with multiple modes (bombardment, enhancement). */
+  mode?: string;
 }
 
 /** Player uses their hero ability */
@@ -110,6 +113,15 @@ export interface ActivateBuildingAction {
   type: "activate_building";
   playerId: string;
   cardId: string; // id of the built purple district to activate
+  /** Target card id when activation needs a hand or table card (e.g. Observatory discards). */
+  targetCardId?: string;
+}
+
+/** Player picks one card from the pending Plan offer (grey card). */
+export interface PlanPickAction {
+  type: "plan_pick";
+  playerId: string;
+  cardId: string; // id from pendingPlanOffer.choices
 }
 
 /** Player explicitly ends their turn */

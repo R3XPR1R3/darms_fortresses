@@ -1,6 +1,6 @@
 import type { DistrictCard, CardColor } from "@darms/shared-types";
-import { ALL_DISTRICTS, ALL_PURPLE_BASIC, ALL_SPELLS } from "@darms/shared-types";
-import type { DistrictDef, PurpleBasicDef, SpellDef } from "@darms/shared-types";
+import { ALL_DISTRICTS, ALL_PURPLE_BASIC, ALL_SPELLS, ALL_GREY } from "@darms/shared-types";
+import type { DistrictDef, PurpleBasicDef, SpellDef, GreyDef } from "@darms/shared-types";
 
 /** Unified template used for deck generation */
 interface CardTemplate {
@@ -9,6 +9,7 @@ interface CardTemplate {
   colors: CardColor[];
   count: number;
   spellAbility?: string;
+  greyAbility?: string;
 }
 
 /** Build TEMPLATES from the card registry (single source of truth) */
@@ -23,6 +24,9 @@ function buildTemplates(): CardTemplate[] {
   }
   for (const s of ALL_SPELLS as readonly SpellDef[]) {
     templates.push({ name: s.name.ru, cost: s.cost, colors: ["purple"], count: s.count, spellAbility: s.ability });
+  }
+  for (const g of ALL_GREY as readonly GreyDef[]) {
+    templates.push({ name: g.name.ru, cost: g.cost, colors: [], count: g.count, greyAbility: g.ability });
   }
 
   return templates;
@@ -46,6 +50,7 @@ export function createBaseDeck(): DistrictCard[] {
         colors: t.colors as CardColor[],
         baseColors: t.colors as CardColor[],
         spellAbility: t.spellAbility as DistrictCard["spellAbility"],
+        greyAbility: t.greyAbility as DistrictCard["greyAbility"],
       });
     }
   }

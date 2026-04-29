@@ -2,7 +2,7 @@
 // Single source of truth for all card data.
 // Every card lives in its own folder; this file collects them.
 
-export type { I18nText, DistrictDef, PurpleBasicDef, PurpleSpecialDef, SpellDef, SpecialDef, AnyCardDef } from "./types.js";
+export type { I18nText, DistrictDef, PurpleBasicDef, PurpleSpecialDef, SpellDef, SpecialDef, GreyDef, AnyCardDef } from "./types.js";
 
 // ---- Districts (yellow / blue / green / red / multi) ----
 export { watchtower } from "./districts/watchtower/index.js";
@@ -32,14 +32,6 @@ export { citadel } from "./districts/citadel/index.js";
 export { tradeChamber } from "./districts/trade_chamber/index.js";
 export { warCouncil } from "./districts/war_council/index.js";
 
-// ---- Purple basic (in deck, no special ability) ----
-export { observatory } from "./purple-basic/observatory/index.js";
-export { laboratory } from "./purple-basic/laboratory/index.js";
-export { smithy } from "./purple-basic/smithy/index.js";
-export { library } from "./purple-basic/library/index.js";
-export { royalLibrary } from "./purple-basic/royal_library/index.js";
-export { sacredGrove } from "./purple-basic/sacred_grove/index.js";
-
 // ---- Purple special (drafted, with abilities) ----
 export { cannon } from "./purple/cannon/index.js";
 export { stronghold } from "./purple/stronghold/index.js";
@@ -51,6 +43,11 @@ export { tntStorage } from "./purple/tnt_storage/index.js";
 export { mine } from "./purple/mine/index.js";
 export { cult } from "./purple/cult/index.js";
 export { altarDarkness } from "./purple/altar_darkness/index.js";
+export { observatory } from "./purple/observatory/index.js";
+export { salvageYard } from "./purple/salvage_yard/index.js";
+export { hospital } from "./purple/hospital/index.js";
+export { innerWall } from "./purple/inner_wall/index.js";
+export { heavyArtillery } from "./purple/heavy_artillery/index.js";
 
 // ---- Spells ----
 export { ignite } from "./spells/ignite/index.js";
@@ -59,6 +56,14 @@ export { holyDay } from "./spells/holy_day/index.js";
 export { flood } from "./spells/flood/index.js";
 export { plague } from "./spells/plague/index.js";
 export { flame } from "./spells/flame/index.js";
+export { fireMagic } from "./spells/fire_magic/index.js";
+export { bombardment } from "./spells/bombardment/index.js";
+export { enhancement } from "./spells/enhancement/index.js";
+
+// ---- Grey (in shared deck, played from hand) ----
+export { newOpportunities } from "./grey/new_opportunities/index.js";
+export { plan } from "./grey/plan/index.js";
+export { burningDeadline } from "./grey/burning_deadline/index.js";
 
 // ---- Aggregated collections ----
 import { watchtower } from "./districts/watchtower/index.js";
@@ -109,12 +114,6 @@ import { bastion } from "./districts/bastion/index.js";
 import { merchantGuild } from "./districts/merchant_guild/index.js";
 import { headquarters } from "./districts/headquarters/index.js";
 import { hospitallers } from "./districts/hospitallers/index.js";
-import { observatory } from "./purple-basic/observatory/index.js";
-import { laboratory } from "./purple-basic/laboratory/index.js";
-import { smithy } from "./purple-basic/smithy/index.js";
-import { library } from "./purple-basic/library/index.js";
-import { royalLibrary } from "./purple-basic/royal_library/index.js";
-import { sacredGrove } from "./purple-basic/sacred_grove/index.js";
 import { cannon } from "./purple/cannon/index.js";
 import { stronghold } from "./purple/stronghold/index.js";
 import { monument } from "./purple/monument/index.js";
@@ -125,16 +124,27 @@ import { tntStorage } from "./purple/tnt_storage/index.js";
 import { mine } from "./purple/mine/index.js";
 import { cult } from "./purple/cult/index.js";
 import { altarDarkness } from "./purple/altar_darkness/index.js";
+import { observatory } from "./purple/observatory/index.js";
+import { salvageYard } from "./purple/salvage_yard/index.js";
+import { hospital } from "./purple/hospital/index.js";
+import { innerWall } from "./purple/inner_wall/index.js";
+import { heavyArtillery } from "./purple/heavy_artillery/index.js";
 import { ignite } from "./spells/ignite/index.js";
 import { goldRain } from "./spells/gold_rain/index.js";
 import { holyDay } from "./spells/holy_day/index.js";
 import { flood } from "./spells/flood/index.js";
 import { plague } from "./spells/plague/index.js";
 import { fireRitual } from "./spells/fire_ritual/index.js";
+import { fireMagic } from "./spells/fire_magic/index.js";
+import { bombardment } from "./spells/bombardment/index.js";
+import { enhancement } from "./spells/enhancement/index.js";
 import { flame } from "./spells/flame/index.js";
 import { fire } from "./spells/fire/index.js";
+import { newOpportunities } from "./grey/new_opportunities/index.js";
+import { plan } from "./grey/plan/index.js";
+import { burningDeadline } from "./grey/burning_deadline/index.js";
 
-import type { DistrictDef, PurpleBasicDef, PurpleSpecialDef, SpellDef, SpecialDef } from "./types.js";
+import type { DistrictDef, PurpleBasicDef, PurpleSpecialDef, SpellDef, SpecialDef, GreyDef } from "./types.js";
 
 export const ALL_DISTRICTS: readonly DistrictDef[] = [
   // Originals (yellow / blue / green / red / multi)
@@ -151,24 +161,31 @@ export const ALL_DISTRICTS: readonly DistrictDef[] = [
   merchantGuild, headquarters, hospitallers,
 ];
 
-export const ALL_PURPLE_BASIC: readonly PurpleBasicDef[] = [
-  observatory, laboratory, smithy, library, royalLibrary, sacredGrove,
-];
+/** Purple-basic was retired — its slots were replaced with new ability-bearing
+ *  purple-special cards (observatory, salvage_yard, hospital, inner_wall,
+ *  heavy_artillery). Kept as an empty array so older readers don't crash. */
+export const ALL_PURPLE_BASIC: readonly PurpleBasicDef[] = [];
 
 export const ALL_PURPLE_SPECIAL: readonly PurpleSpecialDef[] = [
   cannon, stronghold, monument, highway, cityGates,
   crypt, tntStorage, mine, cult, altarDarkness,
+  observatory, salvageYard, hospital, innerWall, heavyArtillery,
 ];
 
 export const ALL_SPELLS: readonly SpellDef[] = [
   ignite, goldRain, holyDay, flood, plague, fireRitual,
+  fireMagic, bombardment, enhancement,
+];
+
+export const ALL_GREY: readonly GreyDef[] = [
+  newOpportunities, plan, burningDeadline,
 ];
 
 export const ALL_SPECIALS: readonly SpecialDef[] = [flame, fire];
 
 /** Lookup: Russian card name → card definition (for translating runtime DistrictCard.name) */
-const _nameIndex = new Map<string, DistrictDef | PurpleBasicDef | PurpleSpecialDef | SpellDef | SpecialDef>();
-for (const c of [...ALL_DISTRICTS, ...ALL_PURPLE_BASIC, ...ALL_PURPLE_SPECIAL, ...ALL_SPELLS, ...ALL_SPECIALS]) {
+const _nameIndex = new Map<string, DistrictDef | PurpleBasicDef | PurpleSpecialDef | SpellDef | SpecialDef | GreyDef>();
+for (const c of [...ALL_DISTRICTS, ...ALL_PURPLE_BASIC, ...ALL_PURPLE_SPECIAL, ...ALL_SPELLS, ...ALL_GREY, ...ALL_SPECIALS]) {
   _nameIndex.set(c.name.ru, c);
 }
 
@@ -194,4 +211,14 @@ for (const c of ALL_SPELLS) {
 
 export function findSpellByAbility(ability: string) {
   return _spellIndex.get(ability) ?? null;
+}
+
+/** Lookup: grey ability id → grey card definition */
+const _greyIndex = new Map<string, GreyDef>();
+for (const c of ALL_GREY) {
+  _greyIndex.set(c.ability, c);
+}
+
+export function findGreyByAbility(ability: string) {
+  return _greyIndex.get(ability) ?? null;
 }

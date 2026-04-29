@@ -134,6 +134,14 @@ export interface PlayerState {
   companionDeck: CompanionSlot[];
   /** When non-null, player has played a placeholder and must pick one of these offered cards. */
   pendingPurpleOffer: DistrictCard[] | null;
+  /**
+   * Permanent buffs from "Усиление" spell. Each entry is one casting; effects stack.
+   *  - "card": income-card pick offers +1 extra card (and you keep one extra).
+   *  - "gold": income-gold gives +1 gold per Усиление stack.
+   */
+  enhancements?: Array<"card" | "gold">;
+  /** When non-null, player has played "План" and is iterating through pick rounds. */
+  pendingPlanOffer?: { round: number; choices: DistrictCard[] } | null;
 }
 
 /** State tracking the hero draft within a day */
