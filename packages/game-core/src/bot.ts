@@ -289,10 +289,6 @@ function pickBestPurpleCard(
         // Cheap removal tool
         score += 6;
         break;
-      case "fort":
-        // Cheap defensive building
-        score += 5;
-        break;
       case "crypt":
         // Gives purple cards on destroy — decent
         score += 5;

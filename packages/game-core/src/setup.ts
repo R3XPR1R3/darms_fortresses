@@ -4,7 +4,7 @@ import type { Rng } from "./rng.js";
 
 /** Default test build — used when a caller doesn't specify one (tests / sandbox). */
 export const DEFAULT_TEST_BUILD: MatchDeckBuild = {
-  purple: ["fort", "mine", "cannon", "cult", "stronghold", "altar_darkness"],
+  purple: ["mine", "mine", "cannon", "cult", "stronghold", "altar_darkness"],
   companions: [CompanionId.Farmer, CompanionId.Hunter, CompanionId.Mason],
 };
 

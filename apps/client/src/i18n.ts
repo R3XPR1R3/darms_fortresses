@@ -480,7 +480,6 @@ export function tCompanionDescription(id: string, fallback?: string): string {
 // ---- Canonical purple building translations ----
 const PURPLE_NAMES: Record<string, TranslationEntry> = {
   cannon: { en: "Cannon", ru: "Пушка", id: "Meriam" },
-  fort: { en: "Fort", ru: "Форт", id: "Benteng" },
   stronghold: { en: "Stronghold", ru: "Цитадель", id: "Kubu" },
   monument: { en: "Monument", ru: "Монумент", id: "Monumen" },
   highway: { en: "Highway", ru: "Шоссе", id: "Jalan raya" },
@@ -494,7 +493,6 @@ const PURPLE_NAMES: Record<string, TranslationEntry> = {
 
 const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
   cannon: { en: "{kw:activate} 1💰: deal 1 damage to a random enemy district (unlimited per day)", ru: "{kw:activate} За 1💰: −1 HP случайному кварталу врага (без лимита)", id: "{kw:activate} 1💰: 1 damage ke distrik musuh acak (tanpa batas)" },
-  fort: { en: "{kw:passive} Other buildings −1 HP on table. Destroyed → refund its cost in gold", ru: "{kw:passive} Другие постройки −1 HP на столе. При разрушении — возврат золотом", id: "{kw:passive} Bangunan lain −1 HP di meja. Jika hancur — kembalikan emas" },
   stronghold: { en: "{kw:passive} Immune to destruction and damage", ru: "{kw:passive} Неуязвима к разрушению и урону", id: "{kw:passive} Kebal dari penghancuran & damage" },
   monument: { en: "In hand: costs 3. On table: 5/5 HP", ru: "В руке: цена 3. На столе: 5/5 HP", id: "Di tangan: harga 3. Di meja: 5/5 HP" },
   highway: { en: "{kw:passive} Hero speed −1", ru: "{kw:passive} Скорость героя −1", id: "{kw:passive} Kecepatan hero −1" },

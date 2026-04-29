@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload, PlayerState, MatchDeckBuild, BuildablePurpleId } from "@darms/shared-types";
-import { HeroId, HEROES, WIN_DISTRICTS, MAX_HAND_CARDS, CompanionId, COMPANIONS, isPassiveCompanion, PURPLE_CARD_TEMPLATES, DECK_BUILD_PURPLE_SIZE, DECK_BUILD_COMPANION_SIZE, ALL_PURPLE_SPECIAL, ALL_SPELLS, BOT_BUILDS } from "@darms/shared-types";
+import { HeroId, HEROES, WIN_DISTRICTS, MAX_HAND_CARDS, CompanionId, COMPANIONS, isPassiveCompanion, PURPLE_CARD_TEMPLATES, DECK_BUILD_PURPLE_SIZE, DECK_BUILD_COMPANION_SIZE, ALL_PURPLE_SPECIAL, ALL_SPELLS, BOT_BUILDS, findCardByName } from "@darms/shared-types";
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateCardShatter, animateChanges, resetAnimState } from "./anim.js";
@@ -667,25 +667,49 @@ function colorStyle(colors: string[]): { cls: string; style: string } {
   };
 }
 
-/** Map building name → texture file (color_cost) */
-function buildingTextureUrl(d: { colors: string[]; cost: number; spellAbility?: string }): string {
+/**
+ * Texture lookup priority:
+ *   1. Per-card art: /buildings/by-id/<cardId>.png — drop a PNG here named
+ *      after the card's id (e.g. butcherShop.png, watchHut.png) and it
+ *      automatically takes precedence. Resolved via the registry by name.
+ *   2. Spells: /buildings/purple.png
+ *   3. Generic fallback: /buildings/<color>_<cost>.png
+ *
+ * The browser falls back to the generic file if the by-id PNG 404s — we
+ * use an onerror handler in the <img> rendering to swap the src.
+ */
+function buildingTextureUrl(d: { colors: string[]; cost: number; spellAbility?: string; name?: string }): string {
   if (d.spellAbility) return "/buildings/purple.png";
   const color = d.colors[0] ?? "purple";
-  const key = `${color}_${d.cost}`;
-  return `/buildings/${key}.png`;
+  return `/buildings/${color}_${d.cost}.png`;
+}
+
+/** Resolve a card's per-id texture path if the registry knows this card. */
+function buildingByIdTextureUrl(name: string): string | null {
+  const def = findCardByName(name);
+  if (!def) return null;
+  return `/buildings/by-id/${def.id}.png`;
+}
+
+/** Render the <img> for a card's texture. Tries the per-id PNG first; on 404
+ *  the onerror handler swaps to the generic color/cost texture. */
+function cardTextureImg(d: { colors: string[]; cost: number; spellAbility?: string; name: string }): string {
+  const generic = buildingTextureUrl(d);
+  const byId = buildingByIdTextureUrl(d.name);
+  if (!byId) return `<img class="card-texture" src="${generic}" alt="" />`;
+  return `<img class="card-texture" src="${byId}" onerror="this.onerror=null;this.src='${generic}';" alt="" />`;
 }
 
 function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string }, opts: { info?: boolean } = {}): string {
   const cs = colorStyle(d.colors);
   const spellClass = d.spellAbility ? "spell-card" : "";
   const spellLabel = d.spellAbility ? `<div class="spell-badge">✦ ${kwHtml("spell")} ✦</div>` : "";
-  const texUrl = buildingTextureUrl(d);
   const infoBtn = opts.info !== false
     ? `<button class="card-info-btn" data-card-info="${encodeCardPayload(d)}" title="Info">ℹ</button>`
     : "";
   // Cost is the unified HP/value/cost number — no separate HP label.
   return `<div class="district-card ${cs.cls} ${spellClass}" style="${cs.style}">
-    <img class="card-texture" src="${texUrl}" alt="" />
+    ${cardTextureImg(d)}
     <div class="card-cost-badge">${d.cost}</div>
     ${spellLabel}
     <div class="card-name">${tDistrict(d.name)}</div>
@@ -1843,7 +1867,6 @@ function renderMyBoard() {
       const duplicate = !officialAllows && me.builtDistricts.some((d) => d.name === c.name);
       const buildable = canBuild && affordable && !duplicate;
       const cs = colorStyle(c.colors);
-      const texUrl = buildingTextureUrl(c);
       const placeholderAction = c.placeholder === "purple" && myTurnNow && !getPendingPurpleOffer();
       // Custom labels for special "play to discard" cards: Flame & Fire.
       const isFlame = c.name === "🔥 Пламя";
@@ -1862,7 +1885,7 @@ function renderMyBoard() {
       }
       return `
         <div class="hand-card ${cs.cls} ${c.placeholder === "purple" ? "placeholder-card" : ""}" style="${cs.style}">
-          <img class="card-texture" src="${texUrl}" alt="" />
+          ${cardTextureImg(c)}
           <div class="card-cost">${c.cost}</div>
           <div class="card-name-text">${tDistrict(c.name)}</div>
           <button class="card-info-btn" data-card-info="${encodeCardPayload(c)}" title="Info">ℹ</button>
@@ -1906,9 +1929,8 @@ function renderMyBoard() {
       if (me.incomeOffer && me.incomeOffer.length > 0) {
         const offerCards = me.incomeOffer.map((c) => {
           const cs = colorStyle(c.colors);
-          const texUrl = buildingTextureUrl(c);
           return `<div class="income-offer-card ${cs.cls}" style="${cs.style}" data-income-pick="${c.id}">
-            <img class="card-texture" src="${texUrl}" alt="" />
+            ${cardTextureImg(c)}
             <div class="card-cost-badge">${c.cost}</div>
             <div class="card-name">${tDistrict(c.name)}</div>
             ${c.spellAbility ? `<div class="spell-badge">✦</div>` : ""}
@@ -2460,18 +2482,22 @@ function showCompanionModal(companionId: CompanionId) {
     }
 
     case CompanionId.Pyromancer: {
+      // Pick a target player. Pyromancer plants a Flame in their hand AND in
+      // the owner's own hand. Self-target is allowed (double dose for self).
       title.textContent = `🔥 ${companionLabel}`;
-      const hand = getMyHand().filter((c) => c.name !== "🔥 Пламя");
+      const targets = players; // self included (per spec — "double dose")
       options.innerHTML = `
         <p class="hint" style="margin-bottom:8px;">${companionHint}</p>
-        ${hand.length > 0 ? hand.map((c) =>
-          `<button class="modal-option" data-target-card="${c.id}">${tDistrict(c.name)} (${c.cost}💰)</button>`
-        ).join("") : `<p class="hint">${t("companion_modal.no_cards")}</p>`}
+        ${targets.map((p) => `
+          <button class="modal-option" data-target="${p.id}">
+            ${tName(p.name)}${p.id === me.id ? ` (${t("lobby.you") ?? "вы"})` : ""}
+          </button>
+        `).join("")}
       `;
       options.querySelectorAll(".modal-option").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const targetCardId = (btn as HTMLElement).dataset.targetCard!;
-          dispatch({ type: "use_companion", playerId: getMyId(), targetCardId });
+          const targetId = (btn as HTMLElement).dataset.target!;
+          dispatch({ type: "use_companion", playerId: getMyId(), targetPlayerId: targetId });
           close();
         });
       });
