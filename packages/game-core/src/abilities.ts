@@ -92,14 +92,13 @@ export function hasHospital(p: PlayerState): boolean {
 
 /**
  * True if the player should still get a (limited) turn even when assassinated.
- * Both Hospital (building) and Royal Healer (companion) grant this — they let
- * the player still take income and use their companion this turn. They cannot
- * build, use a hero ability, or activate buildings.
+ * Only Hospital (the building) grants this — it lets the owner still take
+ * income and use their companion this turn. Royal Healer is just an
+ * on-assassination bonus (+2🃏 +2💰) and does NOT keep the turn alive: the
+ * dead player still skips their turn after the bonus fires.
  */
 export function canActWhileAssassinated(p: PlayerState): boolean {
-  if (hasHospital(p)) return true;
-  if (p.companion === CompanionId.RoyalHealer && !p.companionDisabled) return true;
-  return false;
+  return hasHospital(p);
 }
 
 function findPlayerByHero(players: PlayerState[], heroId: HeroId): number {

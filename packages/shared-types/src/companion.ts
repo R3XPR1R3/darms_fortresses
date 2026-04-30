@@ -116,7 +116,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Agent, name: "Агент", description: "За 1💰: становится копией компаньона выбранного игрока, который ещё не ходил. Работает только если компаньон бесцветный и не Агент — иначе разведка не удалась. Уходит из пула.", emoji: "🕵️", passive: false, targetType: "player", useCost: 1, leavesPool: true },
   // --- Wave 4 (balance / card-draw incentives patch) ---
   { id: CompanionId.MasterOfSiege, name: "Мастер осады", description: "Когда вы стреляете из пушки — все ваши пушки на столе тоже стреляют (1 цель за 1💰, эхо-выстрелы бесплатны)", emoji: "🎯", passive: true, heroColor: "red" },
-  { id: CompanionId.RoyalHealer, name: "Королевский лекарь", description: "Если вашего героя убили — вы берёте 2🃏 и 2💰 прежде чем ход уйдёт другому", emoji: "⚕️", passive: true, indicatorColor: "#3498db" },
+  { id: CompanionId.RoyalHealer, name: "Королевский лекарь", description: "Если вашего героя убили — вы автоматически получаете 2🃏 и 2💰. Ход всё равно пропускается.", emoji: "⚕️", passive: true, indicatorColor: "#3498db" },
   { id: CompanionId.Engineer, name: "Инженер", description: "За 1💰: +1 к стоимости вашего квартала (до 3 раз за ход). Только бесцветные герои.", emoji: "🔧", passive: false, useCost: 1, targetType: "own_card" },
   { id: CompanionId.Sektant, name: "Сектант", description: "Торговец: +1💰 за каждую Секту в игре (в конце дня). Клерик: ваши Секты можно активировать дважды за ход.", emoji: "🕯️", passive: true, indicatorColor: "#27ae60" },
   { id: CompanionId.Tyrant, name: "Тиран", description: "Один раз в начале хода: за каждый ваш жёлтый квартал — выстрел (1 урон) по случайной постройке случайного игрока", emoji: "👑", passive: true, indicatorColor: "#e74c3c" },
