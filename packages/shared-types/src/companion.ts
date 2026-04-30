@@ -124,7 +124,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Innovator, name: "Инноватор", description: "За 2💰: добираете карты пока в руке не станет 5", emoji: "💡", passive: false, useCost: 2 },
   { id: CompanionId.Paladin, name: "Паладин", description: "Генерал может активировать постройки клерика (Секту); Клерик может активировать постройки генерала (Пушку, ТНТ).", emoji: "✝️", passive: true, indicatorColor: "#9b59b6" },
   { id: CompanionId.Burglar, name: "Домушник", description: "Когда Вор обкрадывает героя — вы крадёте также 1 случайную карту из руки жертвы", emoji: "🦝", passive: true },
-  { id: CompanionId.Bandit, name: "Разбойник", description: "Вместо кражи золота: Вор получает 1💰 за каждый из 4 случайных кварталов жертвы (стоимость не уменьшается)", emoji: "🗡️", passive: true },
+  { id: CompanionId.Bandit, name: "Разбойник", description: "Превращает кражу Вора в рейд: −1 HP/стоимости 4 случайным кварталам жертвы и +1💰 Вору за каждый удар. Stronghold невосприимчив к урону и не даёт золота.", emoji: "🗡️", passive: true },
 ] as const;
 
 /** Name constant for flame cards (Pyromancer / Ignite / Fire Ritual). */

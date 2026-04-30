@@ -134,16 +134,57 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
     const thiefHasBurglar = thief.companion === CompanionId.Burglar && !thief.companionDisabled;
 
     if (thiefHasBandit && player.builtDistricts.length > 0) {
-      // Bandit replaces gold-steal: +1g per cost of 4 random victim districts
-      // (without damaging them).
-      let bandit = 0;
-      const districts = player.builtDistricts;
-      for (let i = 0; i < 4; i++) {
-        const idx = rng.int(0, districts.length - 1);
-        bandit += districts[idx].cost;
+      // Bandit converts the gold-theft into a General-style raid: pick up to 4
+      // unique random districts; each one loses 1 cost (= HP/score). Stronghold
+      // is immune to both damage and gold transfer. Districts whose cost falls
+      // below 1 are destroyed (Salvage Yard fires for each). The thief gains
+      // exactly 1 gold per non-stronghold district hit, so victim has 3 dmg-able
+      // districts → +3 gold even if the 4th pick was the stronghold.
+      const numShots = Math.min(4, player.builtDistricts.length);
+      // Fisher-Yates partial shuffle for unique picks.
+      const indices: number[] = [];
+      for (let i = 0; i < player.builtDistricts.length; i++) indices.push(i);
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = rng.int(0, i);
+        const tmp = indices[i]; indices[i] = indices[j]; indices[j] = tmp;
       }
-      newPlayers[thiefIdx] = { ...thief, gold: thief.gold + bandit };
-      log = addLog({ ...state, log }, `🗡️ ${thief.name} — разбойник: оценил 4 квартала ${player.name}, получил ${bandit}💰`);
+      const picked = indices.slice(0, numShots).sort((a, b) => b - a);
+      const newDistricts = [...player.builtDistricts];
+      const destroyedHere: DistrictCard[] = [];
+      let banditGold = 0;
+      const damagedNames: string[] = [];
+      for (const idx of picked) {
+        const d = newDistricts[idx];
+        if (!d) continue;
+        if (d.purpleAbility === "stronghold") continue; // immune to damage AND theft
+        const newCost = d.cost - 1;
+        banditGold += 1;
+        if (newCost < 1) {
+          destroyedHere.push(d);
+          newDistricts.splice(idx, 1);
+          damagedNames.push(`${d.name} разрушен`);
+        } else {
+          newDistricts[idx] = { ...d, cost: newCost, hp: newCost };
+          damagedNames.push(`${d.name} (${d.cost}→${newCost})`);
+        }
+      }
+      newPlayers[playerIdx] = { ...player, builtDistricts: newDistricts };
+      newPlayers[thiefIdx] = { ...thief, gold: thief.gold + banditGold };
+      let newDiscardPile = state.discardPile;
+      if (destroyedHere.length > 0) {
+        newDiscardPile = [...state.discardPile, ...destroyedHere];
+      }
+      log = addLog({ ...state, log }, `🗡️ ${thief.name} — разбойник: ${numShots} удар(ов) по ${player.name}: ${damagedNames.join(", ")}; +${banditGold}💰`);
+      // Apply Salvage Yard triggers for any of the victim's districts destroyed.
+      if (destroyedHere.length > 0) {
+        const tmpState: GameState = { ...state, players: newPlayers, discardPile: newDiscardPile, log };
+        const after = applySalvageTriggers(tmpState, playerIdx, destroyedHere);
+        newPlayers.splice(0, newPlayers.length, ...after.players);
+        log = after.log;
+        newDiscardPile = after.discardPile;
+      }
+      // Stash discard-pile change on `state` so the function's final spread picks it up.
+      state = { ...state, discardPile: newDiscardPile };
     } else if (player.gold > 0 || thiefHasBurglar) {
       const stolenGold = player.gold;
       newPlayers[playerIdx] = { ...player, gold: 0 };
