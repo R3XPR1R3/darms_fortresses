@@ -3,7 +3,7 @@ import { HeroId, HEROES, WIN_DISTRICTS, MAX_HAND_CARDS, CompanionId, COMPANIONS,
 import { createRng, createMatch, createBaseDeck, processAction, startDraft, botAction, currentDrafter, currentPlayer } from "@darms/game-core";
 import { HERO_ICONS, districtColorDot, heroColor, heroPortrait, heroPortraitLarge, heroPortraitSmall, heroPortraitUrl } from "./icons.js";
 import { animateCardShatter, animateChanges, resetAnimState } from "./anim.js";
-import { t, tHero, tDistrict, tLog, tName, tCompanionName, tCompanionDescription, getLang, setLang, KEYWORDS, kwHtml, expandKw, tSpellName, tSpellDesc, tPurpleName, tPurpleDesc, getGuideHtml } from "./i18n.js";
+import { t, tHero, tDistrict, tLog, tName, tCompanionName, tCompanionDescription, getLang, setLang, KEYWORDS, kwHtml, expandKw, tSpellName, tSpellDesc, tPurpleName, tPurpleDesc, tGreyName, tGreyDesc, getGuideHtml } from "./i18n.js";
 
 /** Get companion emoji for indicator circles */
 function companionEmoji(id: CompanionId | null): string {
@@ -678,8 +678,11 @@ function colorStyle(colors: string[]): { cls: string; style: string } {
  * The browser falls back to the generic file if the by-id PNG 404s — we
  * use an onerror handler in the <img> rendering to swap the src.
  */
-function buildingTextureUrl(d: { colors: string[]; cost: number; spellAbility?: string; name?: string }): string {
-  if (d.spellAbility) return "/buildings/purple.png";
+function buildingTextureUrl(d: { colors: string[]; cost: number; spellAbility?: string; greyAbility?: string; name?: string }): string {
+  // Spells and grey cards share the "spellbook" pixel texture. If that asset
+  // is missing on disk the cardTextureImg onerror will fall back to the
+  // legacy purple.png — adding /buildings/spell.png later auto-takes-effect.
+  if (d.spellAbility || d.greyAbility) return "/buildings/spell.png";
   const color = d.colors[0] ?? "purple";
   return `/buildings/${color}_${d.cost}.png`;
 }
@@ -692,18 +695,37 @@ function buildingByIdTextureUrl(name: string): string | null {
 }
 
 /** Render the <img> for a card's texture. Tries the per-id PNG first; on 404
- *  the onerror handler swaps to the generic color/cost texture. */
-function cardTextureImg(d: { colors: string[]; cost: number; spellAbility?: string; name: string }): string {
+ *  the onerror handler swaps to the generic color/cost texture; for spell
+ *  / grey a final fallback to purple.png keeps things working when the
+ *  pixel-book asset hasn't been dropped on disk yet. */
+function cardTextureImg(d: { colors: string[]; cost: number; spellAbility?: string; greyAbility?: string; name: string }): string {
   const generic = buildingTextureUrl(d);
+  const isSpellLike = !!(d.spellAbility || d.greyAbility);
+  const finalFallback = isSpellLike ? "/buildings/purple.png" : generic;
+  const onerrChain = isSpellLike
+    ? `this.onerror=function(){this.onerror=null;this.src='${finalFallback}';};this.src='${generic}';`
+    : "";
   const byId = buildingByIdTextureUrl(d.name);
-  if (!byId) return `<img class="card-texture" src="${generic}" alt="" />`;
-  return `<img class="card-texture" src="${byId}" onerror="this.onerror=null;this.src='${generic}';" alt="" />`;
+  if (!byId) {
+    // No per-id texture; show generic. Add chain if spell-like so missing
+    // /buildings/spell.png gracefully degrades to purple.png.
+    if (isSpellLike) {
+      return `<img class="card-texture" src="${generic}" onerror="this.onerror=null;this.src='${finalFallback}';" alt="" />`;
+    }
+    return `<img class="card-texture" src="${generic}" alt="" />`;
+  }
+  // Try per-id, fall back to generic, then optionally to purple.png for spell/grey.
+  const onerr = isSpellLike
+    ? `this.onerror=function(){this.onerror=null;this.src='${finalFallback}';};this.src='${generic}';`
+    : `this.onerror=null;this.src='${generic}';`;
+  return `<img class="card-texture" src="${byId}" onerror="${onerr}" alt="" />`;
 }
 
-function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string }, opts: { info?: boolean } = {}): string {
+function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?: number; spellAbility?: string; greyAbility?: string; purpleAbility?: string; placeholder?: string }, opts: { info?: boolean } = {}): string {
   const cs = colorStyle(d.colors);
-  const spellClass = d.spellAbility ? "spell-card" : "";
-  const spellLabel = d.spellAbility ? `<div class="spell-badge">✦ ${kwHtml("spell")} ✦</div>` : "";
+  const isSpellLike = !!(d.spellAbility || d.greyAbility);
+  const spellClass = isSpellLike ? "spell-card" : "";
+  const spellLabel = isSpellLike ? `<div class="spell-badge">✦ ${kwHtml("spell")} ✦</div>` : "";
   const infoBtn = opts.info !== false
     ? `<button class="card-info-btn" data-card-info="${encodeCardPayload(d)}" title="Info">ℹ</button>`
     : "";
@@ -718,13 +740,14 @@ function districtCardHtml(d: { colors: string[]; name: string; cost: number; hp?
 }
 
 /** Encode a card reference for the info popover (JSON in a data attribute). */
-function encodeCardPayload(c: { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string }): string {
+function encodeCardPayload(c: { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; greyAbility?: string; purpleAbility?: string; placeholder?: string }): string {
   const payload = {
     name: c.name,
     cost: c.cost,
     colors: c.colors,
     hp: c.hp,
     spellAbility: c.spellAbility,
+    greyAbility: c.greyAbility,
     purpleAbility: c.purpleAbility,
     placeholder: c.placeholder,
   };
@@ -732,7 +755,7 @@ function encodeCardPayload(c: { name: string; cost: number; colors: string[]; hp
   return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
 }
 
-function decodeCardPayload(encoded: string): { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string } | null {
+function decodeCardPayload(encoded: string): { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; greyAbility?: string; purpleAbility?: string; placeholder?: string } | null {
   try {
     return JSON.parse(decodeURIComponent(escape(atob(encoded))));
   } catch {
@@ -742,9 +765,9 @@ function decodeCardPayload(encoded: string): { name: string; cost: number; color
 
 /**
  * Open the card-info popover for a card. Works for purple buildings,
- * spells, placeholder stubs, and plain coloured districts.
+ * spells, grey shared-deck cards, placeholder stubs, and plain districts.
  */
-function showCardInfoPopover(card: { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; purpleAbility?: string; placeholder?: string }) {
+function showCardInfoPopover(card: { name: string; cost: number; colors: string[]; hp?: number; spellAbility?: string; greyAbility?: string; purpleAbility?: string; placeholder?: string }) {
   let overlay = document.getElementById("card-info-popover");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -783,6 +806,11 @@ function showCardInfoPopover(card: { name: string; cost: number; colors: string[
     emoji = "✨";
     title = tSpellName(card.spellAbility);
     desc = expandKw(tSpellDesc(card.spellAbility));
+    extraTag = t("pool.spells") ?? "spell";
+  } else if (card.greyAbility) {
+    emoji = "📜";
+    title = tGreyName(card.greyAbility);
+    desc = expandKw(tGreyDesc(card.greyAbility));
     extraTag = t("pool.spells") ?? "spell";
   }
 
