@@ -469,6 +469,13 @@ export function buildDistrict(
 
   // One-shot spells: cast from hand, do not stay on table.
   if (card.spellAbility) {
+    // Hero-color gate for spells with a non-purple printed colour. Bombardment
+    // is purple+red → only General (red) may cast it; this generalises so any
+    // future spell with a colour other than purple inherits the same rule.
+    const spellNonPurpleColors = (card.colors ?? []).filter((c) => c !== "purple") as string[];
+    if (spellNonPurpleColors.length > 0) {
+      if (heroColor === null || !spellNonPurpleColors.includes(heroColor)) return null;
+    }
     const newPlayers = [...state.players];
     let log = state.log;
     const randomInt = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1));

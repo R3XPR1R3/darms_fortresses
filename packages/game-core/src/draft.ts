@@ -1,5 +1,5 @@
 import type { DraftState, GameState, CompanionSlot } from "@darms/shared-types";
-import { HeroId, HEROES, CompanionId, COMPANIONS } from "@darms/shared-types";
+import { HeroId, HEROES, CompanionId, COMPANIONS, matchesHeroColor } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 const ALL_HEROES: HeroId[] = Object.values(HeroId);
@@ -95,8 +95,7 @@ function getPlayerHeroColor(state: GameState, playerIdx: number): string | null 
  */
 function canPickCompanion(companionId: CompanionId, heroColor: string | null): boolean {
   const def = COMPANIONS.find((c) => c.id === companionId);
-  if (!def?.heroColor) return true;
-  return def.heroColor === heroColor;
+  return matchesHeroColor(def?.heroColor, heroColor);
 }
 
 /** Get the currently-selectable companion IDs for a player (personal pool filtered). */

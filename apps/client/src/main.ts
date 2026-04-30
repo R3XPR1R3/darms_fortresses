@@ -1189,7 +1189,10 @@ function openDeckBuilderModal() {
       const slotsFull = draftCompanions.every((x) => x !== null);
       const disabled = already || slotsFull;
       const modeTag = `<span class="db-tag ${c.passive ? "db-tag-passive" : "db-tag-active"}">${c.passive ? t("companion.passive") : t("companion.active")}</span>`;
-      const colorTag = c.heroColor ? `<span class="db-tag" style="color:${COLOR_HEX[c.heroColor] ?? "#888"}">${districtColorDot(c.heroColor)} ${t("companion.only_color")}</span>` : "";
+      const heroColors = c.heroColor ? (Array.isArray(c.heroColor) ? c.heroColor : [c.heroColor]) : [];
+      const colorTag = heroColors.length > 0
+        ? `<span class="db-tag" style="color:${COLOR_HEX[heroColors[0]] ?? "#888"}">${heroColors.map((cl) => districtColorDot(cl)).join("")} ${t("companion.only_color")}</span>`
+        : "";
       const desc = expandKw(tCompanionDescription(c.id));
       return `<button class="db-card ${already ? "db-card-used" : ""}" data-pick-companion="${c.id}" ${disabled ? "disabled" : ""}>
         <div class="db-card-head">
@@ -1353,7 +1356,8 @@ function showCardPoolModal() {
 
   const companionsHtml = COMPANIONS
     .map((c) => {
-      const colorTag = c.heroColor ? ` <span style="color:${COLOR_HEX[c.heroColor] ?? "#888"};font-size:10px">${districtColorDot(c.heroColor)}</span>` : "";
+      const hcs = c.heroColor ? (Array.isArray(c.heroColor) ? c.heroColor : [c.heroColor]) : [];
+      const colorTag = hcs.length > 0 ? ` <span style="color:${COLOR_HEX[hcs[0]] ?? "#888"};font-size:10px">${hcs.map((cl) => districtColorDot(cl)).join("")}</span>` : "";
       return `
       <div class="pool-item">
         <div class="pool-item-title">${c.emoji} ${tCompanionName(c.id, c.name)}${colorTag}</div>
@@ -2066,7 +2070,9 @@ function startDraftTimer(draft: DraftView) {
           const myHeroClr = me?.hero ? (HEROES.find((h) => h.id === me.hero)?.color ?? null) : null;
           const eligible = currentDraft.companionPool.filter((cId) => {
             const def = companionDef(cId);
-            return !def?.heroColor || def.heroColor === myHeroClr;
+            if (!def?.heroColor) return true;
+            const colors = Array.isArray(def.heroColor) ? def.heroColor : [def.heroColor];
+            return myHeroClr !== null && colors.includes(myHeroClr as any);
           });
           if (eligible.length > 0) {
             const companionId = eligible[Math.floor(Math.random() * eligible.length)];

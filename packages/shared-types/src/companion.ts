@@ -64,12 +64,29 @@ export interface CompanionDefinition {
   targetType?: "player" | "own_card" | "any_card" | "own_hand_card" | "hero";
   /** Gold cost to activate (0 = free) */
   useCost?: number;
-  /** Hero color restriction — companion only works if hero has this color */
-  heroColor?: "yellow" | "blue" | "green" | "red";
+  /**
+   * Hero color restriction. Single string = only that color. Array = the
+   * companion is dual-coloured and may be picked / activated by heroes of
+   * any of the listed colors (e.g. Sektant "blue" or "green").
+   */
+  heroColor?: "yellow" | "blue" | "green" | "red" | Array<"yellow" | "blue" | "green" | "red">;
   /** Indicator circle color (CSS color). If set, overrides default blue/red */
   indicatorColor?: string;
   /** If true, companion is permanently removed from pool after use */
   leavesPool?: boolean;
+}
+
+/**
+ * True if a hero of the given color can pick / use a companion that has the
+ * given heroColor restriction. `null` heroColor means colourless heroes.
+ */
+export function matchesHeroColor(
+  req: CompanionDefinition["heroColor"] | undefined,
+  heroColor: string | null,
+): boolean {
+  if (!req) return true;
+  if (Array.isArray(req)) return heroColor !== null && (req as string[]).includes(heroColor);
+  return req === heroColor;
 }
 
 export const COMPANIONS: readonly CompanionDefinition[] = [
@@ -116,15 +133,15 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.Agent, name: "Агент", description: "За 1💰: становится копией компаньона выбранного игрока, который ещё не ходил. Работает только если компаньон бесцветный и не Агент — иначе разведка не удалась. Уходит из пула.", emoji: "🕵️", passive: false, targetType: "player", useCost: 1, leavesPool: true },
   // --- Wave 4 (balance / card-draw incentives patch) ---
   { id: CompanionId.MasterOfSiege, name: "Мастер осады", description: "Когда вы стреляете из пушки — все ваши пушки на столе тоже стреляют (1 цель за 1💰, эхо-выстрелы бесплатны)", emoji: "🎯", passive: true, heroColor: "red" },
-  { id: CompanionId.RoyalHealer, name: "Королевский лекарь", description: "Если вашего героя убили — вы автоматически получаете 2🃏 и 2💰. Ход всё равно пропускается.", emoji: "⚕️", passive: true, indicatorColor: "#3498db" },
+  { id: CompanionId.RoyalHealer, name: "Королевский лекарь", description: "Если вашего героя убили — вы автоматически получаете 2🃏 и 2💰. Ход всё равно пропускается.", emoji: "⚕️", passive: true, heroColor: ["yellow", "blue"], indicatorColor: "#3498db" },
   { id: CompanionId.Engineer, name: "Инженер", description: "За 1💰: +1 к стоимости вашего квартала (до 3 раз за ход). Только бесцветные герои.", emoji: "🔧", passive: false, useCost: 1, targetType: "own_card" },
-  { id: CompanionId.Sektant, name: "Сектант", description: "Торговец: +1💰 за каждую Секту в игре (в конце дня). Клерик: ваши Секты можно активировать дважды за ход.", emoji: "🕯️", passive: true, indicatorColor: "#27ae60" },
-  { id: CompanionId.Tyrant, name: "Тиран", description: "Один раз в начале хода: за каждый ваш жёлтый квартал — выстрел (1 урон) по случайной постройке случайного игрока", emoji: "👑", passive: true, indicatorColor: "#e74c3c" },
+  { id: CompanionId.Sektant, name: "Сектант", description: "Торговец: +1💰 за каждую Секту в игре (в конце дня). Клерик: ваши Секты можно активировать дважды за ход.", emoji: "🕯️", passive: true, heroColor: ["blue", "green"], indicatorColor: "#27ae60" },
+  { id: CompanionId.Tyrant, name: "Тиран", description: "Один раз в начале хода: за каждый ваш жёлтый квартал — выстрел (1 урон) по случайной постройке случайного игрока", emoji: "👑", passive: true, heroColor: ["red", "yellow"], indicatorColor: "#e74c3c" },
   { id: CompanionId.WaterMage, name: "Маг воды", description: "За 0💰: тушит всё 🔥 Пламя и 🔥 Пожар во всех руках. +1💰 за каждое потушенное Пламя, +3💰 за каждый Пожар", emoji: "🌊", passive: false, useCost: 0 },
   { id: CompanionId.Innovator, name: "Инноватор", description: "За 2💰: добираете карты пока в руке не станет 5", emoji: "💡", passive: false, useCost: 2 },
-  { id: CompanionId.Paladin, name: "Паладин", description: "Генерал может активировать постройки клерика (Секту); Клерик может активировать постройки генерала (Пушку, ТНТ).", emoji: "✝️", passive: true, indicatorColor: "#9b59b6" },
+  { id: CompanionId.Paladin, name: "Паладин", description: "Генерал может активировать постройки клерика (Секту); Клерик может активировать постройки генерала (Пушку, ТНТ).", emoji: "✝️", passive: true, heroColor: ["blue", "red"], indicatorColor: "#9b59b6" },
   { id: CompanionId.Burglar, name: "Домушник", description: "Когда Вор обкрадывает героя — вы крадёте также 1 случайную карту из руки жертвы", emoji: "🦝", passive: true },
-  { id: CompanionId.Bandit, name: "Разбойник", description: "Превращает кражу Вора в рейд: −1 HP/стоимости 4 случайным кварталам жертвы и +1💰 Вору за каждый удар. Stronghold невосприимчив к урону и не даёт золота.", emoji: "🗡️", passive: true },
+  { id: CompanionId.Bandit, name: "Разбойник", description: "Превращает кражу Вора в рейд: −1 HP/стоимости 4 случайным кварталам жертвы и +1💰 Вору за каждый удар. Цитадель невосприимчива к урону и не даёт золота.", emoji: "🗡️", passive: true },
 ] as const;
 
 /** Name constant for flame cards (Pyromancer / Ignite / Fire Ritual). */
