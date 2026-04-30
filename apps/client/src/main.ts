@@ -2238,7 +2238,9 @@ function renderDraft() {
 
     const hasEligibleBase = unique.some((cId) => {
       const def = companionDef(cId);
-      return !(def?.heroColor && def.heroColor !== myHeroColor);
+      if (!def?.heroColor) return true;
+      const colors = Array.isArray(def.heroColor) ? def.heroColor : [def.heroColor];
+      return myHeroColor !== null && colors.includes(myHeroColor as any);
     });
     // No fallback companions any more — personal pool may be fully locked, in
     // which case the player sees a skip button (rendered below).
@@ -2247,17 +2249,21 @@ function renderDraft() {
     const companionCards = unique.map((cId) => {
       const def = companionDef(cId);
       const passiveTag = def?.passive ? `<span style="font-size:8px;color:#aaa">${t("companion.passive")}</span>` : "";
-      // Check hero color restriction
-      const restricted = def?.heroColor && def.heroColor !== myHeroColor;
+      // Check hero color restriction (single colour OR any of an array)
+      const heroColors = def?.heroColor
+        ? (Array.isArray(def.heroColor) ? def.heroColor : [def.heroColor])
+        : [];
+      const restricted = heroColors.length > 0 && (myHeroColor === null || !heroColors.includes(myHeroColor as any));
       const disabledClass = restricted ? "companion-card-disabled" : "";
       const disabledAttr = restricted ? "disabled" : "";
+      const colorIcons = heroColors.map((c) => c === "yellow" ? "🟡" : c === "blue" ? "🔵" : c === "green" ? "🟢" : "🔴").join("");
       return `
         <button class="companion-card ${disabledClass}" data-companion="${restricted ? "" : cId}" ${disabledAttr}>
           <div class="companion-card-portrait">${def?.emoji ?? "?"}</div>
           <div class="companion-card-body">
             <div class="companion-card-name">${def ? tCompanionName(cId, def.name) : cId} ${passiveTag}</div>
             <div class="companion-card-desc">${def ? expandKw(tCompanionDescription(cId, def.description)) : ""}</div>
-            ${restricted ? `<div style="font-size:8px;color:#e04050">⛔ ${t("companion.only_color")} ${def.heroColor === "yellow" ? "🟡" : def.heroColor === "blue" ? "🔵" : def.heroColor === "green" ? "🟢" : "🔴"}</div>` : ""}
+            ${restricted ? `<div style="font-size:8px;color:#e04050">⛔ ${t("companion.only_color")} ${colorIcons}</div>` : ""}
           </div>
         </button>`;
     }).join("");
