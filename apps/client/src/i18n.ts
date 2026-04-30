@@ -1,6 +1,6 @@
 // ---- Internationalization module ----
 
-import { findCardByName, findPurpleByAbility, findSpellByAbility } from "@darms/shared-types";
+import { findCardByName, findPurpleByAbility, findSpellByAbility, findGreyByAbility } from "@darms/shared-types";
 
 export type Lang = "en" | "ru" | "id";
 
@@ -346,13 +346,18 @@ export function tDistrict(name: string): string {
   if (name === "Фиолетовая карта!" || name === "Purple Card!" || name === "Kartu ungu!") {
     return PLACEHOLDER_NAME[currentLang] ?? PLACEHOLDER_NAME.en;
   }
-  // Try i18n-first lookup by matching ru name against PURPLE_NAMES / SPELL_NAMES.
+  // Try i18n-first lookup by matching ru name against PURPLE_NAMES / SPELL_NAMES / GREY_NAMES.
   for (const [ability, entry] of Object.entries(PURPLE_NAMES)) {
     if (entry.ru === name || entry.en === name || entry.id === name) {
       return entry[currentLang] ?? entry.en;
     }
   }
   for (const [ability, entry] of Object.entries(SPELL_NAMES)) {
+    if (entry.ru === name || entry.en === name || entry.id === name) {
+      return entry[currentLang] ?? entry.en;
+    }
+  }
+  for (const [ability, entry] of Object.entries(GREY_NAMES)) {
     if (entry.ru === name || entry.en === name || entry.id === name) {
       return entry[currentLang] ?? entry.en;
     }
@@ -424,6 +429,16 @@ const COMPANION_NAMES: Record<string, TranslationEntry> = {
   night_shadow: { en: "Night Shadow", ru: "Ночная тень", id: "Bayangan malam" },
   interceptor: { en: "Interceptor", ru: "Перехватчик", id: "Pencegat" },
   agent: { en: "Agent", ru: "Агент", id: "Agen" },
+  master_of_siege: { en: "Master of Siege", ru: "Мастер осады", id: "Pemimpin pengepungan" },
+  royal_healer: { en: "Royal Healer", ru: "Королевский лекарь", id: "Tabib kerajaan" },
+  engineer: { en: "Engineer", ru: "Инженер", id: "Insinyur" },
+  sektant: { en: "Sectarian", ru: "Сектант", id: "Sektarian" },
+  tyrant: { en: "Tyrant", ru: "Тиран", id: "Tiran" },
+  water_mage: { en: "Water Mage", ru: "Маг воды", id: "Penyihir air" },
+  innovator: { en: "Innovator", ru: "Инноватор", id: "Inovator" },
+  paladin: { en: "Paladin", ru: "Паладин", id: "Paladin" },
+  burglar: { en: "Burglar", ru: "Домушник", id: "Pencongkel" },
+  bandit: { en: "Bandit", ru: "Разбойник", id: "Bandit" },
 };
 
 const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
@@ -465,6 +480,16 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   night_shadow: { en: "2💰: {kw:kill} an unrevealed hero", ru: "За 2💰: {kw:kill} нераскрытого героя", id: "2💰: {kw:kill} hero yang belum terbuka" },
   interceptor: { en: "{kw:passive} If first in turn order: draw 2 cards and slow the next player by +1 speed", ru: "{kw:passive} Если ходите первым — берёте 2 карты, скорость следующего +1", id: "{kw:passive} Jika urutan giliran pertama: ambil 2 kartu dan turunkan giliran berikutnya +1 kecepatan" },
   agent: { en: "1💰: copy a chosen not-yet-acted player's companion. Only colourless non-Agent companions can be copied — otherwise reconnaissance fails. {kw:leaves}", ru: "За 1💰: становится копией компаньона выбранного игрока, который ещё не ходил. Только бесцветный и не Агент — иначе разведка не удалась. {kw:leaves}", id: "1💰: salin companion pemain terpilih yang belum bertindak. Hanya companion tanpa warna dan bukan Agen — kalau tidak, pengintaian gagal. {kw:leaves}" },
+  master_of_siege: { en: "{kw:passive} 🔴 only. When you fire a Cannon, every other Cannon you own fires a free echo shot at a random opponent's district.", ru: "{kw:passive} Только 🔴. Выстрел из одной Пушки повторяется бесплатно из всех ваших остальных Пушек по случайным кварталам противников.", id: "{kw:passive} Hanya 🔴. Saat satu Meriam menembak, setiap Meriam Anda yang lain menembak gratis ke distrik lawan acak." },
+  royal_healer: { en: "{kw:passive} If your hero is assassinated — automatically gain +2🃏 +2💰. The turn still passes to the next player.", ru: "{kw:passive} Если вашего героя убили — вы автоматически получаете +2🃏 +2💰. Ход всё равно пропускается.", id: "{kw:passive} Jika hero Anda terbunuh — otomatis dapat +2🃏 +2💰. Giliran tetap dilewati." },
+  engineer: { en: "Colourless heroes only. 1💰 → +1 cost (and HP) on one of your built districts. Up to 3 uses per turn.", ru: "Только бесцветные герои. За 1💰 → +1 к стоимости (и HP) выбранному вашему кварталу. До 3 раз за ход.", id: "Hanya hero tanpa warna. 1💰 → +1 biaya (dan HP) pada distrik milik Anda. Hingga 3 kali per giliran." },
+  sektant: { en: "{kw:passive} 🟢: end of day +1💰 per Cult anywhere on the board. 🔵: you may activate the same Cult twice per turn.", ru: "{kw:passive} 🟢: в конце дня +1💰 за каждую Секту в игре. 🔵: ваши Секты можно активировать дважды за ход.", id: "{kw:passive} 🟢: di akhir hari +1💰 per Kultus di papan. 🔵: Kultus Anda boleh diaktifkan dua kali per giliran." },
+  tyrant: { en: "{kw:passive} At turn start: 1 shot (1 dmg) per yellow district at a random opponent's district.", ru: "{kw:passive} В начале хода: 1 выстрел (1 урон) на каждый жёлтый квартал по случайной постройке противника.", id: "{kw:passive} Di awal giliran: 1 tembakan (1 damage) per distrik kuning ke distrik lawan acak." },
+  water_mage: { en: "0💰: extinguish all 🔥 Flames and Fires in every hand. Gain +1💰 per Flame and +3💰 per Fire put out.", ru: "За 0💰: тушит всё 🔥 Пламя и Пожары во всех руках. +1💰 за каждое Пламя и +3💰 за каждый Пожар.", id: "0💰: padamkan semua 🔥 Api dan Kebakaran di setiap tangan. +1💰 per Api dan +3💰 per Kebakaran." },
+  innovator: { en: "2💰: draw cards until you have exactly 5 in hand (no-op if already ≥ 5).", ru: "За 2💰: добираете карты, пока в руке не станет ровно 5 (no-op если уже ≥ 5).", id: "2💰: ambil kartu hingga tangan Anda berisi tepat 5 (tidak berlaku jika sudah ≥ 5)." },
+  paladin: { en: "{kw:passive} Cleric (🔵) may activate Cannon and TNT Storage; General (🔴) may activate Cult.", ru: "{kw:passive} Клерик (🔵) может активировать Пушку и Склад тротила; Генерал (🔴) — Секту.", id: "{kw:passive} Klerik (🔵) boleh mengaktifkan Meriam dan Gudang TNT; Jenderal (🔴) boleh mengaktifkan Kultus." },
+  burglar: { en: "{kw:passive} When the Thief robs a hero, you also steal one random card from the victim's hand.", ru: "{kw:passive} Когда Вор обкрадывает героя — крадёте также 1 случайную карту из его руки.", id: "{kw:passive} Saat Pencuri merampok hero — Anda juga mencuri 1 kartu acak dari tangannya." },
+  bandit: { en: "{kw:passive} Replaces gold theft: 4 random shots at the victim's districts (−1 cost each, +1💰ach hit). Stronghold immune. Districts dropped to 0 are destroyed.", ru: "{kw:passive} Превращает кражу: 4 случайных удара по кварталам жертвы (−1 к цене, +1💰 за удар). Цитадель невосприимчива. Кварталы со стоимостью 0 разрушаются.", id: "{kw:passive} Ganti pencurian emas: 4 tembakan acak ke distrik korban (−1 biaya, +1💰 per hit). Kubu kebal. Distrik dengan biaya 0 dihancurkan." },
 };
 
 export function tCompanionName(id: string, fallback?: string): string {
@@ -489,6 +514,11 @@ const PURPLE_NAMES: Record<string, TranslationEntry> = {
   mine: { en: "Mine", ru: "Шахта", id: "Tambang" },
   cult: { en: "Cult", ru: "Секта", id: "Kultus" },
   altar_darkness: { en: "Altar of Darkness", ru: "Алтарь тьмы", id: "Altar kegelapan" },
+  observatory: { en: "Observatory", ru: "Обсерватория", id: "Observatorium" },
+  salvage_yard: { en: "Salvage Yard", ru: "Утиль цех", id: "Tempat daur ulang" },
+  hospital: { en: "Hospital", ru: "Госпиталь", id: "Rumah sakit" },
+  inner_wall: { en: "Inner Wall", ru: "Внутренняя стена", id: "Tembok dalam" },
+  heavy_artillery: { en: "Heavy Artillery", ru: "Тяжёлая артиллерия", id: "Artileri berat" },
 };
 
 const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
@@ -502,6 +532,11 @@ const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
   mine: { en: "{kw:passive} +1💰 at end of day (Merchant: end of each turn)", ru: "{kw:passive} +1💰 в конце дня (Казначей: в конце каждого хода)", id: "{kw:passive} +1💰 di akhir hari (Pedagang: tiap giliran)" },
   cult: { en: "{kw:activate} Blue hero only: replace a random opponent's district with a copy of Cult", ru: "{kw:activate} Только синий герой: заменяет случайный квартал оппа на Секту", id: "{kw:activate} Hanya hero biru: ganti distrik lawan acak dengan salinan Kultus" },
   altar_darkness: { en: "{kw:altar} Build 4 Altars → alternate win condition", ru: "{kw:altar} Постройте 4 алтаря → альтернативная победа", id: "{kw:altar} Bangun 4 Altar → kondisi menang alternatif" },
+  observatory: { en: "{kw:activate} Discard 1 card from hand → draw 2", ru: "{kw:activate} Сбросьте 1 карту из руки → возьмите 2 карты", id: "{kw:activate} Buang 1 kartu dari tangan → ambil 2 kartu" },
+  salvage_yard: { en: "{kw:passive} When any of your districts is destroyed — gain 1🃏 + ⌈cost/2⌉💰 per Salvage Yard you own (triggers on its own destruction too)", ru: "{kw:passive} Когда любой ваш квартал разрушен — +1🃏 и +⌈cost/2⌉💰 за каждый Утиль цех (срабатывает и при разрушении самого Утиль цеха)", id: "{kw:passive} Saat distrik Anda hancur — +1🃏 dan +⌈biaya/2⌉💰 per Tempat daur ulang (berlaku juga saat dirinya sendiri hancur)" },
+  hospital: { en: "{kw:passive} While built, an assassinated owner can still take income and use their companion (no build, no hero passive, no activation).", ru: "{kw:passive} Если ваш герой убит — можно взять доход и использовать компаньона (без постройки, без пассивки и активации).", id: "{kw:passive} Saat hero Anda terbunuh — Anda tetap bisa ambil pendapatan dan pakai companion (tidak boleh membangun, pakai pasif hero, atau mengaktifkan bangunan)." },
+  inner_wall: { en: "On build: destroys one of your random districts and absorbs its cost into its own value.", ru: "При постройке: уничтожает ваш случайный квартал и прибавляет его стоимость к собственной.", id: "Saat dibangun: hancurkan satu distrik acak Anda dan tambahkan biayanya ke nilainya sendiri." },
+  heavy_artillery: { en: "{kw:activate} 3💰: 6 random shots at opponent districts (×current damage). After firing, cost and damage drop by 1 (one volley per turn).", ru: "{kw:activate} За 3💰: 6 случайных выстрелов по кварталам противников (× текущий урон). После залпа стоимость и урон −1 (один залп за ход).", id: "{kw:activate} 3💰: 6 tembakan acak ke distrik lawan (× damage saat ini). Setelah salvo, biaya & damage −1 (satu salvo per giliran)." },
 };
 
 // ---- Canonical spell translations ----
@@ -512,6 +547,9 @@ const SPELL_NAMES: Record<string, TranslationEntry> = {
   flood: { en: "Flood", ru: "Потоп", id: "Banjir" },
   plague: { en: "Plague", ru: "Чума", id: "Wabah" },
   fire_ritual: { en: "Fire Ritual", ru: "Ритуал огня", id: "Ritual api" },
+  fire_magic: { en: "Fire Magic", ru: "Магия огня", id: "Sihir api" },
+  bombardment: { en: "Bombardment", ru: "Обстрел", id: "Pengeboman" },
+  enhancement: { en: "Enhancement", ru: "Усиление", id: "Penguatan" },
 };
 
 const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
@@ -521,6 +559,22 @@ const SPELL_DESCRIPTIONS: Record<string, TranslationEntry> = {
   flood: { en: "{kw:spell} Up to 4 random districts from each player return to hand", ru: "{kw:spell} До 4 случайных кварталов у каждого возвращаются в руку", id: "{kw:spell} Sampai 4 distrik acak tiap pemain kembali ke tangan" },
   plague: { en: "{kw:spell} 3-day effect: each day a random player loses gold, a random district takes damage", ru: "{kw:spell} Эффект 3 дня: каждый день случайный игрок теряет золото, случайный квартал получает урон", id: "{kw:spell} Efek 3 hari: tiap hari pemain acak kehilangan emas, distrik acak kena damage" },
   fire_ritual: { en: "{kw:spell} Burn one of your built districts. For every gold of its cost, plant a 🔥 Flame in a random opponent's hand", ru: "{kw:spell} Сожгите вашу постройку. За каждое золото её цены подбрасывает 🔥 Пламя в руку случайного противника", id: "{kw:spell} Bakar bangunan Anda. Untuk tiap emas dari biayanya, tanam 🔥 Api di tangan lawan acak" },
+  fire_magic: { en: "{kw:spell} Create 2 random spells (purple or grey) at cost −1. If unplayed by end of turn, they convert to 🔥 Flame.", ru: "{kw:spell} Создаёт 2 случайных заклинания (фиолетовых или серых) со стоимостью −1. Если не разыграны на этом ходу — превращаются в 🔥 Пламя.", id: "{kw:spell} Buat 2 mantra acak (ungu atau abu-abu) dengan biaya −1. Jika tidak dimainkan di akhir giliran, jadi 🔥 Api." },
+  bombardment: { en: "{kw:spell} Choose: 2 shots × 3 damage OR 6 shots × 1 damage at random opponent districts.", ru: "{kw:spell} Выберите эффект: 2 выстрела по 3 урона ИЛИ 6 выстрелов по 1 урона по случайным кварталам противников.", id: "{kw:spell} Pilih: 2 tembakan × 3 damage ATAU 6 tembakan × 1 damage ke distrik lawan acak." },
+  enhancement: { en: "{kw:spell} Choose (permanent stack): card-income picks +1 extra card OR gold-income gives +1💰. Stacks per casting.", ru: "{kw:spell} Выберите эффект (накопительно, до конца игры): при доходе картой — +1 карта в руку, либо при доходе золотом — +1💰. Эффекты складываются от каждой сыгранной Усиление.", id: "{kw:spell} Pilih (permanen, bertumpuk): pendapatan kartu +1 kartu ekstra ATAU pendapatan emas +1💰. Bertumpuk per casting." },
+};
+
+// ---- Canonical grey card translations ----
+const GREY_NAMES: Record<string, TranslationEntry> = {
+  new_opportunities: { en: "New Opportunities", ru: "Новые возможности", id: "Peluang baru" },
+  plan: { en: "Plan", ru: "План", id: "Rencana" },
+  burning_deadline: { en: "Burning Deadline", ru: "Горящий срок", id: "Tenggat membakar" },
+};
+
+const GREY_DESCRIPTIONS: Record<string, TranslationEntry> = {
+  new_opportunities: { en: "{kw:spell} Draw 2 random cards from the deck.", ru: "{kw:spell} Возьмите 2 случайные карты из колоды.", id: "{kw:spell} Ambil 2 kartu acak dari dek." },
+  plan: { en: "{kw:spell} Reveal 2 cards — pick 1 to hand. Repeat once more. Rejected cards return to the deck.", ru: "{kw:spell} Откройте 2 карты — выберите 1 в руку. Повторите ещё раз. Остальные возвращаются в колоду.", id: "{kw:spell} Buka 2 kartu — pilih 1 ke tangan. Ulangi sekali lagi. Sisanya kembali ke dek." },
+  burning_deadline: { en: "{kw:spell} Draw 1 card. If you do not build it this turn, it transforms into 🔥 Flame.", ru: "{kw:spell} Возьмите 1 карту. Если вы не построите её на этом ходу — она превратится в 🔥 Пламя.", id: "{kw:spell} Ambil 1 kartu. Jika tidak dibangun pada giliran ini — ia berubah menjadi 🔥 Api." },
 };
 
 // ---- Placeholder stub name ----
@@ -689,6 +743,23 @@ export function tPurpleDesc(ability: string): string {
   const entry = PURPLE_DESCRIPTIONS[ability];
   if (entry) return entry[currentLang] ?? entry.en;
   const def = findPurpleByAbility(ability);
+  if (!def) return ability;
+  return def.description[currentLang as "en" | "ru"] ?? def.description.en;
+}
+
+// ---- Grey card translations (canonical: this file) ----
+export function tGreyName(nameOrAbility: string): string {
+  if (GREY_NAMES[nameOrAbility]) {
+    const entry = GREY_NAMES[nameOrAbility];
+    return entry[currentLang] ?? entry.en;
+  }
+  return tDistrict(nameOrAbility);
+}
+
+export function tGreyDesc(ability: string): string {
+  const entry = GREY_DESCRIPTIONS[ability];
+  if (entry) return entry[currentLang] ?? entry.en;
+  const def = findGreyByAbility(ability);
   if (!def) return ability;
   return def.description[currentLang as "en" | "ru"] ?? def.description.en;
 }

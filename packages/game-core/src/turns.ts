@@ -386,6 +386,9 @@ export function buildDistrict(
 
   // 🔥 Flame can be played away for 1💰. Stops a single Flame from contributing
   // to the end-of-day hand-burn or from feeding the 3-Flames → Fire combine.
+  // Clearing a Flame is a hand-clean action, not a build — it does NOT consume
+  // the player's buildsRemaining slot, so they can still build a real district
+  // on the same turn.
   if (card.name === FLAME_CARD_NAME) {
     const flameClearCost = 1;
     if (player.gold < flameClearCost) return null;
@@ -396,14 +399,13 @@ export function buildDistrict(
       ...player,
       gold: player.gold - flameClearCost,
       hand: newHand,
-      buildsRemaining: player.buildsRemaining - 1,
     };
     return { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `${player.name} погасил 🔥 Пламя за ${flameClearCost}💰` }] };
   }
 
-  // 🔥 Fire can be played away for 3💰 to stop the per-turn burn early. If
-  // not played, the Fire self-removes at end of day anyway, but each turn
-  // until then it eats one of the owner's hand cards.
+  // 🔥 Fire can be played away for 3💰 to stop the per-turn burn early. Same
+  // rationale as Flame — clearing it is hand-cleanup, not a build, so the
+  // player keeps their buildsRemaining slot for an actual district.
   if (card.name === FIRE_CARD_NAME) {
     const fireClearCost = 3;
     if (player.gold < fireClearCost) return null;
@@ -414,7 +416,6 @@ export function buildDistrict(
       ...player,
       gold: player.gold - fireClearCost,
       hand: newHand,
-      buildsRemaining: player.buildsRemaining - 1,
     };
     return { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `${player.name} потушил 🔥 Пожар за ${fireClearCost}💰` }] };
   }
