@@ -123,7 +123,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
   { id: CompanionId.UnluckyMage, name: "Неудачный маг", description: "За 3💰: сбрасывает случайную карту из руки — все ваши постройки становятся её точной копией. Уходит из пула после использования.", emoji: "💫", passive: false, useCost: 3, leavesPool: true },
   { id: CompanionId.Nobility, name: "Знать", description: "Самый богатый → +4🃏. Не самый богатый → −1🃏 и −2💰", emoji: "👑", passive: true },
   // --- Wave 3 (purple-themed) ---
-  { id: CompanionId.TreasureTrader, name: "Торговец сокровищами", description: "За 2💰: продаёт вам «Фиолетовую карту!» в руку (выбор из вашего деккилда). Уходит из пула", emoji: "💎", passive: false, useCost: 2, leavesPool: true },
+  { id: CompanionId.TreasureTrader, name: "Торговец сокровищами", description: "За 2💰: продаёт вам «Фиолетовую карту!» в руку (выбор из вашего деккилда).", emoji: "💎", passive: false, useCost: 2 },
   { id: CompanionId.Designer, name: "Дизайнер", description: "Выбранный ваш район превращается в случайную фиолетовую постройку", emoji: "📐", passive: false, targetType: "own_card" },
   { id: CompanionId.Innkeeper, name: "Трактирщик", description: "Покажет все фиолетовые карты противников в руке", emoji: "🍺", passive: false },
   { id: CompanionId.Peacemaker, name: "Миротворец", description: "Разрушает все пушки, склады тротила и секты (без эффектов). Уходит из пула", emoji: "🕊️", passive: false, leavesPool: true },

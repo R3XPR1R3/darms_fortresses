@@ -575,17 +575,19 @@ function useCompanion(
       // 2💰: sell the player a purple placeholder card. Played later as a
       // regular placeholder → opens a 3-of-N pick from THEIR purplePool, so
       // the value is bounded by their own deck-build instead of being a
-      // global-roulette random purple. Still leavesPool.
+      // global-roulette random purple. The companion stays in the pool —
+      // re-drawable every day so long as the player has 2💰 and a pool.
+      // The natural cap is the personal purplePool depleting (sale refused
+      // when empty).
       if (player.gold < 2) return null;
-      // Refuse the sale if their pool has nothing left to draw from — the
-      // placeholder would burn for a colourless filler card and the 2💰
-      // would feel scammy.
       if (player.purplePool.length === 0) return null;
       const placeholder = createPurplePlaceholder();
-      newPlayers[playerIdx] = markCompanionGone(
-        { ...player, gold: player.gold - 2, hand: [...player.hand, placeholder], companionUsed: true },
-        CompanionId.TreasureTrader,
-      );
+      newPlayers[playerIdx] = {
+        ...player,
+        gold: player.gold - 2,
+        hand: [...player.hand, placeholder],
+        companionUsed: true,
+      };
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — торговец сокровищами: продал «${PURPLE_PLACEHOLDER_NAME}» за 2💰`), rng: rng.getSeed() };
     }
 
