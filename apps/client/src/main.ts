@@ -1590,6 +1590,10 @@ function renderTurnBanner() {
   const myTurn = isMyTurn();
 
   if (phase === "draft") {
+    // Day rolled over into draft — kill any leftover turn timer so a stale
+    // expiry doesn't dispatch an income action against the next day's
+    // freshly-reset incomeTaken flag.
+    stopTurnTimer();
     const draft = getDraft();
     const isCompanionPhase = draft?.draftPhase === "companion";
     el.className = "turn-banner" + (myTurn || isCompanionPhase ? " my-turn" : "");
@@ -2118,7 +2122,14 @@ function startTurnTimer(playerIdx: number) {
     }
     if (turnTimerRemaining <= 0) {
       stopTurnTimer();
-      // Auto-act when timer expires
+      // Auto-act when timer expires — but only if we're still on our own
+      // turn in the turns phase. The day-end transition can flip phase to
+      // "draft" before this fires, in which case any income/end_turn we
+      // dispatch would either no-op or, worse, hit the next day's fresh
+      // incomeTaken=false and quietly grant phantom gold.
+      if (getPhase() !== "turns" || !isMyTurn()) {
+        return;
+      }
       const me = getPlayers()[getMyIndex()];
       if (me && !me.incomeTaken) {
         // Random income choice then end turn

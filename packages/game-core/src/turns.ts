@@ -136,6 +136,10 @@ export function takeIncome(
   if (playerIdx === -1) return null;
 
   const player = state.players[playerIdx];
+  // Income is a turn-phase action — never accept it during draft / setup / end.
+  // Without this gate, an income action that arrives just after the day rolls
+  // over (initDraft resets incomeTaken to false) would silently grant gold.
+  if (state.phase !== "turns") return null;
   // Hospital / Royal Healer allow an assassinated owner to still take income.
   if (player.assassinated && !canActWhileAssassinated(player)) return null;
   if (player.incomeTaken) return null;
