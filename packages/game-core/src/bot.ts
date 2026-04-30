@@ -1,5 +1,5 @@
 import type { GameState, GameAction, AbilityPayload } from "@darms/shared-types";
-import { HeroId, HEROES, CompanionId, COMPANIONS, isPassiveCompanion, WIN_DISTRICTS } from "@darms/shared-types";
+import { HeroId, HEROES, CompanionId, COMPANIONS, isPassiveCompanion, matchesHeroColor, WIN_DISTRICTS } from "@darms/shared-types";
 import { currentDrafter } from "./draft.js";
 import { currentPlayer } from "./turns.js";
 import { createRng } from "./rng.js";
@@ -158,8 +158,7 @@ function pickBestCompanion(
   // Filter to companions the bot can actually pick (hero color restriction)
   const eligible = pool.filter((cId) => {
     const def = COMPANIONS.find((c) => c.id === cId);
-    if (def?.heroColor && def.heroColor !== heroColor) return false;
-    return true;
+    return matchesHeroColor(def?.heroColor, heroColor);
   });
 
   // Fallback: if nothing eligible, just pick the first pool entry — caller should
@@ -686,12 +685,15 @@ function scoreDraftPick(
 
   // Bias towards heroes whose color matches the bot's build: any companion in
   // the bot's personal deck with a hero-colour lock implies that build expects
-  // that color (e.g., SunPriestess → blue → Cleric).
+  // that color (e.g., SunPriestess → blue → Cleric). Dual-colour companions
+  // bias every listed colour by 1.
   const buildColorBias: Record<string, number> = {};
   for (const slot of player.companionDeck) {
     const def = COMPANIONS.find((c) => c.id === slot.id);
-    if (def?.heroColor) {
-      buildColorBias[def.heroColor] = (buildColorBias[def.heroColor] ?? 0) + 1;
+    if (!def?.heroColor) continue;
+    const colors = Array.isArray(def.heroColor) ? def.heroColor : [def.heroColor];
+    for (const c of colors) {
+      buildColorBias[c] = (buildColorBias[c] ?? 0) + 1;
     }
   }
 

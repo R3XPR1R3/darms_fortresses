@@ -489,7 +489,7 @@ const COMPANION_DESCRIPTIONS: Record<string, TranslationEntry> = {
   innovator: { en: "2💰: draw cards until you have exactly 5 in hand (no-op if already ≥ 5).", ru: "За 2💰: добираете карты, пока в руке не станет ровно 5 (no-op если уже ≥ 5).", id: "2💰: ambil kartu hingga tangan Anda berisi tepat 5 (tidak berlaku jika sudah ≥ 5)." },
   paladin: { en: "{kw:passive} Cleric (🔵) may activate Cannon and TNT Storage; General (🔴) may activate Cult.", ru: "{kw:passive} Клерик (🔵) может активировать Пушку и Склад тротила; Генерал (🔴) — Секту.", id: "{kw:passive} Klerik (🔵) boleh mengaktifkan Meriam dan Gudang TNT; Jenderal (🔴) boleh mengaktifkan Kultus." },
   burglar: { en: "{kw:passive} When the Thief robs a hero, you also steal one random card from the victim's hand.", ru: "{kw:passive} Когда Вор обкрадывает героя — крадёте также 1 случайную карту из его руки.", id: "{kw:passive} Saat Pencuri merampok hero — Anda juga mencuri 1 kartu acak dari tangannya." },
-  bandit: { en: "{kw:passive} Replaces gold theft: 4 random shots at the victim's districts (−1 cost each, +1💰ach hit). Stronghold immune. Districts dropped to 0 are destroyed.", ru: "{kw:passive} Превращает кражу: 4 случайных удара по кварталам жертвы (−1 к цене, +1💰 за удар). Цитадель невосприимчива. Кварталы со стоимостью 0 разрушаются.", id: "{kw:passive} Ganti pencurian emas: 4 tembakan acak ke distrik korban (−1 biaya, +1💰 per hit). Kubu kebal. Distrik dengan biaya 0 dihancurkan." },
+  bandit: { en: "{kw:passive} Replaces gold theft: 4 random shots at the victim's districts (−1 cost each, +1💰 per hit). Bastion is immune. Districts dropped to 0 are destroyed.", ru: "{kw:passive} Превращает кражу: 4 случайных удара по кварталам жертвы (−1 к цене, +1💰 за удар). Бастион невосприимчив. Кварталы со стоимостью 0 разрушаются.", id: "{kw:passive} Ganti pencurian emas: 4 tembakan acak ke distrik korban (−1 biaya, +1💰 per hit). Bastion kebal. Distrik dengan biaya 0 dihancurkan." },
 };
 
 export function tCompanionName(id: string, fallback?: string): string {
@@ -505,7 +505,7 @@ export function tCompanionDescription(id: string, fallback?: string): string {
 // ---- Canonical purple building translations ----
 const PURPLE_NAMES: Record<string, TranslationEntry> = {
   cannon: { en: "Cannon", ru: "Пушка", id: "Meriam" },
-  stronghold: { en: "Stronghold", ru: "Цитадель", id: "Kubu" },
+  stronghold: { en: "Bastion", ru: "Бастион", id: "Bastion" },
   monument: { en: "Monument", ru: "Монумент", id: "Monumen" },
   highway: { en: "Highway", ru: "Шоссе", id: "Jalan raya" },
   city_gates: { en: "City Gates", ru: "Врата в город", id: "Gerbang kota" },
@@ -528,7 +528,7 @@ const PURPLE_DESCRIPTIONS: Record<string, TranslationEntry> = {
   highway: { en: "{kw:passive} Hero speed −1", ru: "{kw:passive} Скорость героя −1", id: "{kw:passive} Kecepatan hero −1" },
   city_gates: { en: "In hand: cost −2 each day. Leader auto-builds it for free", ru: "В руке: цена −2 каждый день. Лидер строит автоматически и бесплатно", id: "Di tangan: harga −2 tiap hari. Leader membangunnya gratis otomatis" },
   crypt: { en: "{kw:activate} 2💰: self-destroy, gain 2 random purple buildings in hand", ru: "{kw:activate} За 2💰: самоуничтожение, +2 случайные фиолетовые постройки в руку", id: "{kw:activate} 2💰: hancurkan diri, dapat 2 bangunan ungu acak" },
-  tnt_storage: { en: "{kw:activate} 2💰: self-destroy, 8 damage spread across every player's districts (Stronghold immune)", ru: "{kw:activate} За 2💰: самоуничтожение, 8 урона распределяется случайно между постройками всех игроков (Цитадель неуязвима)", id: "{kw:activate} 2💰: hancurkan diri, 8 damage tersebar pada distrik tiap pemain (Kubu kebal)" },
+  tnt_storage: { en: "{kw:activate} 2💰: self-destroy, 8 damage spread across every player's districts (Bastion is immune)", ru: "{kw:activate} За 2💰: самоуничтожение, 8 урона распределяется случайно между постройками всех игроков (Бастион неуязвим)", id: "{kw:activate} 2💰: hancurkan diri, 8 damage tersebar pada distrik tiap pemain (Bastion kebal)" },
   mine: { en: "{kw:passive} +1💰 at end of day (Merchant: end of each turn)", ru: "{kw:passive} +1💰 в конце дня (Казначей: в конце каждого хода)", id: "{kw:passive} +1💰 di akhir hari (Pedagang: tiap giliran)" },
   cult: { en: "{kw:activate} Blue hero only: replace a random opponent's district with a copy of Cult", ru: "{kw:activate} Только синий герой: заменяет случайный квартал оппа на Секту", id: "{kw:activate} Hanya hero biru: ganti distrik lawan acak dengan salinan Kultus" },
   altar_darkness: { en: "{kw:altar} Build 4 Altars → alternate win condition", ru: "{kw:altar} Постройте 4 алтаря → альтернативная победа", id: "{kw:altar} Bangun 4 Altar → kondisi menang alternatif" },

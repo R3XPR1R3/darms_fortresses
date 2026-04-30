@@ -1,6 +1,6 @@
 export { HeroId, type HeroDefinition, type CardColor, HEROES } from "./hero.js";
 export type { DistrictCard, PurpleAbility, SpellAbility, GreyAbility } from "./card.js";
-export { CompanionId, type CompanionDefinition, COMPANIONS, isPassiveCompanion, FLAME_CARD_NAME, FIRE_CARD_NAME } from "./companion.js";
+export { CompanionId, type CompanionDefinition, COMPANIONS, isPassiveCompanion, matchesHeroColor, FLAME_CARD_NAME, FIRE_CARD_NAME } from "./companion.js";
 export {
   WIN_DISTRICTS,
   MAX_HAND_CARDS,
