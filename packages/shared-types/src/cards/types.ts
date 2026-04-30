@@ -1,5 +1,5 @@
 import type { CardColor } from "../hero.js";
-import type { PurpleAbility, SpellAbility } from "../card.js";
+import type { PurpleAbility, SpellAbility, GreyAbility } from "../card.js";
 
 export interface I18nText {
   ru: string;
@@ -49,4 +49,13 @@ export interface SpecialDef extends CardBase {
   description?: I18nText;
 }
 
-export type AnyCardDef = DistrictDef | PurpleBasicDef | PurpleSpecialDef | SpellDef | SpecialDef;
+/** Grey card (in shared deck, played from hand for cost — like a public spell). */
+export interface GreyDef extends CardBase {
+  type: "grey";
+  ability: GreyAbility;
+  /** How many copies of this card to seed into the shared deck. */
+  count: number;
+  description: I18nText;
+}
+
+export type AnyCardDef = DistrictDef | PurpleBasicDef | PurpleSpecialDef | SpellDef | SpecialDef | GreyDef;

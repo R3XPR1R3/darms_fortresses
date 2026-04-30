@@ -1,11 +1,11 @@
 import type { GameState, GameAction, DistrictCard } from "@darms/shared-types";
-import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, MAX_GOLD, WIN_DISTRICTS } from "@darms/shared-types";
+import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, FIRE_CARD_NAME, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS, MAX_GOLD, WIN_DISTRICTS } from "@darms/shared-types";
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, companionSkip } from "./draft.js";
-import { buildTurnOrder, takeIncome, pickIncomeCard, buildDistrict, advanceTurn, currentPlayer, canAddDistrict, pushBuiltDistrict, markCompanionGone } from "./turns.js";
+import { buildTurnOrder, takeIncome, pickIncomeCard, pickPlanCard, buildDistrict, advanceTurn, currentPlayer, canAddDistrict, pushBuiltDistrict, markCompanionGone } from "./turns.js";
 import { createPurpleFromAbility } from "./setup.js";
 import { playPurplePlaceholder, pickFromPurpleOffer } from "./placeholder.js";
-import { useAbility, checkWinCondition } from "./abilities.js";
+import { useAbility, checkWinCondition, applySalvageTriggers, canActWhileAssassinated } from "./abilities.js";
 import { generateRandomCard, generateDifferentColorCard, generateCard } from "./deck.js";
 
 function addLog(state: GameState, message: string): GameState {
@@ -85,7 +85,8 @@ function useCompanion(
   if (playerIdx === -1) return null;
   const player = state.players[playerIdx];
   if (player.companionUsed || !player.companion) return null;
-  if (player.assassinated) return null;
+  // Hospital / Royal Healer let assassinated players still use their companion.
+  if (player.assassinated && !canActWhileAssassinated(player)) return null;
   if (player.companionDisabled) return null;
 
   const newPlayers = [...state.players];
@@ -637,6 +638,80 @@ function useCompanion(
       return { ...addLog({ ...state, players: newPlayers }, `${player.name} — агент: превратился в копию компаньона ${target.name} (${copiedName})`), rng: rng.getSeed() };
     }
 
+    case CompanionId.Engineer: {
+      // Pay 1g per use to bump an own district's cost (HP/score) by 1.
+      // Up to 3 uses per turn (uses tracked via activatedBuildings entries).
+      // Only usable by colourless heroes.
+      if (player.gold < 1) return null;
+      if (!targetCardId) return null;
+      const heroDef = HEROES.find((h) => h.id === player.hero);
+      if (heroDef?.color) return null;
+      const usedCount = (player.activatedBuildings ?? []).filter((id) => id.startsWith("engineer:")).length;
+      if (usedCount >= 3) return null;
+      const cardIdx = player.builtDistricts.findIndex((c) => c.id === targetCardId);
+      if (cardIdx === -1) return null;
+      const card = player.builtDistricts[cardIdx];
+      const newCard = { ...card, cost: card.cost + 1, hp: card.cost + 1 };
+      const newDistricts = [...player.builtDistricts];
+      newDistricts[cardIdx] = newCard;
+      newPlayers[playerIdx] = {
+        ...player,
+        gold: player.gold - 1,
+        builtDistricts: newDistricts,
+        // Don't mark companionUsed — Engineer can fire up to 3× per turn.
+        activatedBuildings: [...(player.activatedBuildings ?? []), `engineer:${Date.now()}-${rng.int(0, 9999)}`],
+      };
+      return { ...addLog({ ...state, players: newPlayers }, `🔧 ${player.name} — инженер: ${card.name} ${card.cost}→${newCard.cost}`), rng: rng.getSeed() };
+    }
+
+    case CompanionId.Innovator: {
+      // 2g: draw cards until your hand has exactly 5 (no-op if already ≥5).
+      if (player.gold < 2) return null;
+      if (player.hand.length >= 5) return null;
+      const newDeck = [...state.deck];
+      const need = 5 - player.hand.length;
+      const drawn: DistrictCard[] = [];
+      for (let i = 0; i < need && newDeck.length > 0; i++) {
+        drawn.push(newDeck.shift()!);
+      }
+      newPlayers[playerIdx] = {
+        ...player,
+        gold: player.gold - 2,
+        hand: [...player.hand, ...drawn],
+        companionUsed: true,
+      };
+      return { ...addLog({ ...state, players: newPlayers, deck: newDeck }, `💡 ${player.name} — инноватор: добор до 5 (+${drawn.length}🃏)`), rng: rng.getSeed() };
+    }
+
+    case CompanionId.WaterMage: {
+      // 0g: extinguish ALL flames and fires across all hands.
+      // +1g per flame, +3g per fire — only flames/fires in OWN hand and
+      // OPPONENT hands count toward the bounty. Description simplified per
+      // user spec.
+      let totalFlames = 0;
+      let totalFires = 0;
+      for (let i = 0; i < newPlayers.length; i++) {
+        const p = newPlayers[i];
+        const flameCount = p.hand.filter((c) => c.name === FLAME_CARD_NAME).length;
+        const fireCount = p.hand.filter((c) => c.name === FIRE_CARD_NAME).length;
+        if (flameCount === 0 && fireCount === 0) continue;
+        const cleansed = p.hand.filter((c) => c.name !== FLAME_CARD_NAME && c.name !== FIRE_CARD_NAME);
+        newPlayers[i] = { ...p, hand: cleansed };
+        totalFlames += flameCount;
+        totalFires += fireCount;
+      }
+      const reward = totalFlames * 1 + totalFires * 3;
+      newPlayers[playerIdx] = {
+        ...newPlayers[playerIdx],
+        gold: newPlayers[playerIdx].gold + reward,
+        companionUsed: true,
+      };
+      return {
+        ...addLog({ ...state, players: newPlayers }, `🌊 ${player.name} — маг воды: потушил ${totalFlames}🔥 + ${totalFires}🔥🔥, получил ${reward}💰`),
+        rng: rng.getSeed(),
+      };
+    }
+
     // Passive companions — should not be used via action
     case CompanionId.Farmer:
     case CompanionId.Interceptor:
@@ -653,6 +728,13 @@ function useCompanion(
     case CompanionId.Jester:
     case CompanionId.Knight:
     case CompanionId.Nobility:
+    case CompanionId.MasterOfSiege:
+    case CompanionId.RoyalHealer:
+    case CompanionId.Sektant:
+    case CompanionId.Tyrant:
+    case CompanionId.Paladin:
+    case CompanionId.Burglar:
+    case CompanionId.Bandit:
       return null;
 
     default:
@@ -719,7 +801,10 @@ export function processAction(state: GameState, action: GameAction): GameState |
       return finish(useCompanion(state, action.playerId, action.targetPlayerId, action.targetCardId, action.targetHeroId));
 
     case "activate_building":
-      return finish(activateBuilding(state, action.playerId, action.cardId, rng));
+      return finish(activateBuilding(state, action.playerId, action.cardId, rng, action.targetCardId));
+
+    case "plan_pick":
+      return finish(pickPlanCard(state, action.playerId, action.cardId));
 
     case "end_turn":
       return finish(advanceTurn(state, rng));
@@ -743,6 +828,7 @@ function activateBuilding(
   playerId: string,
   cardId: string,
   rng: Rng,
+  activateTargetCardId?: string,
 ): GameState | null {
   const playerIdx = state.players.findIndex((p) => p.id === playerId);
   if (playerIdx === -1) return null;
@@ -758,42 +844,93 @@ function activateBuilding(
 
   switch (card.purpleAbility) {
     case "cannon": {
-      // For 1 gold, shoot random opponent district HP-1
+      // For 1 gold, shoot random opponent district HP-1.
+      // Color gate: red hero (General) by default, or any hero if Paladin
+      // companion makes blue (Cleric) eligible too.
       const heroColor = getHeroColor(state, playerIdx);
-      if (heroColor !== "red") return null;
+      const paladinAllowsCleric = player.companion === CompanionId.Paladin
+        && !player.companionDisabled
+        && heroColor === "blue";
+      if (heroColor !== "red" && !paladinAllowsCleric) return null;
       if (player.gold < 1) return null;
-      const opponents = state.players
-        .map((p, i) => ({ p, i }))
-        .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0 && !x.p.assassinated);
-      if (opponents.length === 0) return null;
-      const opp = opponents[rng.int(0, opponents.length - 1)];
-      const target = state.players[opp.i];
-      const validTargets = target.builtDistricts
-        .map((d, i) => ({ d, i }))
-        .filter(({ d }) => d.purpleAbility !== "stronghold");
-      if (validTargets.length === 0) return null;
-      const distIdx = validTargets[rng.int(0, validTargets.length - 1)].i;
-      const dist = target.builtDistricts[distIdx];
-      const newCost = dist.cost - 1;
-      const newOppDistricts = [...target.builtDistricts];
-      let discardPile = state.discardPile;
-      let msg: string;
-      if (newCost < 1) {
-        newOppDistricts.splice(distIdx, 1);
-        discardPile = [...discardPile, dist];
-        msg = `${player.name} — пушка: разрушил ${dist.name} у ${target.name}!`;
-      } else {
-        newOppDistricts[distIdx] = { ...dist, cost: newCost, hp: newCost };
-        msg = `${player.name} — пушка: ${dist.name} у ${target.name} ${dist.cost}→${newCost}`;
+
+      // Master of Siege: shooting a single cannon also fires every other
+      // friendly cannon for free (one shot each, same random-target rules).
+      const masterOfSiegeActive = player.companion === CompanionId.MasterOfSiege
+        && !player.companionDisabled
+        && heroColor === "red";
+      // Determine all firing cannons: the activated one + (if MoS) every
+      // other cannon on the same player's table.
+      const friendlyCannons = masterOfSiegeActive
+        ? player.builtDistricts.filter((d) => d.purpleAbility === "cannon").length
+        : 1;
+
+      let nextPlayers = [...state.players];
+      let discardPile = [...state.discardPile];
+      const fireOneShot = (gold: number): { ok: boolean; gold: number; message: string | null } => {
+        const opps = nextPlayers
+          .map((p, i) => ({ p, i }))
+          .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0 && !x.p.assassinated);
+        if (opps.length === 0) return { ok: false, gold, message: null };
+        const oppPick = opps[rng.int(0, opps.length - 1)];
+        const target = nextPlayers[oppPick.i];
+        const valid = target.builtDistricts
+          .map((d, i) => ({ d, i }))
+          .filter(({ d }) => d.purpleAbility !== "stronghold");
+        if (valid.length === 0) return { ok: false, gold, message: null };
+        const distIdx = valid[rng.int(0, valid.length - 1)].i;
+        const dist = target.builtDistricts[distIdx];
+        const newCost = dist.cost - 1;
+        const newOppDistricts = [...target.builtDistricts];
+        let msg: string;
+        if (newCost < 1) {
+          newOppDistricts.splice(distIdx, 1);
+          discardPile = [...discardPile, dist];
+          msg = `пушка: разрушил ${dist.name} у ${target.name}!`;
+        } else {
+          newOppDistricts[distIdx] = { ...dist, cost: newCost, hp: newCost };
+          msg = `пушка: ${dist.name} у ${target.name} ${dist.cost}→${newCost}`;
+        }
+        nextPlayers[oppPick.i] = { ...target, builtDistricts: newOppDistricts };
+        // Salvage Yard trigger if destroyed
+        if (newCost < 1) {
+          const tmpState: GameState = { ...state, players: nextPlayers, discardPile };
+          const after = applySalvageTriggers(tmpState, oppPick.i, [dist]);
+          nextPlayers = [...after.players];
+          discardPile = [...after.discardPile];
+        }
+        return { ok: true, gold, message: msg };
+      };
+
+      // Pay gold once for the activated cannon. Echo shots are free.
+      let goldRemaining = player.gold - 1;
+      const messages: string[] = [];
+      for (let i = 0; i < friendlyCannons; i++) {
+        const r = fireOneShot(goldRemaining);
+        if (r.message) messages.push(r.message);
       }
-      newPlayers[playerIdx] = { ...player, gold: player.gold - 1 };
-      newPlayers[opp.i] = { ...target, builtDistricts: newOppDistricts };
-      return { ...addLog({ ...state, players: newPlayers, discardPile }, msg), rng: rng.getSeed() };
+      nextPlayers[playerIdx] = { ...nextPlayers[playerIdx], gold: goldRemaining };
+      const prefix = masterOfSiegeActive && friendlyCannons > 1
+        ? `${player.name} — мастер осады: залп из ${friendlyCannons} пушек`
+        : `${player.name}`;
+      const finalMsg = messages.length > 0 ? `${prefix} → ${messages.join("; ")}` : `${prefix}: пушка не нашла цели`;
+      return { ...addLog({ ...state, players: nextPlayers, discardPile }, finalMsg), rng: rng.getSeed() };
     }
     case "cult": {
-      // Can be used only by Cleric. Once per turn.
-      if (player.hero !== HeroId.Cleric) return null;
-      if (player.activatedBuildings?.includes(card.id)) return null;
+      // Activatable by Cleric, OR by General with Paladin companion.
+      const heroColor = getHeroColor(state, playerIdx);
+      const isCleric = player.hero === HeroId.Cleric;
+      const paladinGeneral = player.companion === CompanionId.Paladin
+        && !player.companionDisabled
+        && heroColor === "red";
+      if (!isCleric && !paladinGeneral) return null;
+      // Sektant lets a Cleric activate the SAME Sect twice per turn.
+      const sektantDouble = isCleric
+        && player.companion === CompanionId.Sektant
+        && !player.companionDisabled;
+      const usedCount = (player.activatedBuildings ?? []).filter((id) => id === card.id).length;
+      const limit = sektantDouble ? 2 : 1;
+      if (usedCount >= limit) return null;
       const opponents = state.players
         .map((p, i) => ({ p, i }))
         .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0);
@@ -893,6 +1030,108 @@ function activateBuilding(
       log = [...log, { day: state.day, message: `🧨 ${player.name} взорвал Склад тротила: ${totalDamage} урона распределено между постройками` }];
       return { ...state, players: newPlayers, discardPile, log, rng: rng.getSeed() };
     }
+
+    case "observatory": {
+      // Discard 1 card from hand → draw 2.
+      const tIdx = activateTargetCardId
+        ? player.hand.findIndex((c) => c.id === activateTargetCardId)
+        : (player.hand.length > 0 ? rng.int(0, player.hand.length - 1) : -1);
+      if (tIdx === -1) return null;
+      const newHand = [...player.hand];
+      const discarded = newHand.splice(tIdx, 1)[0];
+      const newDeck = [...state.deck];
+      const drawn: DistrictCard[] = [];
+      for (let i = 0; i < 2 && newDeck.length > 0; i++) {
+        drawn.push(newDeck.shift()!);
+      }
+      newPlayers[playerIdx] = {
+        ...player,
+        hand: [...newHand, ...drawn],
+      };
+      return { ...addLog({ ...state, players: newPlayers, deck: newDeck }, `🔭 ${player.name} — обсерватория: сбросил ${discarded.name}, взял ${drawn.length}🃏`), rng: rng.getSeed() };
+    }
+
+    case "heavy_artillery": {
+      // Volley: 6 shots × current artilleryDamage. Once per turn. After firing,
+      // the cannon's printed cost and damage drop by 1.
+      if (player.activatedBuildings?.includes(card.id)) return null;
+      const dmg = card.artilleryDamage ?? 1;
+      if (dmg < 1) return null;
+      const activationCost = 3;
+      if (player.gold < activationCost) return null;
+      let nextPlayers = [...state.players];
+      let discardPile = [...state.discardPile];
+      const destroyedNames: string[] = [];
+      for (let s = 0; s < 6; s++) {
+        const opps = nextPlayers
+          .map((p, i) => ({ p, i }))
+          .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0 && !x.p.assassinated);
+        if (opps.length === 0) break;
+        const oppPick = opps[rng.int(0, opps.length - 1)];
+        const opp = nextPlayers[oppPick.i];
+        const damageable = opp.builtDistricts
+          .map((d, i) => ({ d, i }))
+          .filter(({ d }) => d.purpleAbility !== "stronghold");
+        if (damageable.length === 0) continue;
+        const distPick = damageable[rng.int(0, damageable.length - 1)];
+        const dist = opp.builtDistricts[distPick.i];
+        const newCost = dist.cost - dmg;
+        const newOppDistricts = [...opp.builtDistricts];
+        if (newCost < 1) {
+          newOppDistricts.splice(distPick.i, 1);
+          discardPile = [...discardPile, dist];
+          destroyedNames.push(`${dist.name} (${opp.name})`);
+        } else {
+          newOppDistricts[distPick.i] = { ...dist, cost: newCost, hp: newCost };
+        }
+        nextPlayers[oppPick.i] = { ...opp, builtDistricts: newOppDistricts };
+        if (newCost < 1) {
+          const after = applySalvageTriggers({ ...state, players: nextPlayers, discardPile }, oppPick.i, [dist]);
+          nextPlayers = [...after.players];
+          discardPile = [...after.discardPile];
+        }
+      }
+      // Decay this artillery: cost -1, damage -1.
+      const me = nextPlayers[playerIdx];
+      const myDistricts = [...me.builtDistricts];
+      const meCardIdx = myDistricts.findIndex((d) => d.id === card.id);
+      if (meCardIdx !== -1) {
+        const decayed = myDistricts[meCardIdx];
+        const newDmg = Math.max(0, dmg - 1);
+        const newSelfCost = Math.max(0, decayed.cost - 1);
+        if (newSelfCost < 1) {
+          myDistricts.splice(meCardIdx, 1);
+          discardPile = [...discardPile, decayed];
+        } else {
+          myDistricts[meCardIdx] = { ...decayed, cost: newSelfCost, hp: newSelfCost, artilleryDamage: newDmg };
+        }
+      }
+      nextPlayers[playerIdx] = {
+        ...me,
+        gold: me.gold - activationCost,
+        builtDistricts: myDistricts,
+        activatedBuildings: [...(me.activatedBuildings ?? []), card.id],
+      };
+      return {
+        ...addLog(
+          { ...state, players: nextPlayers, discardPile },
+          `💥 ${player.name} — тяжёлая артиллерия (урон ${dmg}): 6 выстрелов${destroyedNames.length > 0 ? `, разрушено: ${destroyedNames.join(", ")}` : ""}`,
+        ),
+        rng: rng.getSeed(),
+      };
+    }
+
+    // Passive purple abilities — no manual activation possible.
+    case "salvage_yard":
+    case "hospital":
+    case "inner_wall":
+    case "stronghold":
+    case "monument":
+    case "highway":
+    case "city_gates":
+    case "mine":
+    case "altar_darkness":
+      return null;
 
     default:
       return null;

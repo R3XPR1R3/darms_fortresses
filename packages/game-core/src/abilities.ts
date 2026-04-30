@@ -1,9 +1,104 @@
-import type { GameState, AbilityPayload, PlayerState, LogEntry } from "@darms/shared-types";
+import type { GameState, AbilityPayload, PlayerState, LogEntry, DistrictCard } from "@darms/shared-types";
 import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, PURPLE_CARD_TEMPLATES, MAX_HAND_CARDS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
 
 function addLog(state: GameState, message: string): LogEntry[] {
   return [...state.log, { day: state.day, message }];
+}
+
+/**
+ * Trigger Salvage Yard payouts when one of player's districts has been destroyed.
+ * Counts every salvage_yard the owner has on the table and grants +1🃏 + ⌈cost/2⌉💰
+ * per salvage_yard. Pure function — call right after the destruction has been
+ * persisted into newPlayers.
+ *
+ * @param destroyed list of cards that were just destroyed for this owner.
+ */
+export function applySalvageTriggers(
+  state: GameState,
+  ownerIdx: number,
+  destroyed: DistrictCard[],
+): GameState {
+  if (destroyed.length === 0) return state;
+  const owner = state.players[ownerIdx];
+  const salvageCount = owner.builtDistricts.filter((d) => d.purpleAbility === "salvage_yard").length;
+  // Salvage Yard triggers even if it itself was the destroyed card — count it in.
+  const triggerCount = salvageCount + destroyed.filter((d) => d.purpleAbility === "salvage_yard").length;
+  if (triggerCount === 0) return state;
+
+  let newDeck = [...state.deck];
+  let goldGained = 0;
+  const drawn: DistrictCard[] = [];
+  for (const card of destroyed) {
+    const goldPerSalvage = Math.ceil(card.cost / 2);
+    for (let s = 0; s < triggerCount; s++) {
+      goldGained += goldPerSalvage;
+      if (newDeck.length > 0) {
+        drawn.push(newDeck.shift()!);
+      }
+    }
+  }
+  const newPlayers = [...state.players];
+  newPlayers[ownerIdx] = {
+    ...owner,
+    gold: owner.gold + goldGained,
+    hand: [...owner.hand, ...drawn],
+  };
+  const log = [...state.log, {
+    day: state.day,
+    message: `♻️ ${owner.name} — утиль цех (×${triggerCount}): +${drawn.length}🃏 +${goldGained}💰`,
+  }];
+  return { ...state, players: newPlayers, deck: newDeck, log };
+}
+
+/**
+ * When a player gets assassinated, fire any onAssassinated triggers they have:
+ *  - Royal Healer companion: +2🃏 +2💰 immediately.
+ *  - Hospital is checked at action time, not here (it lets the player still act).
+ */
+export function applyAssassinatedTriggers(
+  state: GameState,
+  victimIdx: number,
+): GameState {
+  const victim = state.players[victimIdx];
+  if (!victim) return state;
+  let newState = state;
+  if (victim.companion === CompanionId.RoyalHealer && !victim.companionDisabled) {
+    const newDeck = [...state.deck];
+    const drawn: DistrictCard[] = [];
+    for (let i = 0; i < 2 && newDeck.length > 0; i++) {
+      drawn.push(newDeck.shift()!);
+    }
+    const newPlayers = [...state.players];
+    newPlayers[victimIdx] = {
+      ...victim,
+      gold: victim.gold + 2,
+      hand: [...victim.hand, ...drawn],
+    };
+    newState = {
+      ...state,
+      players: newPlayers,
+      deck: newDeck,
+      log: [...state.log, { day: state.day, message: `⚕️ ${victim.name} — королевский лекарь: +${drawn.length}🃏 +2💰` }],
+    };
+  }
+  return newState;
+}
+
+/** True if the player can still take limited actions while assassinated (Hospital). */
+export function hasHospital(p: PlayerState): boolean {
+  return p.builtDistricts.some((d) => d.purpleAbility === "hospital");
+}
+
+/**
+ * True if the player should still get a (limited) turn even when assassinated.
+ * Only Hospital (the building) grants this — it lets the owner still take
+ * income and use their companion this turn. Royal Healer is just an
+ * on-assassination bonus (+2🃏 +2💰) and does NOT keep the turn alive: the
+ * dead player still skips their turn after the bonus fires.
+ */
+export function canActWhileAssassinated(p: PlayerState): boolean {
+  return hasHospital(p);
 }
 
 function findPlayerByHero(players: PlayerState[], heroId: HeroId): number {
@@ -18,6 +113,10 @@ function findPlayerByHero(players: PlayerState[], heroId: HeroId): number {
 export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rng): GameState {
   const player = state.players[playerIdx];
   if (!player.hero) return state;
+  // Assassinated players don't get hero passives (Hospital/Royal Healer let
+  // them act but explicitly forbid the hero passive). Companion-only effects
+  // also gate themselves on companionDisabled.
+  if (player.assassinated) return state;
 
   const newPlayers = [...state.players];
   let log = state.log;
@@ -28,14 +127,84 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
   const thiefIdx = state.players.findIndex(
     (p) => p.hero === HeroId.Thief && p.robbedHeroId === player.hero,
   );
-  if (thiefIdx !== -1 && player.gold > 0) {
-    const stolenGold = player.gold;
-    newPlayers[playerIdx] = { ...player, gold: 0 };
-    newPlayers[thiefIdx] = {
-      ...state.players[thiefIdx],
-      gold: state.players[thiefIdx].gold + stolenGold,
-    };
-    log = addLog({ ...state, log }, `${state.players[thiefIdx].name} украл ${stolenGold} золота у ${player.name}`);
+  if (thiefIdx !== -1) {
+    const thief = state.players[thiefIdx];
+    const thiefHasBandit = thief.companion === CompanionId.Bandit && !thief.companionDisabled;
+    const thiefHasBurglar = thief.companion === CompanionId.Burglar && !thief.companionDisabled;
+
+    if (thiefHasBandit && player.builtDistricts.length > 0) {
+      // Bandit converts the gold-theft into a General-style raid: pick up to 4
+      // unique random districts; each one loses 1 cost (= HP/score). Stronghold
+      // is immune to both damage and gold transfer. Districts whose cost falls
+      // below 1 are destroyed (Salvage Yard fires for each). The thief gains
+      // exactly 1 gold per non-stronghold district hit, so victim has 3 dmg-able
+      // districts → +3 gold even if the 4th pick was the stronghold.
+      const numShots = Math.min(4, player.builtDistricts.length);
+      // Fisher-Yates partial shuffle for unique picks.
+      const indices: number[] = [];
+      for (let i = 0; i < player.builtDistricts.length; i++) indices.push(i);
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = rng.int(0, i);
+        const tmp = indices[i]; indices[i] = indices[j]; indices[j] = tmp;
+      }
+      const picked = indices.slice(0, numShots).sort((a, b) => b - a);
+      const newDistricts = [...player.builtDistricts];
+      const destroyedHere: DistrictCard[] = [];
+      let banditGold = 0;
+      const damagedNames: string[] = [];
+      for (const idx of picked) {
+        const d = newDistricts[idx];
+        if (!d) continue;
+        if (d.purpleAbility === "stronghold") continue; // immune to damage AND theft
+        const newCost = d.cost - 1;
+        banditGold += 1;
+        if (newCost < 1) {
+          destroyedHere.push(d);
+          newDistricts.splice(idx, 1);
+          damagedNames.push(`${d.name} разрушен`);
+        } else {
+          newDistricts[idx] = { ...d, cost: newCost, hp: newCost };
+          damagedNames.push(`${d.name} (${d.cost}→${newCost})`);
+        }
+      }
+      newPlayers[playerIdx] = { ...player, builtDistricts: newDistricts };
+      newPlayers[thiefIdx] = { ...thief, gold: thief.gold + banditGold };
+      let newDiscardPile = state.discardPile;
+      if (destroyedHere.length > 0) {
+        newDiscardPile = [...state.discardPile, ...destroyedHere];
+      }
+      log = addLog({ ...state, log }, `🗡️ ${thief.name} — разбойник: ${numShots} удар(ов) по ${player.name}: ${damagedNames.join(", ")}; +${banditGold}💰`);
+      // Apply Salvage Yard triggers for any of the victim's districts destroyed.
+      if (destroyedHere.length > 0) {
+        const tmpState: GameState = { ...state, players: newPlayers, discardPile: newDiscardPile, log };
+        const after = applySalvageTriggers(tmpState, playerIdx, destroyedHere);
+        newPlayers.splice(0, newPlayers.length, ...after.players);
+        log = after.log;
+        newDiscardPile = after.discardPile;
+      }
+      // Stash discard-pile change on `state` so the function's final spread picks it up.
+      state = { ...state, discardPile: newDiscardPile };
+    } else if (player.gold > 0 || thiefHasBurglar) {
+      const stolenGold = player.gold;
+      newPlayers[playerIdx] = { ...player, gold: 0 };
+      let thiefAfter = { ...thief, gold: thief.gold + stolenGold };
+
+      // Burglar: also steal one random card from victim's hand.
+      if (thiefHasBurglar && newPlayers[playerIdx].hand.length > 0) {
+        const victimHand = [...newPlayers[playerIdx].hand];
+        const stolenIdx = rng.int(0, victimHand.length - 1);
+        const stolenCard = victimHand[stolenIdx];
+        victimHand.splice(stolenIdx, 1);
+        newPlayers[playerIdx] = { ...newPlayers[playerIdx], hand: victimHand };
+        thiefAfter = { ...thiefAfter, hand: [...thiefAfter.hand, stolenCard] };
+        log = addLog({ ...state, log }, `🦝 ${thief.name} — домушник: украл ${stolenCard.name} у ${player.name}`);
+      }
+
+      newPlayers[thiefIdx] = thiefAfter;
+      if (stolenGold > 0) {
+        log = addLog({ ...state, log }, `${thief.name} украл ${stolenGold} золота у ${player.name}`);
+      }
+    }
   }
 
   const p = newPlayers[playerIdx];
@@ -198,6 +367,38 @@ export function applyPassiveAbility(state: GameState, playerIdx: number, rng: Rn
     }
   }
 
+  // Tyrant: at start of turn, fire 1 shot per yellow district at random opponent district.
+  if (cp.companion === CompanionId.Tyrant && !cp.companionDisabled) {
+    const yellowCount = cp.builtDistricts.filter((d) => d.colors.includes("yellow")).length;
+    if (yellowCount > 0) {
+      let destroyedNames: string[] = [];
+      for (let shot = 0; shot < yellowCount; shot++) {
+        const opponents = newPlayers
+          .map((p, i) => ({ p, i }))
+          .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0 && !x.p.assassinated);
+        if (opponents.length === 0) break;
+        const oppPick = opponents[rng.int(0, opponents.length - 1)];
+        const opp = newPlayers[oppPick.i];
+        const damageable = opp.builtDistricts
+          .map((d, i) => ({ d, i }))
+          .filter(({ d }) => d.purpleAbility !== "stronghold");
+        if (damageable.length === 0) continue;
+        const distPick = damageable[rng.int(0, damageable.length - 1)];
+        const dist = opp.builtDistricts[distPick.i];
+        const newCost = dist.cost - 1;
+        const newOppDistricts = [...opp.builtDistricts];
+        if (newCost < 1) {
+          newOppDistricts.splice(distPick.i, 1);
+          destroyedNames.push(dist.name);
+        } else {
+          newOppDistricts[distPick.i] = { ...dist, cost: newCost, hp: newCost };
+        }
+        newPlayers[oppPick.i] = { ...opp, builtDistricts: newOppDistricts };
+      }
+      log = addLog({ ...state, log }, `👑 ${cp.name} — тиран: ${yellowCount} выстрел(ов)${destroyedNames.length > 0 ? `, разрушено: ${destroyedNames.join(", ")}` : ""}`);
+    }
+  }
+
   // Nobility: richest gets +4 cards, non-richest get -1 card AND -2 gold.
   // Steeper swing than the old +1 / -1 / -1g version to make the "stay
   // richest" pressure actually mean something — being a step behind costs.
@@ -270,6 +471,23 @@ export function useAbility(
           if (posInOrder !== -1 && posInOrder <= state.currentTurnIndex) return null;
         }
         newPlayers[targetIdx] = { ...state.players[targetIdx], assassinated: true };
+
+        // Royal Healer: victim immediately gets +2🃏 +2💰 before assassin proceeds.
+        const victim = newPlayers[targetIdx];
+        if (victim.companion === CompanionId.RoyalHealer && !victim.companionDisabled) {
+          let nd = state.deck;
+          const drawn: typeof victim.hand = [];
+          if (newDeck === state.deck) newDeck = [...state.deck];
+          for (let i = 0; i < 2 && newDeck.length > 0; i++) {
+            drawn.push(newDeck.shift()!);
+          }
+          newPlayers[targetIdx] = {
+            ...victim,
+            gold: victim.gold + 2,
+            hand: [...victim.hand, ...drawn],
+          };
+          log = addLog({ ...state, log }, `⚕️ ${victim.name} — королевский лекарь: +${drawn.length}🃏 +2💰 перед смертью`);
+        }
 
         // Marauder companion: steal victim's cards
         if (player.companion === CompanionId.Marauder && !player.companionDisabled) {
@@ -392,10 +610,12 @@ export function useAbility(
       const newCost = card.cost - damage;
 
       let newDiscardPile = state.discardPile;
+      let destroyedThisAction: DistrictCard[] = [];
       if (newCost < 1) {
         // District destroyed — add to discard pile
         newTargetDistricts.splice(cardIdx, 1);
         newDiscardPile = [...state.discardPile, card];
+        destroyedThisAction = [card];
         log = addLog({ ...state, log }, `${player.name} (Генерал) разрушил ${card.name} у ${target.name} за ${damage} золота`);
         // Crypt: on destroy → owner gets 2 random purple cards
         if (card.purpleAbility === "crypt") {
@@ -430,7 +650,11 @@ export function useAbility(
       newPlayers[playerIdx] = { ...player, gold: player.gold - damage, abilityUsed: true };
       newPlayers[targetIdx] = { ...newPlayers[targetIdx] ?? target, builtDistricts: newTargetDistricts };
       newDeck = state.deck; // preserve deck
-      return { ...state, players: newPlayers, deck: newDeck, discardPile: newDiscardPile, log };
+      let result: GameState = { ...state, players: newPlayers, deck: newDeck, discardPile: newDiscardPile, log };
+      if (destroyedThisAction.length > 0) {
+        result = applySalvageTriggers(result, targetIdx, destroyedThisAction);
+      }
+      return result;
     }
     // Passive abilities — no active action needed
     case "king":

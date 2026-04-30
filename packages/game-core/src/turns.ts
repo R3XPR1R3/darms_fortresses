@@ -1,7 +1,7 @@
 import type { GameState, DistrictCard, CardColor, PlayerState } from "@darms/shared-types";
 import { HeroId, HEROES, WIN_DISTRICTS, CompanionId, FLAME_CARD_NAME, FIRE_CARD_NAME, MAX_HAND_CARDS } from "@darms/shared-types";
 import type { Rng } from "./rng.js";
-import { applyPassiveAbility, checkWinCondition, calculateScores } from "./abilities.js";
+import { applyPassiveAbility, checkWinCondition, calculateScores, canActWhileAssassinated, applySalvageTriggers } from "./abilities.js";
 import { addRandomColor } from "./deck.js";
 
 /** Hard cap: true iff this player can add one more district. */
@@ -136,20 +136,39 @@ export function takeIncome(
   if (playerIdx === -1) return null;
 
   const player = state.players[playerIdx];
-  if (player.assassinated) return null;
+  // Hospital / Royal Healer allow an assassinated owner to still take income.
+  if (player.assassinated && !canActWhileAssassinated(player)) return null;
   if (player.incomeTaken) return null;
+
+  // Усиление stacks: count permanent enhancement bonuses.
+  const goldEnhStacks = (player.enhancements ?? []).filter((e) => e === "gold").length;
+  const cardEnhStacks = (player.enhancements ?? []).filter((e) => e === "card").length;
 
   const hasSwindler = player.companion === CompanionId.Swindler
     && !player.companionDisabled && !player.companionUsed;
 
   const rng = { int: (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1)) };
   const hasDruid = player.companion === CompanionId.Druid && !player.companionDisabled;
+  // Усиление "card": each stack adds 1 bonus card directly to hand on top of
+  // the standard 2-card offer (offer size stays at 2 — 1 picked, 1 returns).
   const drawTwoOffer = (
     deck: typeof state.deck,
   ) => {
     const newDeck = [...deck];
     const drawn: DistrictCard[] = [];
     for (let i = 0; i < 2 && newDeck.length > 0; i++) {
+      let card = newDeck.shift()!;
+      if (hasDruid) card = addRandomColor(card, rng);
+      drawn.push(card);
+    }
+    return { newDeck, drawn };
+  };
+  const drawEnhancementBonus = (
+    deck: typeof state.deck,
+  ) => {
+    const newDeck = [...deck];
+    const drawn: DistrictCard[] = [];
+    for (let i = 0; i < cardEnhStacks && newDeck.length > 0; i++) {
       let card = newDeck.shift()!;
       if (hasDruid) card = addRandomColor(card, rng);
       drawn.push(card);
@@ -177,15 +196,16 @@ export function takeIncome(
 
   if (choice === "gold") {
     const newPlayers = [...state.players];
+    const goldGain = 2 + goldEnhStacks;
     newPlayers[playerIdx] = {
       ...player,
-      gold: player.gold + 2,
+      gold: player.gold + goldGain,
       incomeTaken: true,
     };
     return {
       ...state,
       players: newPlayers,
-      log: [...state.log, { day: state.day, message: `💰 ${player.name} берёт +2 золота` }],
+      log: [...state.log, { day: state.day, message: `💰 ${player.name} берёт +${goldGain} золота${goldEnhStacks > 0 ? ` (Усиление ×${goldEnhStacks})` : ""}` }],
     };
   }
 
@@ -194,17 +214,83 @@ export function takeIncome(
   }
 
   const offer = drawTwoOffer(state.deck);
+  const bonus = drawEnhancementBonus(offer.newDeck);
   const newPlayers = [...state.players];
   newPlayers[playerIdx] = {
     ...player,
+    hand: bonus.drawn.length > 0 ? [...player.hand, ...bonus.drawn] : player.hand,
     incomeOffer: offer.drawn,
   };
+  const log = [...state.log, { day: state.day, message: `🃏 ${player.name} берёт 2 карты (выбирает 1)` }];
+  if (bonus.drawn.length > 0) {
+    log.push({ day: state.day, message: `✨ ${player.name} — Усиление ×${cardEnhStacks}: +${bonus.drawn.length}🃏 в руку` });
+  }
   return {
     ...state,
     players: newPlayers,
-    deck: offer.newDeck,
-    log: [...state.log, { day: state.day, message: `🃏 ${player.name} берёт 2 карты (выбирает 1)` }],
+    deck: bonus.newDeck,
+    log,
   };
+}
+
+/**
+ * Resolve a Plan grey-card pick. Picks one card from the current pendingPlanOffer
+ * to put in hand; the other goes back to the bottom of the deck. If round=1,
+ * a fresh round-2 offer is drawn. After round 2, the pending offer clears.
+ */
+export function pickPlanCard(
+  state: GameState,
+  playerId: string,
+  cardId: string,
+): GameState | null {
+  const playerIdx = state.players.findIndex((p) => p.id === playerId);
+  if (playerIdx === -1) return null;
+  const player = state.players[playerIdx];
+  const pending = player.pendingPlanOffer;
+  if (!pending || pending.choices.length === 0) return null;
+  const pickIdx = pending.choices.findIndex((c) => c.id === cardId);
+  if (pickIdx === -1) return null;
+
+  const picked = pending.choices[pickIdx];
+  const others = pending.choices.filter((_, i) => i !== pickIdx);
+  let newDeck = [...state.deck, ...others]; // rejected cards go to bottom
+
+  const freeSlots = Math.max(0, MAX_HAND_CARDS - player.hand.length);
+  const accepted = freeSlots > 0;
+  const newHand = accepted ? [...player.hand, picked] : player.hand;
+
+  const newPlayers = [...state.players];
+
+  if (pending.round === 1) {
+    // Open round 2.
+    const drawCount = Math.min(2, newDeck.length);
+    const choices = newDeck.splice(0, drawCount);
+    newPlayers[playerIdx] = {
+      ...player,
+      hand: newHand,
+      pendingPlanOffer: { round: 2, choices },
+    };
+    const log = [
+      ...state.log,
+      { day: state.day, message: `📜 ${player.name} (План, тур 1): взял ${picked.name}` },
+      { day: state.day, message: `📜 ${player.name} (План, тур 2): выбор из ${choices.length}` },
+    ];
+    if (!accepted) log.push({ day: state.day, message: `💥 ${player.name}: 1 карта рассыпалась (лимит руки ${MAX_HAND_CARDS})` });
+    return { ...state, players: newPlayers, deck: newDeck, log };
+  }
+
+  // Round 2 — clear the offer.
+  newPlayers[playerIdx] = {
+    ...player,
+    hand: newHand,
+    pendingPlanOffer: null,
+  };
+  const log = [
+    ...state.log,
+    { day: state.day, message: `📜 ${player.name} (План, тур 2): взял ${picked.name}` },
+  ];
+  if (!accepted) log.push({ day: state.day, message: `💥 ${player.name}: 1 карта рассыпалась (лимит руки ${MAX_HAND_CARDS})` });
+  return { ...state, players: newPlayers, deck: newDeck, log };
 }
 
 /** Resolve explicit income card choice from previously offered 2 cards. */
@@ -276,6 +362,7 @@ export function buildDistrict(
   playerId: string,
   cardId: string,
   targetCardId?: string,
+  mode?: string,
 ): GameState | null {
   const playerIdx = state.players.findIndex((p) => p.id === playerId);
   if (playerIdx === -1) return null;
@@ -283,12 +370,16 @@ export function buildDistrict(
   const player = state.players[playerIdx];
   if (player.assassinated) return null;
   if (player.buildsRemaining <= 0) return null;
-  if (!canAddDistrict(player)) return null;
+  // Grey cards and spells are playable even at district cap (they don't add a district).
+  // Real district build requires room.
 
   const cardIdx = player.hand.findIndex((c) => c.id === cardId);
   if (cardIdx === -1) return null;
 
   const card = player.hand[cardIdx];
+
+  // Cap check applies only to real districts (not spells, not grey).
+  if (!card.spellAbility && !card.greyAbility && !canAddDistrict(player)) return null;
 
   // Placeholders are not buildable — they must be played via the dedicated action.
   if (card.placeholder === "purple") return null;
@@ -439,6 +530,96 @@ export function buildDistrict(
       log = [...log, { day: state.day, message: `🌊 ${player.name} применил Потоп: до 4 случайных кварталов у каждого вернулись в руку` }];
     } else if (card.spellAbility === "plague") {
       log = [...log, { day: state.day, message: `☣️ ${player.name} применил Чуму: эффект активен 3 дня` }];
+    } else if (card.spellAbility === "bombardment") {
+      // Bombardment: choose mode — "heavy" = 2 shots × 3 dmg, "spread" = 6 × 1 dmg.
+      const heavy = mode !== "spread";
+      const shots = heavy ? 2 : 6;
+      const dmgPerShot = heavy ? 3 : 1;
+      const destroyedNames: string[] = [];
+      for (let s = 0; s < shots; s++) {
+        const opps = newPlayers
+          .map((p, i) => ({ p, i }))
+          .filter((x) => x.i !== playerIdx && x.p.builtDistricts.length > 0 && !x.p.assassinated);
+        if (opps.length === 0) break;
+        const oppPick = opps[randomInt(0, opps.length - 1)];
+        const opp = newPlayers[oppPick.i];
+        const damageable = opp.builtDistricts
+          .map((d, i) => ({ d, i }))
+          .filter(({ d }) => d.purpleAbility !== "stronghold");
+        if (damageable.length === 0) continue;
+        const distPick = damageable[randomInt(0, damageable.length - 1)];
+        const dist = opp.builtDistricts[distPick.i];
+        const newCost = dist.cost - dmgPerShot;
+        const newOppDistricts = [...opp.builtDistricts];
+        if (newCost < 1) {
+          newOppDistricts.splice(distPick.i, 1);
+          destroyedNames.push(`${dist.name} (${opp.name})`);
+        } else {
+          newOppDistricts[distPick.i] = { ...dist, cost: newCost, hp: newCost };
+        }
+        newPlayers[oppPick.i] = { ...opp, builtDistricts: newOppDistricts };
+      }
+      log = [...log, { day: state.day, message: `💥 ${player.name} применил Обстрел (${heavy ? "2×3" : "6×1"}). Разрушено: ${destroyedNames.length > 0 ? destroyedNames.join(", ") : "—"}` }];
+    } else if (card.spellAbility === "enhancement") {
+      // Enhancement: permanent buff. mode = "card" or "gold".
+      const enhMode = (mode === "gold" ? "gold" : "card") as "card" | "gold";
+      const existing = newPlayers[playerIdx].enhancements ?? [];
+      newPlayers[playerIdx] = {
+        ...newPlayers[playerIdx],
+        enhancements: [...existing, enhMode],
+      };
+      log = [...log, { day: state.day, message: `✨ ${player.name} применил Усиление (${enhMode === "card" ? "+1🃏" : "+1💰"} к доходу)` }];
+    } else if (card.spellAbility === "fire_magic") {
+      // Create 2 random spells (purple or grey) at -1 cost; if not played by end
+      // of turn they convert to flame.
+      // Avoid recursion: never roll fire_magic itself.
+      const spellPool: { kind: "spell" | "grey"; ability: string; cost: number; name: string }[] = [
+        { kind: "spell", ability: "ignite", cost: 1, name: "Поджигание" },
+        { kind: "spell", ability: "gold_rain", cost: 0, name: "Золотой дождь" },
+        { kind: "spell", ability: "holy_day", cost: 1, name: "Священный день" },
+        { kind: "spell", ability: "flood", cost: 5, name: "Потоп" },
+        { kind: "spell", ability: "plague", cost: 2, name: "Чума" },
+        { kind: "spell", ability: "fire_ritual", cost: 3, name: "Ритуал огня" },
+        { kind: "spell", ability: "bombardment", cost: 6, name: "Обстрел" },
+        { kind: "spell", ability: "enhancement", cost: 3, name: "Усиление" },
+        { kind: "grey", ability: "new_opportunities", cost: 2, name: "Новые возможности" },
+        { kind: "grey", ability: "plan", cost: 4, name: "План" },
+        { kind: "grey", ability: "burning_deadline", cost: 1, name: "Горящий срок" },
+      ];
+      const generated: DistrictCard[] = [];
+      for (let i = 0; i < 2; i++) {
+        const pick = spellPool[randomInt(0, spellPool.length - 1)];
+        const reduced = Math.max(0, pick.cost - 1);
+        const newCard: DistrictCard = pick.kind === "spell"
+          ? {
+            id: `firemagic-spell-${Date.now()}-${i}-${randomInt(0, 9999)}`,
+            name: pick.name,
+            cost: reduced,
+            originalCost: reduced,
+            hp: 0,
+            colors: ["purple"],
+            baseColors: ["purple"],
+            spellAbility: pick.ability as DistrictCard["spellAbility"],
+            fireMagicFuse: true,
+          }
+          : {
+            id: `firemagic-grey-${Date.now()}-${i}-${randomInt(0, 9999)}`,
+            name: pick.name,
+            cost: reduced,
+            originalCost: reduced,
+            hp: 0,
+            colors: [],
+            baseColors: [],
+            greyAbility: pick.ability as DistrictCard["greyAbility"],
+            fireMagicFuse: true,
+          };
+        generated.push(newCard);
+      }
+      newPlayers[playerIdx] = {
+        ...newPlayers[playerIdx],
+        hand: [...newPlayers[playerIdx].hand, ...generated],
+      };
+      log = [...log, { day: state.day, message: `🔥 ${player.name} применил Магию огня: получил ${generated.map((c) => c.name).join(", ")} (фитиль до конца хода)` }];
     } else if (card.spellAbility === "fire_ritual") {
       // Sacrifice ONE of the caster's own built districts (chosen via targetCardId).
       // For every gold of its cost, plant a 🔥 Flame in a random opponent's hand
@@ -490,6 +671,76 @@ export function buildDistrict(
     return { ...state, players: newPlayers, log, plagueDaysLeft: card.spellAbility === "plague" ? 3 : (state.plagueDaysLeft ?? 0) };
   }
 
+  // Grey cards: spell-like effects from the shared deck. Cast from hand for cost.
+  if (card.greyAbility) {
+    const newPlayers = [...state.players];
+    let log = state.log;
+    let newDeck = [...state.deck];
+    const randomInt = (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1));
+
+    if (card.greyAbility === "new_opportunities") {
+      const drawCount = Math.min(2, newDeck.length);
+      const drawn = newDeck.splice(0, drawCount);
+      const freeSlots = Math.max(0, MAX_HAND_CARDS - newHand.length);
+      const accepted = drawn.slice(0, freeSlots);
+      const overflow = drawn.length - accepted.length;
+      newPlayers[playerIdx] = {
+        ...player,
+        gold: player.gold - effectiveCost,
+        hand: [...newHand, ...accepted],
+        buildsRemaining: player.buildsRemaining - 1,
+      };
+      log = [...log, { day: state.day, message: `🌫️ ${player.name} разыграл Новые возможности: +${accepted.length}🃏` }];
+      if (overflow > 0) {
+        log = [...log, { day: state.day, message: `💥 ${player.name}: ${overflow} карт(ы) рассыпались (лимит руки ${MAX_HAND_CARDS})` }];
+      }
+      return { ...state, players: newPlayers, deck: newDeck, log };
+    }
+    if (card.greyAbility === "plan") {
+      // Open the first round of 2 choices. The pick action serves both rounds.
+      const drawCount = Math.min(2, newDeck.length);
+      const choices = newDeck.splice(0, drawCount);
+      newPlayers[playerIdx] = {
+        ...player,
+        gold: player.gold - effectiveCost,
+        hand: newHand,
+        buildsRemaining: player.buildsRemaining - 1,
+        pendingPlanOffer: { round: 1, choices },
+      };
+      log = [...log, { day: state.day, message: `📜 ${player.name} разыграл План: 1-й тур (1 из ${choices.length})` }];
+      return { ...state, players: newPlayers, deck: newDeck, log };
+    }
+    if (card.greyAbility === "burning_deadline") {
+      const drawCount = Math.min(1, newDeck.length);
+      if (drawCount === 0) {
+        // Deck empty: still consume cost & build slot, no card drawn.
+        newPlayers[playerIdx] = {
+          ...player,
+          gold: player.gold - effectiveCost,
+          hand: newHand,
+          buildsRemaining: player.buildsRemaining - 1,
+        };
+        return { ...state, players: newPlayers, deck: newDeck, log: [...log, { day: state.day, message: `🔥 ${player.name} разыграл Горящий срок, но колода пуста` }] };
+      }
+      const drawn = newDeck.splice(0, 1)[0];
+      const stamped: DistrictCard = { ...drawn, burningDeadline: true };
+      const freeSlots = Math.max(0, MAX_HAND_CARDS - newHand.length);
+      const accepted = freeSlots > 0;
+      newPlayers[playerIdx] = {
+        ...player,
+        gold: player.gold - effectiveCost,
+        hand: accepted ? [...newHand, stamped] : newHand,
+        buildsRemaining: player.buildsRemaining - 1,
+      };
+      log = [...log, { day: state.day, message: `🔥 ${player.name} разыграл Горящий срок: взял ${drawn.name} (не построит — превратится в Пламя)` }];
+      if (!accepted) {
+        log = [...log, { day: state.day, message: `💥 ${player.name}: 1 карта рассыпалась (лимит руки ${MAX_HAND_CARDS})` }];
+      }
+      return { ...state, players: newPlayers, deck: newDeck, log };
+    }
+    return null;
+  }
+
   // Built card: cost is the unified value (HP/score). Original cost is preserved
   // for refunds/discounts. Monument bumps to 5 on the table (special card rule).
   let builtCard = { ...card, hp: card.cost, originalCost: card.originalCost ?? card.cost, baseColors: card.baseColors ?? card.colors };
@@ -497,20 +748,69 @@ export function buildDistrict(
     builtCard = { ...card, cost: 5, hp: 5, originalCost: card.originalCost ?? 5, baseColors: card.baseColors ?? card.colors };
   }
 
+  // Inner Wall: on build, sacrifice a random own district and absorb its cost.
+  let innerWallSacrifice: DistrictCard | null = null;
+  let extraDiscardPile = state.discardPile;
+  let postPlayers = [...state.players];
+  if (card.purpleAbility === "inner_wall" && player.builtDistricts.length > 0) {
+    const rng2 = { int: (a: number, b: number) => a + Math.floor(Math.random() * (b - a + 1)) };
+    const candIdx = rng2.int(0, player.builtDistricts.length - 1);
+    innerWallSacrifice = player.builtDistricts[candIdx];
+    const remaining = [...player.builtDistricts];
+    remaining.splice(candIdx, 1);
+    extraDiscardPile = [...extraDiscardPile, innerWallSacrifice];
+    postPlayers[playerIdx] = { ...postPlayers[playerIdx], builtDistricts: remaining };
+    builtCard = {
+      ...builtCard,
+      cost: builtCard.cost + innerWallSacrifice.cost,
+      hp: builtCard.cost + innerWallSacrifice.cost,
+    };
+  }
+
   // Fort: reduce other (non-fort) districts HP by 1 when on table
   // (Fort effect is passive — applied when checking HP, not on build)
 
-  const newPlayers = [...state.players];
+  const beforePushPlayer = postPlayers[playerIdx] ?? player;
   const afterGoldHand = {
-    ...player,
-    gold: player.gold - effectiveCost,
+    ...beforePushPlayer,
+    gold: beforePushPlayer.gold - effectiveCost,
     hand: newHand,
-    buildsRemaining: player.buildsRemaining - 1,
+    buildsRemaining: beforePushPlayer.buildsRemaining - 1,
   };
   // Defensive: pushBuiltDistrict no-ops if somehow at cap.
-  newPlayers[playerIdx] = pushBuiltDistrict(afterGoldHand, builtCard);
+  postPlayers[playerIdx] = pushBuiltDistrict(afterGoldHand, builtCard);
 
-  let newState = { ...state, players: newPlayers, log: [...state.log, { day: state.day, message: `🏗️ ${player.name} построил ${card.name}` }] };
+  // Heavy Artillery: stamp a fresh damage value on first build.
+  if (card.purpleAbility === "heavy_artillery") {
+    const built = postPlayers[playerIdx].builtDistricts[postPlayers[playerIdx].builtDistricts.length - 1];
+    if (built) {
+      const updated = { ...built, artilleryDamage: 1 };
+      const arr = [...postPlayers[playerIdx].builtDistricts];
+      arr[arr.length - 1] = updated;
+      postPlayers[playerIdx] = { ...postPlayers[playerIdx], builtDistricts: arr };
+    }
+  }
+
+  const buildLog: { day: number; message: string }[] = [
+    { day: state.day, message: `🏗️ ${player.name} построил ${card.name}` },
+  ];
+  if (innerWallSacrifice) {
+    buildLog.push({ day: state.day, message: `🧱 Внутренняя стена поглотила ${innerWallSacrifice.name} (+${innerWallSacrifice.cost} к стоимости)` });
+  }
+
+  let newState: GameState = {
+    ...state,
+    players: postPlayers,
+    discardPile: extraDiscardPile,
+    log: [...state.log, ...buildLog],
+  };
+
+  // Salvage Yard: passive trigger when an own district is destroyed (here,
+  // by Inner Wall sacrifice).
+  if (innerWallSacrifice) {
+    newState = applySalvageTriggers(newState, playerIdx, [innerWallSacrifice]);
+  }
+
   newState = checkWinCondition(newState);
   return newState;
 }
@@ -564,6 +864,29 @@ function applyTreasurerEndOfDay(state: GameState, rng: Rng): GameState {
 }
 
 /**
+ * Sektant Treasurer (green hero): +1 gold per Cult building anywhere on the board
+ * at the end of the day.
+ */
+function applySektantEndOfDay(state: GameState): GameState {
+  const cultCount = state.players.reduce(
+    (acc, p) => acc + p.builtDistricts.filter((d) => d.purpleAbility === "cult").length,
+    0,
+  );
+  if (cultCount === 0) return state;
+  let newPlayers = [...state.players];
+  let log = state.log;
+  for (let i = 0; i < newPlayers.length; i++) {
+    const p = newPlayers[i];
+    if (p.companion !== CompanionId.Sektant || p.companionDisabled) continue;
+    const heroDef = HEROES.find((h) => h.id === p.hero);
+    if (heroDef?.color !== "green") continue;
+    newPlayers[i] = { ...p, gold: p.gold + cultCount };
+    log = [...log, { day: state.day, message: `🕯️ ${p.name} — сектант (торговец): +${cultCount}💰 за ${cultCount} Сект` }];
+  }
+  return { ...state, players: newPlayers, log };
+}
+
+/**
  * Set Royal Guard flag for next draft on players who have Royal Guard companion.
  */
 function applyRoyalGuardEndOfDay(state: GameState): GameState {
@@ -586,9 +909,15 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
   let nextIdx = state.currentTurnIndex + 1;
   let log = state.log;
 
-  // Skip assassinated players — but still process theft against them
+  // Skip assassinated players — but still process theft against them.
+  // Hospital / Royal Healer let the dead still get a (limited) turn, so don't
+  // skip in that case; their action layer enforces the build/ability lock.
   let players = [...state.players];
-  while (nextIdx < turnOrder.length && players[turnOrder[nextIdx]].assassinated) {
+  while (
+    nextIdx < turnOrder.length
+    && players[turnOrder[nextIdx]].assassinated
+    && !canActWhileAssassinated(players[turnOrder[nextIdx]])
+  ) {
     const killedIdx = turnOrder[nextIdx];
     const killed = players[killedIdx];
     const killedHeroName = HEROES.find((h) => h.id === killed.hero)?.name ?? "???";
@@ -607,6 +936,41 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     }
 
     nextIdx++;
+  }
+
+  // 🔥 Burning Deadline / Fire Magic fuse: any card in the just-ended player's
+  // hand that was stamped as a fuse this turn but wasn't built/cast → 🔥 Flame.
+  // Runs ONLY for the player whose turn just ended (not all players).
+  {
+    const endedIdx = state.turnOrder[state.currentTurnIndex];
+    if (endedIdx !== undefined && players[endedIdx]) {
+      const endedPlayer = players[endedIdx];
+      let mutated = false;
+      const newHand: typeof endedPlayer.hand = [];
+      let burnedCount = 0;
+      for (const c of endedPlayer.hand) {
+        if (c.burningDeadline || c.fireMagicFuse) {
+          newHand.push({
+            id: `flame-fuse-${Date.now()}-${endedIdx}-${burnedCount}-${rng.int(0, 9999)}`,
+            name: FLAME_CARD_NAME,
+            cost: 1,
+            originalCost: 1,
+            hp: 0,
+            colors: ["red"],
+            baseColors: ["red"],
+          });
+          burnedCount++;
+          mutated = true;
+        } else {
+          newHand.push(c);
+        }
+      }
+      if (mutated) {
+        players = [...players];
+        players[endedIdx] = { ...endedPlayer, hand: newHand };
+        log = [...log, { day: state.day, message: `🔥 ${endedPlayer.name}: ${burnedCount} карт(ы) с фитилём → Пламя` }];
+      }
+    }
   }
 
   // 🔥 End-of-turn Flame/Fire bookkeeping:
@@ -824,6 +1188,7 @@ export function advanceTurn(state: GameState, rng: Rng): GameState {
     // End of day — apply end-of-day effects
     state = applyTreasurerEndOfDay(state, rng);
     state = applyRoyalGuardEndOfDay(state);
+    state = applySektantEndOfDay(state);
 
     // Wake companions whose sleepEndDay has reached today. Companions picked today
     // were given sleepEndDay = state.day + 1, so they stay asleep through tomorrow.
