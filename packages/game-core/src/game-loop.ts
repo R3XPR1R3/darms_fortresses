@@ -3,7 +3,7 @@ import { CompanionId, COMPANIONS, HEROES, HeroId, FLAME_CARD_NAME, FIRE_CARD_NAM
 import { createRng, type Rng } from "./rng.js";
 import { initDraft, draftPick, companionPick, companionSkip } from "./draft.js";
 import { buildTurnOrder, takeIncome, pickIncomeCard, pickPlanCard, buildDistrict, advanceTurn, currentPlayer, canAddDistrict, pushBuiltDistrict, markCompanionGone } from "./turns.js";
-import { createPurpleFromAbility } from "./setup.js";
+import { createPurpleFromAbility, createPurplePlaceholder, PURPLE_PLACEHOLDER_NAME } from "./setup.js";
 import { playPurplePlaceholder, pickFromPurpleOffer } from "./placeholder.js";
 import { useAbility, checkWinCondition, applySalvageTriggers, canActWhileAssassinated } from "./abilities.js";
 import { generateRandomCard, generateDifferentColorCard, generateCard } from "./deck.js";
@@ -572,14 +572,23 @@ function useCompanion(
     }
 
     case CompanionId.TreasureTrader: {
-      // Gain a random purple building in hand. Leaves pool.
-      const purple = randomPurpleBuilding(rng);
-      if (!purple) return null;
-      newPlayers[playerIdx] = markCompanionGone(
-        { ...player, hand: [...player.hand, purple], companionUsed: true },
-        CompanionId.TreasureTrader,
-      );
-      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — торговец сокровищами: получена ${purple.name}`), rng: rng.getSeed() };
+      // 2💰: sell the player a purple placeholder card. Played later as a
+      // regular placeholder → opens a 3-of-N pick from THEIR purplePool, so
+      // the value is bounded by their own deck-build instead of being a
+      // global-roulette random purple. The companion stays in the pool —
+      // re-drawable every day so long as the player has 2💰 and a pool.
+      // The natural cap is the personal purplePool depleting (sale refused
+      // when empty).
+      if (player.gold < 2) return null;
+      if (player.purplePool.length === 0) return null;
+      const placeholder = createPurplePlaceholder();
+      newPlayers[playerIdx] = {
+        ...player,
+        gold: player.gold - 2,
+        hand: [...player.hand, placeholder],
+        companionUsed: true,
+      };
+      return { ...addLog({ ...state, players: newPlayers }, `${player.name} — торговец сокровищами: продал «${PURPLE_PLACEHOLDER_NAME}» за 2💰`), rng: rng.getSeed() };
     }
 
     case CompanionId.Agent: {
